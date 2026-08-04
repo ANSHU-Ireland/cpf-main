@@ -1,22 +1,23 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — `get_me` HTTP boundary + UI profile view
+## Immediate next slice: Wave 1 — first audited write (`patch_me`)
 
-**Goal:** expose the completed `@cpf/account` `getMe` use-case over an HTTP handler validated against
-the `@cpf/contracts` `get_me` operation (problem+json errors, correlation id), and render the
-returned profile with `@cpf/ui` primitives.
+**Goal:** the first mutation vertical that writes an audit event. Update the caller's own profile
+fields via `patch_me`, authorized deny-by-default, persisted through the tenant RLS context, and
+recorded as a hash-chained `audit.events` row (this operation is `x-audit-event: true`).
 
 **Source identifiers:**
 
-- OpenAPI `get_me` (200 `UserProfile`, Problem responses, `X-Correlation-ID` header).
-- `@cpf/account` `getMe` (already tested end-to-end against live RLS).
+- OpenAPI `patch_me` (request body, 200 `UserProfile`, Problem responses).
+- SQL `audit.events` (append-only, `previous_hash`/`event_hash` chain); `iam.user_profiles` self RLS.
+- Invariants §9 (server-verified identity), audit-integrity invariant.
 
 **Steps:**
 
-1. Add an app/server package with a `get_me` handler: map `GetMeResult` → 200 / 403 / 404 Problem.
-2. Handler test: authorized 200 shape, 404 problem, 403 problem; assert correlation id echoed.
-3. UI: a profile view composed from `@cpf/ui` (name, email, tenant roles), with an a11y test.
-4. Update ledgers; commit. Then the first audited write vertical (e.g. `patch_me`).
+1. `@cpf/account`: `updateMe` use-case (validate patch → authorize → update → append audit event).
+2. An `AuditWriter` that computes `event_hash` over the previous hash (tamper-evident chain).
+3. Tests: unit (authz/validation) + live-pg (update visible only in-tenant; audit row written+chained).
+4. `apps/api` `patch_me` handler; update ledgers; commit.
 
 ## Then (Wave 1 continuation)
 

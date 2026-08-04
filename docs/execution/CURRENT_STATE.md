@@ -51,11 +51,16 @@ resuming. Do not re-plan the whole project or redo completed work.
   role context **through the `withTenant` RLS context** as a non-superuser `cpf_app` role. 4 unit
   tests (authz allow/deny, 404, null-tenant) + 2 live-Postgres tests proving a different-tenant
   actor sees no membership (RLS). No audit event — `get_me` is `x-audit-event: false` in the spec.
+- **`get_me` HTTP boundary + profile UI:** `@cpf/http` provides reusable RFC 9457 problem+json and
+  `X-Correlation-ID` helpers; `apps/api` `handleGetMe` maps the use-case result to 200 `UserProfile`
+  / 403 / 404 problem+json (correlation id echoed in header and body). `apps/web` `AccountProfileView`
+  renders the profile as an accessible labelled region (roles list, no-membership fallback), tested
+  under jsdom. `UserProfile` projection recorded as ASM-06.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**67/67**:
-28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy + 4 tokens + 12 ui + 6 account).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**80/80**:
+67 prior + 5 http + 4 api handler + 4 web view).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

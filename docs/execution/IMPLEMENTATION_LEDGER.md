@@ -21,8 +21,9 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done with linked evidence · 
 | `@cpf/policy` deny-by-default `can()`     | Contract §12; Invariants §9 | `packages/policy`                                  | Vitest (7, 100% branch)         | this ledger                             | ✅     |
 | `@cpf/tokens` from Penpot handoff         | Wave 1; design-tokens.json  | `packages/tokens`                                  | Vitest (4, source parity)       | design-tokens.json                      | ✅     |
 | `@cpf/ui` accessible primitives           | Wave 1; WCAG 2.2 AA         | `packages/ui` (Button/Input/Field)                 | Vitest (12, jsdom a11y)         | developer-handoff.md                    | ✅     |
-| `get_me` account vertical (server)        | FR-ACC-04, FR-ACC-12        | `packages/account`                                 | Vitest (6: 4 unit + 2 live RLS) | this ledger                             | ✅     |
-| CI foundation (+ postgres service)        | Contract §17                | `.github/workflows/ci.yml`                         | CI run                          | ci.yml                                  | ✅     |
+| `get_me` account vertical (server)        | FR-ACC-04, FR-ACC-12        | `packages/account`                                 | Vitest (6: 4 unit + 2 live RLS) | this ledger                             | ✅     |     | `@cpf/http` problem+json / correlation | RFC 9457; OpenAPI errors | `packages/http`            | Vitest (5) | ProblemDetails schema | ✅  |
+| `get_me` HTTP boundary                    | OpenAPI `get_me`; ASM-06    | `apps/api`                                         | Vitest (4, 200/403/404)         | this ledger                             | ✅     |
+| Account profile view (UI)                 | FR-ACC-04; WCAG 2.2 AA      | `apps/web`                                         | Vitest (4, jsdom a11y)          | this ledger                             | ✅     |     | CI foundation (+ postgres service)     | Contract §17             | `.github/workflows/ci.yml` | CI run     | ci.yml                | ✅  |
 
 ## Later waves
 

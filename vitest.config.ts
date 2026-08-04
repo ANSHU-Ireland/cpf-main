@@ -7,7 +7,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     // UI packages render in the DOM; everything else stays on the fast node env.
-    environmentMatchGlobs: [['packages/ui/**', 'jsdom']],
+    environmentMatchGlobs: [
+      ['packages/ui/**', 'jsdom'],
+      ['apps/web/**', 'jsdom'],
+    ],
     // Loads .env (e.g. DATABASE_URL) for integration tests; no-op when absent.
     setupFiles: ['dotenv/config', './vitest.setup.ui.ts'],
     include: ['packages/**/*.test.ts', 'packages/**/*.test.tsx', 'apps/**/*.test.{ts,tsx}'],
