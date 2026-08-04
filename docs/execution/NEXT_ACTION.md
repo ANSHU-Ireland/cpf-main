@@ -1,25 +1,28 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — organisation teams (`get_organization_teams` + `post_organization_teams`)
+## Immediate next slice: Wave 1 — invite a tenant member (`post_organization_member_invitations`)
 
-**Goal:** an Employer Admin lists and creates teams within the tenant — extending the same FR-EA-03
-requirement surface (departments + teams), same architectural pattern (keyset list + audited create,
-deny-by-default, tenant RLS, 409 on duplicate name).
+**Goal:** an Employer Admin invites a new member to the tenant — the first Employer Admin **audited
+collection write** on the membership surface, paired with the just-shipped member list.
 
 **Source identifiers:**
 
-- OpenAPI `get_organization_teams` / `post_organization_teams` (tag Employer Admin; FR-EA-03;
-  `get` audit=false, `post` audit=true; `staffBearer`).
-- SQL `tenant.teams` (tenant_isolation + v2 RLS; `tenant_id, name UNIQUE`; has `department_id` FK).
+- OpenAPI `post_organization_member_invitations` (tag Employer Admin; FR-EA-02; audit=**true**;
+  `IdempotencyKey`; body `GenericCommand`; `staffBearer`).
+- SQL `iam.memberships` (tenant_isolation + v2 RLS), `iam.users` (invited status), `iam.membership_roles`.
 
 **Steps:**
 
-1. Record ASM-17 (concrete `TeamDto` shape, create semantics including optional `department_id` FK).
-2. `@cpf/org`: `team-types.ts`, `team-repository.ts`, `teams.ts` (parse + list + create use-cases,
-   deny-by-default read/write on `team` resource).
-3. `apps/api`: `teams.handler.ts` + barrel export + `vitest.globalsetup.ts` GRANT.
-4. Tests: unit (parse, authz) + handler + live-pg (RLS isolation, audit event, 409 duplicate).
-5. Gate (format → typecheck → lint → vitest). Update docs. Commit.
+1. Confirm the invitation shape (create a user + membership with `status='invited'`, assign initial
+   roles). Record an ASM for the concrete `InvitationDto` and the create semantics.
+2. `@cpf/org`: `parseInvitationCreate` (email, roles, department/team optional) + audited
+   `inviteMember` use-case (deny-by-default write; chains an `organization_member.invite` event).
+3. Tests: unit (authz/validation/duplicate rejection) + live-pg (invitation writes a chained event;
+   invited member appears in the list). Add any new `GRANT`s.
+4. `apps/api` `handlePostOrganizationMemberInvitation` + tests; update ledgers; commit.
+
+> **Deferred:** `post_me_data_export` (FR-ACC-19) and `post_me_deactivation` (FR-ACC-20) are blocked
+> on the hiring candidate vertical + user→candidate identity resolution — see ASM-09.
 
 ## Completed this loop
 
@@ -69,6 +72,10 @@ deny-by-default, tenant RLS, 409 on duplicate name).
   `post_organization_departments` over `tenant.departments` (both RLS policies), deny-by-default on
   `employer_admin` (read/write, `department`), concrete `DepartmentDto`/`DepartmentPageDto`, 409 on
   duplicate name, `department.create` audit event (ASM-16). 309/309 green.
+- **Organisation teams** — `get_organization_teams` keyset-paginated + audited
+  `post_organization_teams` over `tenant.teams` (both RLS policies), deny-by-default on
+  `employer_admin` (read/write, `team`), concrete `TeamDto`/`TeamPageDto`, optional `department_id` FK,
+  `UNIQUE(tenant_id, department_id, name)`, 409 on duplicate, `team.create` audit event (ASM-17). 334/334 green.
 
 ## Standing rules for the loop
 

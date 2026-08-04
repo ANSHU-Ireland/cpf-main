@@ -9,3 +9,6 @@ export * from './members.js';
 export * from './department-types.js';
 export * from './department-repository.js';
 export * from './departments.js';
+export * from './team-types.js';
+export * from './team-repository.js';
+export * from './teams.js';
