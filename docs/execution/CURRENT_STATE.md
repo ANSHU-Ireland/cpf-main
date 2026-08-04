@@ -135,10 +135,27 @@ resuming. Do not re-plan the whole project or redo completed work.
   Tests: 16 unit + 7 handler + 3 live-Postgres (user-scoped list, audited completion writes a
   64-hex `event_hash` and stamps `completed_at`, 404 when no step matches).
 
+- **Support cases (`get_me_support_cases` + audited `post_me_support_cases`; FR-ACC-16/FR-SUP-01):**
+  `@cpf/account` lists/creates the caller's own `support.cases`. The table carries
+  `v2_tenant_isolation` RLS (tenant scope); requester ownership is additionally enforced by an
+  explicit `requester_user_id = $1` predicate on reads. `get_me_support_cases` keyset-paginates over
+  `(created_at, id)` → concrete `SupportCaseDto` inside `SupportCasePage`. `parseSupportCaseCreate`
+  requires `{category, severity, subject, description, purpose}` (severity enum, bounded strings,
+  unknown props → 422); `createCase` inserts with server-set `requester_user_id`/`tenant_id`, a
+  generated unique `case_reference` (`SC-<uuid>`), initial `status='open'`, then chains a
+  `support_case.create` `audit.events` row in the same `withTenant` transaction
+  (`x-audit-event: true`). `apps/api` `handleGetMeSupportCases` (200 `SupportCasePage` / 403 / 422)
+  and `handlePostMeSupportCase` (422 on bad body, else 200 case / 403). Baseline `SupportCase`/
+  `SupportCasePage` items / `SupportCaseCreate` were `GenericRecord`/`GenericCommand` placeholders →
+  concrete DTOs recorded as ASM-11 (this slice covers the two collection ops; case detail + messages
+  are a follow-up). Tests: 13 unit + 6 handler + 2 live-Postgres (audited create writes a 64-hex
+  `event_hash` with `requester_user_id`/`tenant_id` set; list returns only the caller's own case and
+  never another requester's in the same tenant).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**197/197**:
-171 prior + 16 onboarding unit + 7 handler + 3 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**218/218**:
+197 prior + 13 support-case unit + 6 handler + 2 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

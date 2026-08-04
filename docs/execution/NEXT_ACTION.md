@@ -1,26 +1,27 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — support cases (`get_me_support_cases` / `post_me_support_cases`)
+## Immediate next slice: Wave 1 — support case detail + messages (`get_me_support_cases_caseId` / `post_me_support_cases_caseId_messages`)
 
-**Goal:** the caller lists and opens their own support cases — a paginated read plus an audited
-create over `support.cases`, deny-by-default and user-scoped.
+**Goal:** the requester reads one of their own cases with its message thread and posts a message —
+a paginated authorised read plus an audited create over `support.case_messages`.
 
 **Source identifiers:**
 
-- OpenAPI `get_me_support_cases` / `post_me_support_cases` (paths under `/me/support-cases`); confirm
-  request/response schemas + audit flags + Idempotency-Key.
-- SQL `support.cases` (confirm columns, user linkage, and RLS in the baseline; record an assumption
-  if the projection is a `GenericCommand`/`GenericRecord` placeholder).
+- OpenAPI `get_me_support_cases_caseId` (audit=false; "Requester or assigned support") /
+  `post_me_support_cases_caseId_messages` (audit=true; body `SupportMessageCreate`).
+- SQL `support.case_messages` (`case_id` FK, `author_user_id`, `visibility` CHECK, `body`,
+  `attachments` jsonb) — carries `v2_tenant_isolation`; enforce requester ownership of the parent
+  case explicitly.
 
 **Steps:**
 
-1. Confirm the backing table + RLS/user-scoping and the operations' audit flags; record ASM if a
-   schema is a placeholder.
-2. `@cpf/account` (or a new package): list + audited create use-cases (deny-by-default via
-   `PgAuditWriter`).
-3. Tests: unit (authz/validation) + live-pg (own cases only; create writes a chained event).
-4. `apps/api` handlers + tests; add any new-table grant to `vitest.globalsetup.ts`; update ledgers;
-   commit.
+1. Confirm access rule (requester-owned case) + audit flags; the caller may only see `requester`-
+   visibility messages (never `internal`/`restricted`). Record ASM if projections are placeholders.
+2. `@cpf/account`: read-case-with-messages + audited add-message use-cases (deny-by-default).
+3. Tests: unit (authz/validation/visibility filter) + live-pg (own case only; message create writes
+   a chained event; foreign case → 404).
+4. `apps/api` handlers + tests; add `support.case_messages` grant to `vitest.globalsetup.ts`; update
+   ledgers; commit.
 
 > **Deferred:** `post_me_data_export` (FR-ACC-19) and `post_me_deactivation` (FR-ACC-20) are blocked
 > on the hiring candidate vertical + user→candidate identity resolution — see ASM-09. Revisit once
@@ -41,7 +42,11 @@ create over `support.cases`, deny-by-default and user-scoped.
   concrete `UserPreferencesDto` (ASM-08).
 - **Onboarding checklist** — `get_me_onboarding` keyset paging + audited
   `put_me_onboarding_stepCode` over `iam.onboarding_progress` (no RLS → explicit `user_id` scoping,
-  ASM-10); update-only of an existing step (404 if absent), user-settable statuses only. 197/197 green.
+  ASM-10); update-only of an existing step (404 if absent), user-settable statuses only.
+- **Support cases (collection)** — `get_me_support_cases` keyset paging + audited
+  `post_me_support_cases` over `support.cases` (`v2_tenant_isolation` RLS + explicit
+  `requester_user_id` scoping); server-set requester/tenant/`SC-<uuid>` reference/`open` status,
+  concrete `SupportCaseDto` (ASM-11). 218/218 green.
 
 ## Standing rules for the loop
 

@@ -5,3 +5,4 @@ export * from './account/security-events.handler.js';
 export * from './account/notification-preferences.handler.js';
 export * from './account/preferences.handler.js';
 export * from './account/onboarding.handler.js';
+export * from './account/support-cases.handler.js';

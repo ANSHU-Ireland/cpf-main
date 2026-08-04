@@ -21,3 +21,6 @@ export * from './preferences.js';
 export * from './onboarding-types.js';
 export * from './onboarding-repository.js';
 export * from './onboarding.js';
+export * from './support-case-types.js';
+export * from './support-case-repository.js';
+export * from './support-cases.js';

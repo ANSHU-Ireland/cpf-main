@@ -27,7 +27,7 @@ export async function setup(): Promise<void> {
        END $$;`,
     );
 
-    await pool.query('GRANT USAGE ON SCHEMA tenant, iam, audit TO cpf_app');
+    await pool.query('GRANT USAGE ON SCHEMA tenant, iam, audit, support TO cpf_app');
     await pool.query('GRANT SELECT ON tenant.departments TO cpf_app');
     await pool.query(
       'GRANT SELECT ON iam.users, iam.memberships, iam.membership_roles, iam.roles TO cpf_app',
@@ -37,6 +37,7 @@ export async function setup(): Promise<void> {
     await pool.query('GRANT SELECT ON iam.account_security_events TO cpf_app');
     await pool.query('GRANT SELECT, INSERT, UPDATE ON iam.notification_preferences TO cpf_app');
     await pool.query('GRANT SELECT, UPDATE ON iam.onboarding_progress TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT ON support.cases TO cpf_app');
     await pool.query('GRANT SELECT, INSERT ON audit.events TO cpf_app');
   } finally {
     await pool.end();
