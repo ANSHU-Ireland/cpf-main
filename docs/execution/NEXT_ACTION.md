@@ -1,28 +1,28 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — account session vertical (sign-in / current session)
+## Immediate next slice: Wave 1 — user-visible security events (`get_me_security_events`)
 
-**Goal:** extend the identity vertical beyond profile read/update toward authentication. The next
-mutation-free-then-audited slice is the current-session view and session revocation, layered over
-the proven policy + RLS + audit defence-in-depth.
+**Goal:** complete the account self-service read surface with the security-events feed
+(`get_me_security_events`, FR-ACC-18, `x-audit-event: false`), reading the caller's own
+`iam.account_security_events` through the self RLS policy, keyset-paginated like sessions.
 
 **Source identifiers:**
 
-- OpenAPI account/session operations (e.g. list/revoke `user_sessions`).
-- SQL `iam.user_sessions` (per-user rows), `audit.events` (revocation is `x-audit-event: true`).
-- Invariants §9 (server-verified identity), audit-integrity invariant.
+- OpenAPI `get_me_security_events` (SecurityEventPage, cursor/limit paging).
+- SQL `iam.account_security_events` (per-user self RLS).
+- Invariants §9 (server-verified identity).
 
 **Steps:**
 
-1. `@cpf/account`: session read use-case (list caller's own sessions via RLS context).
-2. Session revoke as the next audited write, reusing `PgAuditWriter`.
-3. Tests: unit (authz) + live-pg (own sessions only; revoke writes a chained audit row).
-4. `apps/api` handler + `apps/web` view; update ledgers; commit.
+1. `@cpf/account`: security-event read use-case + projection (reuse keyset paging helpers).
+2. Tests: unit (authz/paging) + live-pg (own events only via RLS).
+3. `apps/api` handler + tests; update ledgers; commit.
 
 ## Completed this loop
 
-- **`patch_me` first audited write** — `@cpf/audit` hash-chain + `@cpf/account` `updateMe` +
-  `apps/api` `handlePatchMe`. 101/101 tests green (incl. live-Postgres audit proof).
+- **`patch_me` first audited write** — `@cpf/audit` hash-chain + `updateMe` + `handlePatchMe`.
+- **Account session vertical** — `get_me_sessions` (keyset paging) + audited
+  `delete_me_sessions_sessionId`, layered over the `user_session_self` RLS policy. 120/120 green.
 
 ## Standing rules for the loop
 

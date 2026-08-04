@@ -68,11 +68,21 @@ resuming. Do not re-plan the whole project or redo completed work.
   problem+json on invalid bodies, else maps to 200/403/404. Tests: 7 validate + 3 updateMe unit +
   5 patch handler + 2 live-Postgres (profile persisted + audit row written with 64-hex
   `event_hash`, `previous_hash` chained across successive writes).
+- **Account session vertical (`get_me_sessions`, `delete_me_sessions_sessionId`; FR-ACC-08):**
+  `@cpf/account` gains a `SessionDto`/`SessionPageDto` projection (never exposes
+  `refresh_token_hash`), `PgSessionRepository` reading/revoking the caller's own
+  `iam.user_sessions` rows through the `user_session_self` RLS policy, keyset pagination
+  (`(created_at, id)` cursor, opaque base64url token), a `listSessions` read use-case, and an
+  **audited** `revokeSession` write (`x-audit-event: true`) that chains a `session.revoke` event in
+  the same transaction. `apps/api` `handleGetMeSessions` (422 on bad paging, else 200 `SessionPage`)
+  and `handleDeleteMeSession` (200 `{revoked:true}` / 403 / 404). Tests: 10 unit + 6 handler + 3
+  live-Postgres (own sessions only via RLS, audited revoke writes a 64-hex `event_hash`, another
+  user's session cannot be revoked → 404).
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**101/101**:
-80 prior + 4 audit hash + 7 validate + 3 updateMe unit + 5 patch handler + 2 updateMe live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**120/120**:
+101 prior + 10 session unit + 6 session handler + 3 session live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

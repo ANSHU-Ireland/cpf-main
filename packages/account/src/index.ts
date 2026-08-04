@@ -4,3 +4,7 @@ export * from './repository.js';
 export * from './validate.js';
 export * from './get-me.js';
 export * from './update-me.js';
+export * from './session-types.js';
+export * from './session-repository.js';
+export * from './list-sessions.js';
+export * from './revoke-session.js';
