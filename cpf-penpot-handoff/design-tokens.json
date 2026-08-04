@@ -1,0 +1,121 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "meta": {
+    "direction": "Option 2 \u2014 Guided review",
+    "date": "2026-08-04",
+    "accessibility": "WCAG 2.2 AA"
+  },
+  "color": {
+    "ink": {
+      "$type": "color",
+      "$value": "#1F2937"
+    },
+    "muted": {
+      "$type": "color",
+      "$value": "#667085"
+    },
+    "line": {
+      "$type": "color",
+      "$value": "#D8DDE5"
+    },
+    "soft": {
+      "$type": "color",
+      "$value": "#F6F4EF"
+    },
+    "paper": {
+      "$type": "color",
+      "$value": "#FFFFFF"
+    },
+    "nav": {
+      "$type": "color",
+      "$value": "#F1EFE9"
+    },
+    "blue": {
+      "$type": "color",
+      "$value": "#2559D6"
+    },
+    "blue_soft": {
+      "$type": "color",
+      "$value": "#EAF0FF"
+    },
+    "sage": {
+      "$type": "color",
+      "$value": "#477A67"
+    },
+    "sage_soft": {
+      "$type": "color",
+      "$value": "#E7F1EC"
+    },
+    "amber": {
+      "$type": "color",
+      "$value": "#A66700"
+    },
+    "amber_soft": {
+      "$type": "color",
+      "$value": "#FFF2D8"
+    },
+    "red": {
+      "$type": "color",
+      "$value": "#B42318"
+    },
+    "red_soft": {
+      "$type": "color",
+      "$value": "#FDECEA"
+    },
+    "purple": {
+      "$type": "color",
+      "$value": "#7047A3"
+    },
+    "purple_soft": {
+      "$type": "color",
+      "$value": "#F2EBFA"
+    }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "$value": ["Public Sans", "Source Sans 3", "Arial", "sans-serif"]
+    },
+    "body": {
+      "$type": "dimension",
+      "$value": {
+        "value": 15,
+        "unit": "px"
+      }
+    }
+  },
+  "radius": {
+    "control": {
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "surface": {
+      "$type": "dimension",
+      "$value": {
+        "value": 10,
+        "unit": "px"
+      }
+    }
+  },
+  "space": {
+    "unit": {
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    }
+  },
+  "control": {
+    "minimumTarget": {
+      "$type": "dimension",
+      "$value": {
+        "value": 44,
+        "unit": "px"
+      }
+    }
+  }
+}

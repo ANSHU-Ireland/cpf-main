@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+coverage
+docs/source-of-truth/originals
+cpf_openapi_baseline_v2.0.yaml
+*.csv
+pnpm-lock.yaml

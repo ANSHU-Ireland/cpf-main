@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-08-04",
+  "design_direction": "Option 2 \u2014 Guided review",
+  "counts": {
+    "screens": 125,
+    "ops": 244,
+    "reqs": 362,
+    "tables": 139,
+    "dictionary_rows": 1543
+  },
+  "sources": [
+    {
+      "file": "cpf_openapi_baseline_v2.0(2).yaml",
+      "sha256": "a517c93a3bfc1b78b1c28d2f9ad91e19fd015da6788b29ac9df51c48de6101e0",
+      "bytes": 406430
+    },
+    {
+      "file": "cpf_requirements_traceability_v2.0(2).csv",
+      "sha256": "b368148412d50ab0e1b49ff3f143f8f52c70a65b89da6d164d1e717a26c2ffc7",
+      "bytes": 336302
+    },
+    {
+      "file": "cpf_schema_data_dictionary_v2.0(2).csv",
+      "sha256": "1d5d6cd82c1816d3749d10549e9d554a7367b013333e719f26df16240256dcd7",
+      "bytes": 803066
+    },
+    {
+      "file": "cpf_postgresql_schema_v2.0(2).sql",
+      "sha256": "c51eaa398cb1bd9ebb3b4f4c72bcca48faab46194f15ace619129f10b3b6599d",
+      "bytes": 94771
+    },
+    {
+      "file": "CPF_Product_Requirements_Pack_v2.0(2).md",
+      "sha256": "e10ca347f7bcaff2237c87afc109e77e0951cc6adac90dc504e9763639dcabd0",
+      "bytes": 123967
+    },
+    {
+      "file": "CPF_Developer_Handover_TRD_v2.0(2).md",
+      "sha256": "e7c3b5bb56bbaeb758165176df7bd57e338084af962076ef8d36a8fbea673962",
+      "bytes": 19740
+    }
+  ]
+}

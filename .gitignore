@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Env & secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.log
+
+# Local infra volumes
+infra/local/pgdata/
+infra/local/minio-data/
+
+# Original source-of-truth files are copied into docs/source-of-truth/originals/
+# and tracked there; the top-level working copies remain but are the immutable baseline.

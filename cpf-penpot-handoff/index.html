@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>CPF Penpot handoff</title>
+    <style>
+      :root {
+        --ink: #1f2937;
+        --muted: #667085;
+        --line: #d8dde5;
+        --soft: #f6f4ef;
+        --blue: #2559d6;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font:
+          15px Public Sans,
+          Arial,
+          sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        border-bottom: 1px solid var(--line);
+        padding: 22px 5vw;
+        z-index: 2;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+      }
+      p {
+        color: var(--muted);
+      }
+      input {
+        width: min(720px, 100%);
+        height: 46px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 14px;
+        font: inherit;
+      }
+      main {
+        padding: 28px 5vw 60px;
+      }
+      .stats {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 18px 0;
+      }
+      .stat {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px 16px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        display: flex;
+        min-height: 126px;
+        flex-direction: column;
+        gap: 10px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px;
+        color: inherit;
+        text-decoration: none;
+      }
+      .card:hover,
+      .card:focus {
+        border-color: var(--blue);
+        outline: 3px solid #eaf0ff;
+      }
+      .card span,
+      .card small {
+        color: var(--muted);
+      }
+      .card small {
+        margin-top: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>CPF · Option 2 Penpot handoff</h1>
+      <p>Search 125 interface contracts. Select a card to open its editable SVG.</p>
+      <input
+        id="q"
+        aria-label="Search interfaces"
+        placeholder="Search screen ID, interface, domain or actor"
+      />
+    </header>
+    <main>
+      <div class="stats">
+        <div class="stat"><b>244</b> API operations</div>
+        <div class="stat"><b>362</b> requirements</div>
+        <div class="stat"><b>139</b> SQL tables</div>
+      </div>
+      <div class="grid" id="grid">
+        <a
+          class="card"
+          data-search="auth-01 sign in shared account all users"
+          href="interfaces/auth-01.svg"
+          ><strong>AUTH-01 · Sign in</strong><span>Shared account · All users</span
+          ><small>2 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="auth-02 invitation activation shared account invited user"
+          href="interfaces/auth-02.svg"
+          ><strong>AUTH-02 · Invitation activation</strong><span>Shared account · Invited user</span
+          ><small>3 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="auth-03 password recovery shared account all users"
+          href="interfaces/auth-03.svg"
+          ><strong>AUTH-03 · Password recovery</strong><span>Shared account · All users</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="auth-04 email verification and change shared account all users"
+          href="interfaces/auth-04.svg"
+          ><strong>AUTH-04 · Email verification and change</strong
+          ><span>Shared account · All users</span><small>4 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="auth-05 mfa challenge and methods shared account all users"
+          href="interfaces/auth-05.svg"
+          ><strong>AUTH-05 · MFA challenge and methods</strong
+          ><span>Shared account · All users</span><small>5 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="acc-01 profile and preferences shared account all users"
+          href="interfaces/acc-01.svg"
+          ><strong>ACC-01 · Profile and preferences</strong><span>Shared account · All users</span
+          ><small>4 endpoints · 7 requirements</small></a
+        ><a
+          class="card"
+          data-search="acc-02 notification preferences shared account all users"
+          href="interfaces/acc-02.svg"
+          ><strong>ACC-02 · Notification preferences</strong><span>Shared account · All users</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="acc-03 security and sessions shared account all users"
+          href="interfaces/acc-03.svg"
+          ><strong>ACC-03 · Security and sessions</strong><span>Shared account · All users</span
+          ><small>5 endpoints · 10 requirements</small></a
+        ><a
+          class="card"
+          data-search="acc-04 notices and onboarding shared account all users"
+          href="interfaces/acc-04.svg"
+          ><strong>ACC-04 · Notices and onboarding</strong><span>Shared account · All users</span
+          ><small>3 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="acc-05 data export and deactivation shared account all users"
+          href="interfaces/acc-05.svg"
+          ><strong>ACC-05 · Data export and deactivation</strong
+          ><span>Shared account · All users</span><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="acc-06 my support cases shared account all users"
+          href="interfaces/acc-06.svg"
+          ><strong>ACC-06 · My support cases</strong><span>Shared account · All users</span
+          ><small>4 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-01 candidate home candidate candidate"
+          href="interfaces/can-01.svg"
+          ><strong>CAN-01 · Candidate home</strong><span>Candidate · Candidate</span
+          ><small>0 endpoints · 6 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-02 candidate profile and corrections candidate candidate"
+          href="interfaces/can-02.svg"
+          ><strong>CAN-02 · Candidate profile and corrections</strong
+          ><span>Candidate · Candidate</span><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-03 candidate notices candidate candidate"
+          href="interfaces/can-03.svg"
+          ><strong>CAN-03 · Candidate notices</strong><span>Candidate · Candidate</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-04 accommodation request candidate candidate"
+          href="interfaces/can-04.svg"
+          ><strong>CAN-04 · Accommodation request</strong><span>Candidate · Candidate</span
+          ><small>3 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-05 scheduling and booking candidate candidate"
+          href="interfaces/can-05.svg"
+          ><strong>CAN-05 · Scheduling and booking</strong><span>Candidate · Candidate</span
+          ><small>3 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-06 practice centre candidate candidate"
+          href="interfaces/can-06.svg"
+          ><strong>CAN-06 · Practice centre</strong><span>Candidate · Candidate</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-07 system pre-check candidate candidate"
+          href="interfaces/can-07.svg"
+          ><strong>CAN-07 · System pre-check</strong><span>Candidate · Candidate</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-08 application status candidate candidate"
+          href="interfaces/can-08.svg"
+          ><strong>CAN-08 · Application status</strong><span>Candidate · Candidate</span
+          ><small>1 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-09 withdraw application candidate candidate"
+          href="interfaces/can-09.svg"
+          ><strong>CAN-09 · Withdraw application</strong><span>Candidate · Candidate</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-10 explanation and human review candidate candidate"
+          href="interfaces/can-10.svg"
+          ><strong>CAN-10 · Explanation and human review</strong><span>Candidate · Candidate</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-11 data rights centre candidate candidate"
+          href="interfaces/can-11.svg"
+          ><strong>CAN-11 · Data rights centre</strong><span>Candidate · Candidate</span
+          ><small>2 endpoints · 13 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-12 complaint centre candidate candidate"
+          href="interfaces/can-12.svg"
+          ><strong>CAN-12 · Complaint centre</strong><span>Candidate · Candidate</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="can-13 candidate support candidate candidate"
+          href="interfaces/can-13.svg"
+          ><strong>CAN-13 · Candidate support</strong><span>Candidate · Candidate</span
+          ><small>0 endpoints · 7 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-01 assessment readiness assessment runtime candidate"
+          href="interfaces/run-01.svg"
+          ><strong>RUN-01 · Assessment readiness</strong><span>Assessment runtime · Candidate</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-02 assessment overview assessment runtime candidate"
+          href="interfaces/run-02.svg"
+          ><strong>RUN-02 · Assessment overview</strong><span>Assessment runtime · Candidate</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-03 document task assessment runtime candidate"
+          href="interfaces/run-03.svg"
+          ><strong>RUN-03 · Document task</strong><span>Assessment runtime · Candidate</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-04 code task assessment runtime candidate"
+          href="interfaces/run-04.svg"
+          ><strong>RUN-04 · Code task</strong><span>Assessment runtime · Candidate</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-05 spreadsheet task assessment runtime candidate"
+          href="interfaces/run-05.svg"
+          ><strong>RUN-05 · Spreadsheet task</strong><span>Assessment runtime · Candidate</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-06 ai collaboration panel assessment runtime candidate"
+          href="interfaces/run-06.svg"
+          ><strong>RUN-06 · AI collaboration panel</strong
+          ><span>Assessment runtime · Candidate</span
+          ><small>2 endpoints · 11 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-07 plugin execution assessment runtime candidate"
+          href="interfaces/run-07.svg"
+          ><strong>RUN-07 · Plugin execution</strong><span>Assessment runtime · Candidate</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-08 artifacts and uploads assessment runtime candidate"
+          href="interfaces/run-08.svg"
+          ><strong>RUN-08 · Artifacts and uploads</strong><span>Assessment runtime · Candidate</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-09 flags and break assessment runtime candidate"
+          href="interfaces/run-09.svg"
+          ><strong>RUN-09 · Flags and break</strong><span>Assessment runtime · Candidate</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-10 incident and recovery assessment runtime candidate"
+          href="interfaces/run-10.svg"
+          ><strong>RUN-10 · Incident and recovery</strong><span>Assessment runtime · Candidate</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-11 submission preview assessment runtime candidate"
+          href="interfaces/run-11.svg"
+          ><strong>RUN-11 · Submission preview</strong><span>Assessment runtime · Candidate</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-12 submitting and receipt assessment runtime candidate"
+          href="interfaces/run-12.svg"
+          ><strong>RUN-12 · Submitting and receipt</strong
+          ><span>Assessment runtime · Candidate</span><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="run-13 expired or voided attempt assessment runtime candidate"
+          href="interfaces/run-13.svg"
+          ><strong>RUN-13 · Expired or voided attempt</strong
+          ><span>Assessment runtime · Candidate</span><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-01 reviewer home and queue reviewer employer reviewer"
+          href="interfaces/rev-01.svg"
+          ><strong>REV-01 · Reviewer home and queue</strong><span>Reviewer · Employer Reviewer</span
+          ><small>1 endpoints · 5 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-02 reviewer profile reviewer employer reviewer"
+          href="interfaces/rev-02.svg"
+          ><strong>REV-02 · Reviewer profile</strong><span>Reviewer · Employer Reviewer</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-03 availability reviewer employer reviewer"
+          href="interfaces/rev-03.svg"
+          ><strong>REV-03 · Availability</strong><span>Reviewer · Employer Reviewer</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-04 training and eligibility reviewer employer reviewer"
+          href="interfaces/rev-04.svg"
+          ><strong>REV-04 · Training and eligibility</strong
+          ><span>Reviewer · Employer Reviewer</span><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-05 assignment detail reviewer employer reviewer"
+          href="interfaces/rev-05.svg"
+          ><strong>REV-05 · Assignment detail</strong><span>Reviewer · Employer Reviewer</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-06 accept, decline or conflict reviewer employer reviewer"
+          href="interfaces/rev-06.svg"
+          ><strong>REV-06 · Accept, decline or conflict</strong
+          ><span>Reviewer · Employer Reviewer</span><small>3 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-07 evidence review workspace reviewer employer reviewer"
+          href="interfaces/rev-07.svg"
+          ><strong>REV-07 · Evidence review workspace</strong
+          ><span>Reviewer · Employer Reviewer</span><small>1 endpoints · 7 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-08 criterion scorecard reviewer employer reviewer"
+          href="interfaces/rev-08.svg"
+          ><strong>REV-08 · Criterion scorecard</strong><span>Reviewer · Employer Reviewer</span
+          ><small>2 endpoints · 11 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-09 ai observations reveal reviewer employer reviewer"
+          href="interfaces/rev-09.svg"
+          ><strong>REV-09 · AI observations reveal</strong><span>Reviewer · Employer Reviewer</span
+          ><small>3 endpoints · 10 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-10 integrity review reviewer employer reviewer"
+          href="interfaces/rev-10.svg"
+          ><strong>REV-10 · Integrity review</strong><span>Reviewer · Employer Reviewer</span
+          ><small>1 endpoints · 13 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-11 clarification and escalation reviewer employer reviewer"
+          href="interfaces/rev-11.svg"
+          ><strong>REV-11 · Clarification and escalation</strong
+          ><span>Reviewer · Employer Reviewer</span><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-12 submit review reviewer employer reviewer"
+          href="interfaces/rev-12.svg"
+          ><strong>REV-12 · Submit review</strong><span>Reviewer · Employer Reviewer</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-13 review receipt reviewer employer reviewer"
+          href="interfaces/rev-13.svg"
+          ><strong>REV-13 · Review receipt</strong><span>Reviewer · Employer Reviewer</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="rev-14 review amendment reviewer employer reviewer"
+          href="interfaces/rev-14.svg"
+          ><strong>REV-14 · Review amendment</strong><span>Reviewer · Employer Reviewer</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-01 employer dashboard employer admin employer admin"
+          href="interfaces/emp-01.svg"
+          ><strong>EMP-01 · Employer dashboard</strong><span>Employer admin · Employer Admin</span
+          ><small>3 endpoints · 5 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-02 organisation profile employer admin employer admin"
+          href="interfaces/emp-02.svg"
+          ><strong>EMP-02 · Organisation profile</strong><span>Employer admin · Employer Admin</span
+          ><small>2 endpoints · 4 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-03 members and invitations employer admin employer admin"
+          href="interfaces/emp-03.svg"
+          ><strong>EMP-03 · Members and invitations</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>3 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-04 departments and teams employer admin employer admin"
+          href="interfaces/emp-04.svg"
+          ><strong>EMP-04 · Departments and teams</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>6 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-05 campaign list employer admin employer admin"
+          href="interfaces/emp-05.svg"
+          ><strong>EMP-05 · Campaign list</strong><span>Employer admin · Employer Admin</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-06 campaign setup wizard employer admin employer admin"
+          href="interfaces/emp-06.svg"
+          ><strong>EMP-06 · Campaign setup wizard</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>4 endpoints · 6 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-07 campaign preflight employer admin employer admin"
+          href="interfaces/emp-07.svg"
+          ><strong>EMP-07 · Campaign preflight</strong><span>Employer admin · Employer Admin</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-08 campaign lifecycle employer admin employer admin"
+          href="interfaces/emp-08.svg"
+          ><strong>EMP-08 · Campaign lifecycle</strong><span>Employer admin · Employer Admin</span
+          ><small>4 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-09 campaign operations employer admin employer admin"
+          href="interfaces/emp-09.svg"
+          ><strong>EMP-09 · Campaign operations</strong><span>Employer admin · Employer Admin</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-10 candidate import employer admin employer admin"
+          href="interfaces/emp-10.svg"
+          ><strong>EMP-10 · Candidate import</strong><span>Employer admin · Employer Admin</span
+          ><small>6 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-11 candidate directory employer admin employer admin"
+          href="interfaces/emp-11.svg"
+          ><strong>EMP-11 · Candidate directory</strong><span>Employer admin · Employer Admin</span
+          ><small>0 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-12 candidate record employer admin employer admin"
+          href="interfaces/emp-12.svg"
+          ><strong>EMP-12 · Candidate record</strong><span>Employer admin · Employer Admin</span
+          ><small>3 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-13 duplicate merge employer admin employer admin"
+          href="interfaces/emp-13.svg"
+          ><strong>EMP-13 · Duplicate merge</strong><span>Employer admin · Employer Admin</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-14 invitation management employer admin employer admin"
+          href="interfaces/emp-14.svg"
+          ><strong>EMP-14 · Invitation management</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>4 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-15 scheduling operations employer admin employer admin"
+          href="interfaces/emp-15.svg"
+          ><strong>EMP-15 · Scheduling operations</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-16 accommodation decision employer admin employer admin"
+          href="interfaces/emp-16.svg"
+          ><strong>EMP-16 · Accommodation decision</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-17 reviewer administration employer admin employer admin"
+          href="interfaces/emp-17.svg"
+          ><strong>EMP-17 · Reviewer administration</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-18 assignment board employer admin employer admin"
+          href="interfaces/emp-18.svg"
+          ><strong>EMP-18 · Assignment board</strong><span>Employer admin · Employer Admin</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-19 candidate comparison employer admin employer admin"
+          href="interfaces/emp-19.svg"
+          ><strong>EMP-19 · Candidate comparison</strong><span>Employer admin · Employer Admin</span
+          ><small>1 endpoints · 10 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-20 decision draft employer admin employer decision maker"
+          href="interfaces/emp-20.svg"
+          ><strong>EMP-20 · Decision draft</strong
+          ><span>Employer admin · Employer Decision Maker</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-21 decision approval and issue employer admin employer approver"
+          href="interfaces/emp-21.svg"
+          ><strong>EMP-21 · Decision approval and issue</strong
+          ><span>Employer admin · Employer Approver</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-22 reports and exports employer admin employer admin"
+          href="interfaces/emp-22.svg"
+          ><strong>EMP-22 · Reports and exports</strong><span>Employer admin · Employer Admin</span
+          ><small>2 endpoints · 10 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-23 integrations and webhooks employer admin employer admin"
+          href="interfaces/emp-23.svg"
+          ><strong>EMP-23 · Integrations and webhooks</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>7 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-24 communication templates employer admin employer admin"
+          href="interfaces/emp-24.svg"
+          ><strong>EMP-24 · Communication templates</strong
+          ><span>Employer admin · Employer Admin</span
+          ><small>5 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="emp-25 deployment readiness employer admin employer admin"
+          href="interfaces/emp-25.svg"
+          ><strong>EMP-25 · Deployment readiness</strong><span>Employer admin · Employer Admin</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-01 platform command centre platform admin cpf super admin"
+          href="interfaces/adm-01.svg"
+          ><strong>ADM-01 · Platform command centre</strong
+          ><span>Platform admin · CPF Super Admin</span
+          ><small>0 endpoints · 4 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-02 tenant directory platform admin cpf super admin"
+          href="interfaces/adm-02.svg"
+          ><strong>ADM-02 · Tenant directory</strong><span>Platform admin · CPF Super Admin</span
+          ><small>2 endpoints · 6 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-03 tenant detail and status platform admin cpf super admin"
+          href="interfaces/adm-03.svg"
+          ><strong>ADM-03 · Tenant detail and status</strong
+          ><span>Platform admin · CPF Super Admin</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-04 tenant staff and roles platform admin cpf super admin"
+          href="interfaces/adm-04.svg"
+          ><strong>ADM-04 · Tenant staff and roles</strong
+          ><span>Platform admin · CPF Super Admin</span
+          ><small>8 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-05 plans and subscription platform admin cpf super admin"
+          href="interfaces/adm-05.svg"
+          ><strong>ADM-05 · Plans and subscription</strong
+          ><span>Platform admin · CPF Super Admin</span
+          ><small>4 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-06 feature flags platform admin cpf super admin"
+          href="interfaces/adm-06.svg"
+          ><strong>ADM-06 · Feature flags</strong><span>Platform admin · CPF Super Admin</span
+          ><small>3 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-07 background jobs platform admin cpf super admin"
+          href="interfaces/adm-07.svg"
+          ><strong>ADM-07 · Background jobs</strong><span>Platform admin · CPF Super Admin</span
+          ><small>3 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-08 platform audit platform admin cpf super admin"
+          href="interfaces/adm-08.svg"
+          ><strong>ADM-08 · Platform audit</strong><span>Platform admin · CPF Super Admin</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-09 maintenance and releases platform admin cpf super admin"
+          href="interfaces/adm-09.svg"
+          ><strong>ADM-09 · Maintenance and releases</strong
+          ><span>Platform admin · CPF Super Admin</span
+          ><small>3 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-10 support oversight platform admin cpf super admin"
+          href="interfaces/adm-10.svg"
+          ><strong>ADM-10 · Support oversight</strong><span>Platform admin · CPF Super Admin</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="adm-11 privileged access grant platform admin cpf super admin"
+          href="interfaces/adm-11.svg"
+          ><strong>ADM-11 · Privileged access grant</strong
+          ><span>Platform admin · CPF Super Admin</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="ast-01 assessment catalogue assessment governance assessment admin"
+          href="interfaces/ast-01.svg"
+          ><strong>AST-01 · Assessment catalogue</strong
+          ><span>Assessment governance · Assessment Admin</span
+          ><small>2 endpoints · 7 requirements</small></a
+        ><a
+          class="card"
+          data-search="ast-02 assessment version builder assessment governance assessment admin"
+          href="interfaces/ast-02.svg"
+          ><strong>AST-02 · Assessment version builder</strong
+          ><span>Assessment governance · Assessment Admin</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="ast-03 assessment preview assessment governance assessment admin"
+          href="interfaces/ast-03.svg"
+          ><strong>AST-03 · Assessment preview</strong
+          ><span>Assessment governance · Assessment Admin</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="ast-04 assessment validation assessment governance assessment admin"
+          href="interfaces/ast-04.svg"
+          ><strong>AST-04 · Assessment validation</strong
+          ><span>Assessment governance · Assessment Admin</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="ast-05 assessment lifecycle assessment governance assessment admin"
+          href="interfaces/ast-05.svg"
+          ><strong>AST-05 · Assessment lifecycle</strong
+          ><span>Assessment governance · Assessment Admin</span
+          ><small>3 endpoints · 5 requirements</small></a
+        ><a
+          class="card"
+          data-search="ast-06 assessment defects assessment governance assessment admin"
+          href="interfaces/ast-06.svg"
+          ><strong>AST-06 · Assessment defects</strong
+          ><span>Assessment governance · Assessment Admin</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="ai-01 ai system and model registry assessment governance ai governance"
+          href="interfaces/ai-01.svg"
+          ><strong>AI-01 · AI system and model registry</strong
+          ><span>Assessment governance · AI Governance</span
+          ><small>2 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="ai-02 ai evaluation assessment governance ai governance"
+          href="interfaces/ai-02.svg"
+          ><strong>AI-02 · AI evaluation</strong><span>Assessment governance · AI Governance</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="ai-03 ai model lifecycle assessment governance ai governance"
+          href="interfaces/ai-03.svg"
+          ><strong>AI-03 · AI model lifecycle</strong
+          ><span>Assessment governance · AI Governance</span
+          ><small>2 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="ai-04 prompt versions assessment governance ai governance"
+          href="interfaces/ai-04.svg"
+          ><strong>AI-04 · Prompt versions</strong><span>Assessment governance · AI Governance</span
+          ><small>3 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="plg-01 plugin governance assessment governance plugin admin"
+          href="interfaces/plg-01.svg"
+          ><strong>PLG-01 · Plugin governance</strong
+          ><span>Assessment governance · Plugin Admin</span
+          ><small>3 endpoints · 4 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-01 ai system inventory governance ai governance"
+          href="interfaces/gov-01.svg"
+          ><strong>GOV-01 · AI system inventory</strong><span>Governance · AI Governance</span
+          ><small>2 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-02 ai act classification governance ai governance"
+          href="interfaces/gov-02.svg"
+          ><strong>GOV-02 · AI Act classification</strong><span>Governance · AI Governance</span
+          ><small>1 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-03 risk and control register governance risk owner"
+          href="interfaces/gov-03.svg"
+          ><strong>GOV-03 · Risk and control register</strong><span>Governance · Risk Owner</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-04 dataset governance governance data steward"
+          href="interfaces/gov-04.svg"
+          ><strong>GOV-04 · Dataset governance</strong><span>Governance · Data Steward</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-05 technical documentation governance compliance"
+          href="interfaces/gov-05.svg"
+          ><strong>GOV-05 · Technical documentation</strong><span>Governance · Compliance</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-06 quality management system governance compliance"
+          href="interfaces/gov-06.svg"
+          ><strong>GOV-06 · Quality management system</strong><span>Governance · Compliance</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-07 data-use register governance dpo / data steward"
+          href="interfaces/gov-07.svg"
+          ><strong>GOV-07 · Data-use register</strong><span>Governance · DPO / Data Steward</span
+          ><small>2 endpoints · 12 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-08 impact assessments governance dpo / compliance"
+          href="interfaces/gov-08.svg"
+          ><strong>GOV-08 · Impact assessments</strong><span>Governance · DPO / Compliance</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-09 human oversight plan governance ai governance"
+          href="interfaces/gov-09.svg"
+          ><strong>GOV-09 · Human oversight plan</strong><span>Governance · AI Governance</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-10 deployer instructions governance compliance"
+          href="interfaces/gov-10.svg"
+          ><strong>GOV-10 · Deployer instructions</strong><span>Governance · Compliance</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-11 ai literacy governance training admin"
+          href="interfaces/gov-11.svg"
+          ><strong>GOV-11 · AI literacy</strong><span>Governance · Training Admin</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-12 conformity assessment governance compliance"
+          href="interfaces/gov-12.svg"
+          ><strong>GOV-12 · Conformity assessment</strong><span>Governance · Compliance</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-13 declaration, registration and ce governance compliance"
+          href="interfaces/gov-13.svg"
+          ><strong>GOV-13 · Declaration, registration and CE</strong
+          ><span>Governance · Compliance</span><small>3 endpoints · 3 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-14 post-market monitoring plan governance compliance"
+          href="interfaces/gov-14.svg"
+          ><strong>GOV-14 · Post-market monitoring plan</strong><span>Governance · Compliance</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-15 signals and drift governance operations / ai governance"
+          href="interfaces/gov-15.svg"
+          ><strong>GOV-15 · Signals and drift</strong
+          ><span>Governance · Operations / AI Governance</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-16 serious incident workflow governance incident manager"
+          href="interfaces/gov-16.svg"
+          ><strong>GOV-16 · Serious incident workflow</strong
+          ><span>Governance · Incident Manager</span><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-17 vendor evidence governance vendor manager"
+          href="interfaces/gov-17.svg"
+          ><strong>GOV-17 · Vendor evidence</strong><span>Governance · Vendor Manager</span
+          ><small>2 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="gov-18 change control governance change authority"
+          href="interfaces/gov-18.svg"
+          ><strong>GOV-18 · Change control</strong><span>Governance · Change Authority</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="aud-01 evidence collections governance auditor / compliance"
+          href="interfaces/aud-01.svg"
+          ><strong>AUD-01 · Evidence collections</strong
+          ><span>Governance · Auditor / Compliance</span
+          ><small>2 endpoints · 5 requirements</small></a
+        ><a
+          class="card"
+          data-search="aud-02 requirement traceability governance auditor / compliance"
+          href="interfaces/aud-02.svg"
+          ><strong>AUD-02 · Requirement traceability</strong
+          ><span>Governance · Auditor / Compliance</span
+          ><small>1 endpoints · 1 requirements</small></a
+        ><a
+          class="card"
+          data-search="sup-01 support queue support support agent"
+          href="interfaces/sup-01.svg"
+          ><strong>SUP-01 · Support queue</strong><span>Support · Support Agent</span
+          ><small>1 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="sup-02 support case workspace support support agent"
+          href="interfaces/sup-02.svg"
+          ><strong>SUP-02 · Support case workspace</strong><span>Support · Support Agent</span
+          ><small>2 endpoints · 2 requirements</small></a
+        ><a
+          class="card"
+          data-search="sup-03 jit access session support support agent"
+          href="interfaces/sup-03.svg"
+          ><strong>SUP-03 · JIT access session</strong><span>Support · Support Agent</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="ops-01 operations dashboard support operations"
+          href="interfaces/ops-01.svg"
+          ><strong>OPS-01 · Operations dashboard</strong><span>Support · Operations</span
+          ><small>0 endpoints · 9 requirements</small></a
+        ><a
+          class="card"
+          data-search="ops-02 security incident and kill switch support incident commander"
+          href="interfaces/ops-02.svg"
+          ><strong>OPS-02 · Security incident and kill switch</strong
+          ><span>Support · Incident Commander</span><small>0 endpoints · 18 requirements</small></a
+        ><a
+          class="card"
+          data-search="ops-03 integration delivery monitor support operations"
+          href="interfaces/ops-03.svg"
+          ><strong>OPS-03 · Integration delivery monitor</strong><span>Support · Operations</span
+          ><small>0 endpoints · 0 requirements</small></a
+        ><a
+          class="card"
+          data-search="ds-01 design system, states and accessibility design system all users"
+          href="interfaces/ds-01.svg"
+          ><strong>DS-01 · Design system, states and accessibility</strong
+          ><span>Design system · All users</span><small>0 endpoints · 67 requirements</small></a
+        >
+      </div>
+    </main>
+    <script>
+      const q = document.querySelector('#q');
+      q.addEventListener('input', () => {
+        const v = q.value.toLowerCase();
+        document
+          .querySelectorAll('.card')
+          .forEach((c) => (c.hidden = !c.dataset.search.includes(v)));
+      });
+    </script>
+  </body>
+</html>
