@@ -1,23 +1,22 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — design tokens → `@cpf/ui` primitives
+## Immediate next slice: Wave 1 — `@cpf/ui` accessible primitives
 
-**Goal:** turn the verified Penpot `design-tokens.json` into a typed, tree-shakeable token module,
-and build the first accessible `@cpf/ui` primitives (Button, Input, Field/label) with WCAG-focused
-unit tests — the foundation the account/identity vertical will render with.
+**Goal:** build the first accessible React primitives (Button, Input, Field/label) themed from
+`@cpf/tokens`, with WCAG-focused tests (labels, roles, focus-visible, 44px target). `@cpf/tokens`
+(design tokens) is already done and parity-tested.
 
 **Source identifiers:**
 
-- `cpf-penpot-handoff/design-tokens.json` (verified in SOURCE_MANIFEST).
+- `@cpf/tokens` (colors, radii, `control.minimumTargetPx = 44`).
 - `cpf-penpot-handoff/developer-handoff.md` for component states/spacing.
 
 **Steps:**
 
-1. `@cpf/tokens`: parse/emit design tokens as typed const objects (colors, spacing, typography,
-   radii). Snapshot/shape test asserting counts match the source file.
-2. `@cpf/ui`: Button + Input + Field primitives, deny-by-default a11y (labels, roles, focus).
-3. Tests: render + a11y assertions; wire the vertical to the account/identity screens next.
-4. Update ledgers; commit.
+1. Add React + Testing Library + jsdom; enable jsdom env for `packages/ui` in vitest config.
+2. `@cpf/ui`: Button + Input + Field primitives — associated labels, visible focus, min target.
+3. Tests: render + a11y assertions (accessible name, role, disabled semantics).
+4. Update ledgers; commit. Then wire the account/identity vertical to these primitives.
 
 ## Then (Wave 1 continuation)
 

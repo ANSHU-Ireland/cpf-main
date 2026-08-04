@@ -37,11 +37,14 @@ resuming. Do not re-plan the whole project or redo completed work.
   adds a pure deny-by-default `can(actor, action, resource, permissions)` predicate (cross-tenant
   denied unless platform staff **and** explicitly permitted). 4 RLS + 7 policy tests; policy at
   100% branch coverage. Contract §12.
+- **Design tokens `@cpf/tokens` (Wave 1 start):** verified Penpot `design-tokens.json` transcribed
+  into a typed const module (16 colors, font family/body, radii, 4px space unit, 44px WCAG target).
+  A parity test reads the source JSON and asserts every value matches, so token drift fails CI.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**45/45**:
-28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**49/49**:
+28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy + 4 tokens).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 
