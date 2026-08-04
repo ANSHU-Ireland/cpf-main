@@ -40,11 +40,16 @@ resuming. Do not re-plan the whole project or redo completed work.
 - **Design tokens `@cpf/tokens` (Wave 1 start):** verified Penpot `design-tokens.json` transcribed
   into a typed const module (16 colors, font family/body, radii, 4px space unit, 44px WCAG target).
   A parity test reads the source JSON and asserts every value matches, so token drift fails CI.
+- **UI primitives `@cpf/ui` (Wave 1):** accessible `Button`, `Input`, `Field` themed from
+  `@cpf/tokens` — real button semantics + default `type="button"`, `aria-invalid` inputs, and a
+  render-prop `Field` that always wires label/hint/error via `aria-describedby` (no orphan labels),
+  44px WCAG target size. 12 jsdom + Testing-Library a11y tests (roles, accessible name/description,
+  alert on error). Vitest runs `packages/ui/**` under jsdom; everything else stays on node.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**49/49**:
-28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy + 4 tokens).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**61/61**:
+28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy + 4 tokens + 12 ui).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

@@ -19,6 +19,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done with linked evidence · 
 | `@cpf/contracts` types + manifest         | TRD §arch; Contract §8      | `packages/contracts` (generated)                   | Vitest (3, 244 ops)           | ci.yml drift gate                       | ✅     |
 | Tenant-context (`withTenant`) + RLS proof | Invariants §9; Contract §12 | `packages/db/src/tenant-context.ts`                | Vitest (4, live cross-tenant) | evidence/wave0-db.md                    | ✅     |
 | `@cpf/policy` deny-by-default `can()`     | Contract §12; Invariants §9 | `packages/policy`                                  | Vitest (7, 100% branch)       | this ledger                             | ✅     |
+| `@cpf/tokens` from Penpot handoff         | Wave 1; design-tokens.json  | `packages/tokens`                                  | Vitest (4, source parity)     | design-tokens.json                      | ✅     |
+| `@cpf/ui` accessible primitives           | Wave 1; WCAG 2.2 AA         | `packages/ui` (Button/Input/Field)                 | Vitest (12, jsdom a11y)       | developer-handoff.md                    | ✅     |
 | CI foundation (+ postgres service)        | Contract §17                | `.github/workflows/ci.yml`                         | CI run                        | ci.yml                                  | ✅     |
 
 ## Later waves

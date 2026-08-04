@@ -1,12 +1,16 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Use the React automatic runtime so JSX needs no explicit React import.
+  esbuild: { jsx: 'automatic' },
   test: {
     globals: true,
     environment: 'node',
+    // UI packages render in the DOM; everything else stays on the fast node env.
+    environmentMatchGlobs: [['packages/ui/**', 'jsdom']],
     // Loads .env (e.g. DATABASE_URL) for integration tests; no-op when absent.
-    setupFiles: ['dotenv/config'],
-    include: ['packages/**/*.test.ts', 'apps/**/*.test.ts'],
+    setupFiles: ['dotenv/config', './vitest.setup.ui.ts'],
+    include: ['packages/**/*.test.ts', 'packages/**/*.test.tsx', 'apps/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'json'],

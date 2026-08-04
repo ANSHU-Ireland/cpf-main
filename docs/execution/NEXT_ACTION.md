@@ -1,22 +1,23 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — `@cpf/ui` accessible primitives
+## Immediate next slice: Wave 1 — account/identity vertical (first end-to-end slice)
 
-**Goal:** build the first accessible React primitives (Button, Input, Field/label) themed from
-`@cpf/tokens`, with WCAG-focused tests (labels, roles, focus-visible, 44px target). `@cpf/tokens`
-(design tokens) is already done and parity-tested.
+**Goal:** the first full vertical slice wiring UI + API + policy + persistence + audit + tests:
+sign-in / current-user, rendered with `@cpf/ui` primitives, authorized by `@cpf/policy`, scoped by
+the `withTenant` RLS context, against real `iam` tables.
 
 **Source identifiers:**
 
-- `@cpf/tokens` (colors, radii, `control.minimumTargetPx = 44`).
-- `cpf-penpot-handoff/developer-handoff.md` for component states/spacing.
+- OpenAPI: auth/session + current-user operations in `@cpf/contracts` `OPERATIONS`.
+- SQL: `iam.users`, `iam.memberships`, `runtime.sessions`; RLS `app.tenant_id` context.
+- Invariants §9 (server-verified tenant identity, deny-by-default).
 
 **Steps:**
 
-1. Add React + Testing Library + jsdom; enable jsdom env for `packages/ui` in vitest config.
-2. `@cpf/ui`: Button + Input + Field primitives — associated labels, visible focus, min target.
-3. Tests: render + a11y assertions (accessible name, role, disabled semantics).
-4. Update ledgers; commit. Then wire the account/identity vertical to these primitives.
+1. Pick the concrete auth/session operationIds from the manifest; define request/response DTOs.
+2. Server handler(s): authenticate → establish tenant context → `can()` authorize → query → audit.
+3. UI: sign-in form from `@cpf/ui` `Field`/`Input`/`Button`; current-user display.
+4. Tests across the slice (handler + policy + a11y) and an audit-event assertion. Update ledgers; commit.
 
 ## Then (Wave 1 continuation)
 
