@@ -44,6 +44,8 @@ function repo(
       Promise.resolve(camp({ code: input.code, title: input.title })),
     updateCampaign: (_a: Actor, _id: string, input: CampaignUpdate) =>
       Promise.resolve(camp({ title: input.title ?? 'Frontend Engineer' })),
+    transitionStatus: () => Promise.resolve(camp({ status: 'active' })),
+    duplicateCampaign: () => Promise.resolve(camp({ id: 'new', code: 'COPY' })),
   };
 }
 

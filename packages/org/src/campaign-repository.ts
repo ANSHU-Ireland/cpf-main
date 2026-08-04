@@ -16,11 +16,24 @@ export interface CampaignListResult {
   readonly hasMore: boolean;
 }
 
+export type TransitionStatusResult = CampaignRecord | 'not_found' | 'invalid_status';
+
 export interface CampaignRepository {
   listCampaigns(actor: Actor, query: CampaignListQuery): Promise<CampaignListResult>;
   getCampaign(actor: Actor, id: string): Promise<CampaignRecord | null>;
   createCampaign(actor: Actor, input: CampaignCreate): Promise<CampaignRecord>;
   updateCampaign(actor: Actor, id: string, input: CampaignUpdate): Promise<CampaignRecord | null>;
+  transitionStatus(
+    actor: Actor,
+    id: string,
+    toStatus: CampaignStatus,
+    validFrom: readonly CampaignStatus[],
+  ): Promise<TransitionStatusResult>;
+  duplicateCampaign(
+    actor: Actor,
+    sourceId: string,
+    newCode: string,
+  ): Promise<CampaignRecord | null>;
 }
 
 export interface PgCampaignRepositoryOptions {
@@ -205,6 +218,91 @@ export class PgCampaignRepository implements CampaignRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: input as unknown as Record<string, unknown>,
+      });
+
+      return toRecord(row);
+    });
+  }
+
+  async transitionStatus(
+    actor: Actor,
+    id: string,
+    toStatus: CampaignStatus,
+    validFrom: readonly CampaignStatus[],
+  ): Promise<TransitionStatusResult> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const res = await client.query<CampaignRow>(
+        `UPDATE hiring.campaigns
+            SET status = $3, updated_at = now()
+          WHERE tenant_id = $1 AND id = $2 AND status = ANY($4)
+         RETURNING ${COLUMNS}`,
+        [actor.tenantId, id, toStatus, validFrom],
+      );
+
+      if (res.rows[0] !== undefined) {
+        const row = res.rows[0];
+        await new PgAuditWriter(client).append({
+          tenantId: actor.tenantId,
+          actorType: 'user',
+          actorId: actor.userId,
+          action: `campaign.${toStatus}`,
+          resourceType: 'campaign',
+          resourceId: row.id,
+          outcome: 'success',
+          metadata: { fromStatus: validFrom, toStatus },
+        });
+        return toRecord(row);
+      }
+
+      const check = await client.query<{ id: string }>(
+        'SELECT id FROM hiring.campaigns WHERE tenant_id = $1 AND id = $2',
+        [actor.tenantId, id],
+      );
+      return check.rows[0] === undefined ? 'not_found' : 'invalid_status';
+    });
+  }
+
+  async duplicateCampaign(
+    actor: Actor,
+    sourceId: string,
+    newCode: string,
+  ): Promise<CampaignRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const source = await client.query<CampaignRow>(
+        `SELECT ${COLUMNS} FROM hiring.campaigns WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, sourceId],
+      );
+      if (source.rows[0] === undefined) return null;
+
+      const s = source.rows[0];
+      const res = await client.query<CampaignRow>(
+        `INSERT INTO hiring.campaigns (tenant_id, owner_user_id, code, title, role_name, seniority, department_id, team_id, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft')
+         RETURNING ${COLUMNS}`,
+        [
+          actor.tenantId,
+          actor.userId,
+          newCode,
+          s.title,
+          s.role_name,
+          s.seniority,
+          s.department_id,
+          s.team_id,
+        ],
+      );
+
+      const row = res.rows[0];
+      if (row === undefined) throw new Error('campaign row missing after insert');
+
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'campaign.duplicate',
+        resourceType: 'campaign',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { sourceId, newCode },
       });
 
       return toRecord(row);

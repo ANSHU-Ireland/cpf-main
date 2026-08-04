@@ -18,4 +18,10 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'team' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'campaign' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'campaign' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'campaign_reviewer' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'campaign_reviewer' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'application' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'application' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'reviewer_profile' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'reviewer_profile' },
 ];

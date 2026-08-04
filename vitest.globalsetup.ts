@@ -45,6 +45,10 @@ export async function setup(): Promise<void> {
     await pool.query('GRANT SELECT, INSERT ON support.case_messages TO cpf_app');
     await pool.query('GRANT SELECT, INSERT ON audit.events TO cpf_app');
     await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.campaigns TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.campaign_reviewers TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.reviewer_profiles TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.applications TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT ON hiring.candidates TO cpf_app');
   } finally {
     await pool.end();
   }

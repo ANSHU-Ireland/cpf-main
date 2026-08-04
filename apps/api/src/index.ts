@@ -12,3 +12,7 @@ export * from './organization/members.handler.js';
 export * from './organization/departments.handler.js';
 export * from './organization/teams.handler.js';
 export * from './campaign/campaigns.handler.js';
+export * from './campaign/campaign-lifecycle.handler.js';
+export * from './campaign/campaign-reviewers.handler.js';
+export * from './campaign/applications.handler.js';
+export * from './campaign/reviewer-profiles.handler.js';
