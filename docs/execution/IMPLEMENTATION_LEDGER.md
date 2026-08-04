@@ -44,6 +44,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done with linked evidence · 
 | Organisation read HTTP boundary                           | OpenAPI `get_organization`                   | `apps/api` (`handleGetOrganization`)                                                                                | Vitest (4, 200/422/403/404)     | this ledger                             | ✅     |
 | Organisation settings update (Employer Admin, `@cpf/org`) | FR-EA-01; ASM-14                             | `packages/org` (`updateOrganization`, `PgOrganizationRepository.updateOrganization`, audited `organization.update`) | Vitest (9: 8 unit + 1 live)     | this ledger; ASM-14                     | ✅     |
 | Organisation update HTTP boundary                         | OpenAPI `patch_organization`                 | `apps/api` (`handlePatchOrganization`)                                                                              | Vitest (4, 200/422/403/404)     | this ledger                             | ✅     |
+| Organisation members list (Employer Admin, `@cpf/org`)    | FR-EA-02; ASM-15                             | `packages/org` (`listMembers`, `PgMemberRepository`, keyset-paginated over memberships+users+roles)                 | Vitest (10: 8 unit + 2 live-pg) | this ledger; ASM-15                     | ✅     |
+| Organisation members HTTP boundary                        | OpenAPI `get_organization_members`           | `apps/api` (`handleGetOrganizationMembers`)                                                                         | Vitest (4, 200/422/403)         | this ledger                             | ✅     |
 
 ## Later waves
 

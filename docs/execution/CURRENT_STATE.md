@@ -193,10 +193,21 @@ resuming. Do not re-plan the whole project or redo completed work.
   4 handler + 1 live-Postgres (an Employer Admin update writes a 64-hex `event_hash` and persists the
   new values).
 
+- **Organisation members list (`get_organization_members`; FR-EA-02) — first Employer Admin
+  collection read:** `listMembers` keyset-paginates `iam.memberships` (both `tenant_isolation` and
+  `v2_tenant_isolation` RLS on `tenant_id`), joined with `iam.users` for display fields and role
+  codes aggregated from `iam.membership_roles` → `iam.roles`. Deny-by-default on the `employer_admin`
+  role (`read`,`organization_member`). Audit is disabled (`x-audit-event: false`). The 200 body uses
+  a concrete `MemberDto` (id/userId/email/displayName/status/roles/departmentId/teamId/startsAt/
+  endsAt/createdAt/updatedAt) inside a `MemberPageDto` (items/nextCursor/total), with keyset
+  cursor + limit. `apps/api` `handleGetOrganizationMembers` (200 / 422 / 403). Tests: 8 unit +
+  4 handler + 2 live-Postgres (lists only caller-tenant members with roles aggregated; never
+  surfaces members from another tenant via RLS).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**272/272**:
-259 prior + 8 update unit + 4 handler + 1 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**286/286**:
+272 prior + 8 member unit + 4 handler + 2 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

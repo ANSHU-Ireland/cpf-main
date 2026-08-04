@@ -1,33 +1,29 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — list organisation members (`get_organization_members`)
+## Immediate next slice: Wave 1 — invite a tenant member (`post_organization_member_invitations`)
 
-**Goal:** an Employer Admin lists the tenant's members with their roles and access-review state — the
-first Employer Admin **collection** read, opening the membership-management surface.
+**Goal:** an Employer Admin invites a new member to the tenant — the first Employer Admin **audited
+collection write** on the membership surface, paired with the just-shipped member list.
 
 **Source identifiers:**
 
-- OpenAPI `get_organization_members` (tag Employer Admin; FR-EA-02; audit=false; `cursor`/`limit`
-  query params; `staffBearer`).
-- SQL `iam.memberships` (user↔tenant), `iam.membership_roles` (role assignments), `iam.roles`
-  (`code`/`scope`), `iam.users` (`display_name`/`email`/`status`) — confirm which carry
-  `tenant_isolation` RLS and how access-review state is represented.
+- OpenAPI `post_organization_member_invitations` (tag Employer Admin; FR-EA-02; audit=**true**;
+  `IdempotencyKey`; body `GenericCommand`; `staffBearer`).
+- SQL `iam.memberships` (tenant_isolation + v2 RLS), `iam.users` (invited status), `iam.membership_roles`.
 
 **Steps:**
 
-1. Confirm the join shape (memberships → users + aggregated role codes) and the keyset order
-   (likely `(created_at, id)` on `iam.memberships`). Record an ASM for the concrete
-   `OrganizationMemberDto` + how "access-review state" maps to schema columns.
-2. `@cpf/org`: `parseOrganizationMemberQuery` + `listOrganizationMembers` (deny-by-default `read` on
-   a new `organization_member` resource type or reuse `organization`), keyset-paginated.
-3. Tests: unit (authz/validation/paging) + live-pg (only same-tenant members returned; roles
-   aggregated). Add any new `GRANT`s to `vitest.globalsetup.ts`.
-4. `apps/api` `handleGetOrganizationMembers` + tests; update ledgers; commit.
+1. Confirm the invitation shape (create a user + membership with `status='invited'`, assign initial
+   roles). Record an ASM for the concrete `InvitationDto` and the create semantics.
+2. `@cpf/org`: `parseInvitationCreate` (email, roles, department/team optional) + audited
+   `inviteMember` use-case (deny-by-default write; chains an `organization_member.invite` event).
+3. Tests: unit (authz/validation/duplicate rejection) + live-pg (invitation writes a chained event;
+   invited member appears in the list). Add any new `GRANT`s.
+4. `apps/api` `handlePostOrganizationMemberInvitation` + tests; update ledgers; commit.
 
-> **Note:** the `/organization` root pair is DONE — `get_organization` (read) and
-> `patch_organization` (first Employer Admin **audited** write over the writable subset
-> `displayName`/`defaultTimezone`/`branding`/`settings`, `organization.update` chained in-tx, ASM-14).
-> `tenant.organizations` carries **no** RLS → service-layer `WHERE id = <caller tenant>` scoping.
+> **Note:** the `/organization/members` read is DONE — `get_organization_members` keyset-paginated
+> over RLS-scoped `iam.memberships` + `iam.users` + aggregated role codes, deny-by-default on
+> `employer_admin` (read, organization_member), concrete `MemberDto` in `MemberPageDto` (ASM-15).
 
 > **Deferred:** `post_me_data_export` (FR-ACC-19) and `post_me_deactivation` (FR-ACC-20) are blocked
 > on the hiring candidate vertical + user→candidate identity resolution — see ASM-09. Revisit once
@@ -73,7 +69,10 @@ first Employer Admin **collection** read, opening the membership-management surf
   the `employer_admin` role, concrete `OrganizationDto` (ASM-13).
 - **Organisation settings update** — `patch_organization`, the first Employer Admin **audited** write
   over the writable subset (`displayName`/`defaultTimezone`/`branding`/`settings`; immutable keys
-  rejected), `organization.update` chained in-tx (ASM-14). 272/272 green.
+  rejected), `organization.update` chained in-tx (ASM-14).
+- **Organisation members list** — `get_organization_members` keyset-paginated over RLS-scoped
+  `iam.memberships` + `iam.users` + aggregated role codes, deny-by-default on `employer_admin`
+  (`read`, `organization_member`), concrete `MemberDto`/`MemberPageDto` (ASM-15). 286/286 green.
 
 ## Standing rules for the loop
 

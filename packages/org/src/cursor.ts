@@ -1,0 +1,25 @@
+/** Generic opaque keyset cursor over a (timestamp, id) ordering. */
+export interface KeysetCursor {
+  readonly ts: string;
+  readonly id: string;
+}
+
+export function encodeCursor(cursor: KeysetCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+export function decodeCursor(raw: string): KeysetCursor | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (parsed === null || typeof parsed !== 'object') {
+      return null;
+    }
+    const rec = parsed as Record<string, unknown>;
+    if (typeof rec.ts === 'string' && typeof rec.id === 'string') {
+      return { ts: rec.ts, id: rec.id };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
