@@ -1,23 +1,22 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — account/identity vertical (first end-to-end slice)
+## Immediate next slice: Wave 1 — `get_me` HTTP boundary + UI profile view
 
-**Goal:** the first full vertical slice wiring UI + API + policy + persistence + audit + tests:
-sign-in / current-user, rendered with `@cpf/ui` primitives, authorized by `@cpf/policy`, scoped by
-the `withTenant` RLS context, against real `iam` tables.
+**Goal:** expose the completed `@cpf/account` `getMe` use-case over an HTTP handler validated against
+the `@cpf/contracts` `get_me` operation (problem+json errors, correlation id), and render the
+returned profile with `@cpf/ui` primitives.
 
 **Source identifiers:**
 
-- OpenAPI: auth/session + current-user operations in `@cpf/contracts` `OPERATIONS`.
-- SQL: `iam.users`, `iam.memberships`, `runtime.sessions`; RLS `app.tenant_id` context.
-- Invariants §9 (server-verified tenant identity, deny-by-default).
+- OpenAPI `get_me` (200 `UserProfile`, Problem responses, `X-Correlation-ID` header).
+- `@cpf/account` `getMe` (already tested end-to-end against live RLS).
 
 **Steps:**
 
-1. Pick the concrete auth/session operationIds from the manifest; define request/response DTOs.
-2. Server handler(s): authenticate → establish tenant context → `can()` authorize → query → audit.
-3. UI: sign-in form from `@cpf/ui` `Field`/`Input`/`Button`; current-user display.
-4. Tests across the slice (handler + policy + a11y) and an audit-event assertion. Update ledgers; commit.
+1. Add an app/server package with a `get_me` handler: map `GetMeResult` → 200 / 403 / 404 Problem.
+2. Handler test: authorized 200 shape, 404 problem, 403 problem; assert correlation id echoed.
+3. UI: a profile view composed from `@cpf/ui` (name, email, tenant roles), with an a11y test.
+4. Update ledgers; commit. Then the first audited write vertical (e.g. `patch_me`).
 
 ## Then (Wave 1 continuation)
 

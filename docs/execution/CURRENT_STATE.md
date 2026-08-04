@@ -45,11 +45,17 @@ resuming. Do not re-plan the whole project or redo completed work.
   render-prop `Field` that always wires label/hint/error via `aria-describedby` (no orphan labels),
   44px WCAG target size. 12 jsdom + Testing-Library a11y tests (roles, accessible name/description,
   alert on error). Vitest runs `packages/ui/**` under jsdom; everything else stays on node.
+- **Account vertical `@cpf/account` (`get_me`, FR-ACC-04/12):** first server-side vertical. `getMe`
+  authorizes deny-by-default via `@cpf/policy` (`self_profile` read for authenticated callers), then
+  `PgAccountRepository` reads the caller's own `iam.users` row + current-tenant `iam.memberships`
+  role context **through the `withTenant` RLS context** as a non-superuser `cpf_app` role. 4 unit
+  tests (authz allow/deny, 404, null-tenant) + 2 live-Postgres tests proving a different-tenant
+  actor sees no membership (RLS). No audit event — `get_me` is `x-audit-event: false` in the spec.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**61/61**:
-28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy + 4 tokens + 12 ui).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**67/67**:
+28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy + 4 tokens + 12 ui + 6 account).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 
