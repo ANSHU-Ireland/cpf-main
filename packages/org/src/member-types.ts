@@ -31,3 +31,11 @@ export interface MemberListQuery {
   readonly limit: number;
   readonly cursor: KeysetCursor | null;
 }
+
+export interface MemberStatusUpdate {
+  readonly status: MembershipStatus;
+}
+
+export interface MemberRolesUpdate {
+  readonly roles: readonly string[];
+}

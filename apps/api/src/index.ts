@@ -11,3 +11,4 @@ export * from './organization/organization.handler.js';
 export * from './organization/members.handler.js';
 export * from './organization/departments.handler.js';
 export * from './organization/teams.handler.js';
+export * from './campaign/campaigns.handler.js';

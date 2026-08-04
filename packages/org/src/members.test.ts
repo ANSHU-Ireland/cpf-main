@@ -28,7 +28,11 @@ function member(over: Partial<MemberRecord> = {}): MemberRecord {
 }
 
 function repo(result: MemberListResult): MemberRepository {
-  return { listMembers: () => Promise.resolve(result) };
+  return {
+    listMembers: () => Promise.resolve(result),
+    updateMemberStatus: () => Promise.resolve(null),
+    replaceMemberRoles: () => Promise.resolve(null),
+  };
 }
 
 describe('parseMemberListQuery', () => {

@@ -27,13 +27,15 @@ export async function setup(): Promise<void> {
        END $$;`,
     );
 
-    await pool.query('GRANT USAGE ON SCHEMA tenant, iam, audit, support TO cpf_app');
+    await pool.query('GRANT USAGE ON SCHEMA tenant, iam, audit, support, hiring TO cpf_app');
     await pool.query('GRANT SELECT, UPDATE ON tenant.organizations TO cpf_app');
-    await pool.query('GRANT SELECT, INSERT ON tenant.departments TO cpf_app');
-    await pool.query('GRANT SELECT, INSERT ON tenant.teams TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT, UPDATE ON tenant.departments TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT, UPDATE ON tenant.teams TO cpf_app');
     await pool.query(
       'GRANT SELECT ON iam.users, iam.memberships, iam.membership_roles, iam.roles TO cpf_app',
     );
+    await pool.query('GRANT UPDATE ON iam.memberships TO cpf_app');
+    await pool.query('GRANT INSERT, DELETE ON iam.membership_roles TO cpf_app');
     await pool.query('GRANT SELECT, INSERT, UPDATE ON iam.user_profiles TO cpf_app');
     await pool.query('GRANT SELECT, UPDATE ON iam.user_sessions TO cpf_app');
     await pool.query('GRANT SELECT ON iam.account_security_events TO cpf_app');
@@ -42,6 +44,7 @@ export async function setup(): Promise<void> {
     await pool.query('GRANT SELECT, INSERT ON support.cases TO cpf_app');
     await pool.query('GRANT SELECT, INSERT ON support.case_messages TO cpf_app');
     await pool.query('GRANT SELECT, INSERT ON audit.events TO cpf_app');
+    await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.campaigns TO cpf_app');
   } finally {
     await pool.end();
   }

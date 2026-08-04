@@ -7,6 +7,7 @@ import type {
   DepartmentListQuery,
   DepartmentRecord,
   DepartmentStatus,
+  DepartmentUpdate,
 } from './department-types.js';
 
 export interface DepartmentListResult {
@@ -18,6 +19,11 @@ export interface DepartmentListResult {
 export interface DepartmentRepository {
   listDepartments(actor: Actor, query: DepartmentListQuery): Promise<DepartmentListResult>;
   createDepartment(actor: Actor, input: DepartmentCreate): Promise<DepartmentRecord>;
+  updateDepartment(
+    actor: Actor,
+    id: string,
+    input: DepartmentUpdate,
+  ): Promise<DepartmentRecord | null>;
 }
 
 export interface PgDepartmentRepositoryOptions {
@@ -116,6 +122,55 @@ export class PgDepartmentRepository implements DepartmentRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: { name: input.name },
+      });
+
+      return toRecord(row);
+    });
+  }
+
+  async updateDepartment(
+    actor: Actor,
+    id: string,
+    input: DepartmentUpdate,
+  ): Promise<DepartmentRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const sets: string[] = [];
+      const params: unknown[] = [actor.tenantId, id];
+      let idx = 3;
+
+      if (input.name !== undefined) {
+        sets.push(`name = $${idx++}`);
+        params.push(input.name);
+      }
+      if (input.code !== undefined) {
+        sets.push(`code = $${idx++}`);
+        params.push(input.code);
+      }
+      if (input.status !== undefined) {
+        sets.push(`status = $${idx++}`);
+        params.push(input.status);
+      }
+
+      const res = await client.query<DepartmentRow>(
+        `UPDATE tenant.departments
+            SET ${sets.join(', ')}, updated_at = now()
+          WHERE tenant_id = $1 AND id = $2
+         RETURNING ${COLUMNS}`,
+        params,
+      );
+
+      const row = res.rows[0];
+      if (row === undefined) return null;
+
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'department.update',
+        resourceType: 'department',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: input as unknown as Record<string, unknown>,
       });
 
       return toRecord(row);

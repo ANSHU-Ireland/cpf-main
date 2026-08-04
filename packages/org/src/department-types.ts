@@ -29,3 +29,9 @@ export interface DepartmentCreate {
   readonly name: string;
   readonly code?: string;
 }
+
+export interface DepartmentUpdate {
+  readonly name?: string;
+  readonly code?: string;
+  readonly status?: DepartmentStatus;
+}

@@ -1,14 +1,18 @@
 import {
   parseDepartmentCreate,
+  parseDepartmentId,
   parseDepartmentListQuery,
+  parseDepartmentUpdate,
   type Actor,
   type CreateDepartmentResult,
   type DepartmentCreate,
   type DepartmentDto,
   type DepartmentListQuery,
   type DepartmentPageDto,
+  type DepartmentUpdate,
   type ListDepartmentsResult,
   type RawDepartmentListQuery,
+  type UpdateDepartmentResult,
 } from '@cpf/org';
 import {
   ensureCorrelationId,
@@ -21,6 +25,11 @@ import {
 export interface DepartmentService {
   listDepartments(actor: Actor, query: DepartmentListQuery): Promise<ListDepartmentsResult>;
   createDepartment(actor: Actor, input: DepartmentCreate): Promise<CreateDepartmentResult>;
+  updateDepartment(
+    actor: Actor,
+    id: string,
+    input: DepartmentUpdate,
+  ): Promise<UpdateDepartmentResult>;
 }
 
 export interface GetDepartmentsRequest {
@@ -102,4 +111,61 @@ export async function handlePostOrganizationDepartment(
     correlationId,
     detail: result.reason,
   });
+}
+
+export interface PatchDepartmentRequest {
+  readonly actor: Actor;
+  readonly departmentId: string;
+  readonly body: unknown;
+  readonly correlationId?: string;
+}
+
+export async function handlePatchOrganizationDepartment(
+  service: DepartmentService,
+  req: PatchDepartmentRequest,
+): Promise<DepartmentResponse> {
+  const correlationId = ensureCorrelationId(req.correlationId);
+
+  const id = parseDepartmentId(req.departmentId);
+  if (id === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'departmentId must be a valid UUID.',
+    });
+  }
+
+  const parsed = parseDepartmentUpdate(req.body);
+  if (!parsed.ok) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'The request body failed validation.',
+      errors: parsed.errors.map((message) => ({ detail: message })),
+    });
+  }
+
+  const result = await service.updateDepartment(req.actor, id, parsed.value);
+  if (result.ok) {
+    return jsonResponse(200, result.department, correlationId);
+  }
+  if (result.status === 409) {
+    return problemResponse({
+      status: 409,
+      title: 'Conflict',
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  if (result.status === 404) {
+    return problemResponse({
+      status: 404,
+      title: 'Not Found',
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return problemResponse({ status: 403, title: 'Forbidden', correlationId, detail: result.reason });
 }

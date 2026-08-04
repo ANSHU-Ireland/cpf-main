@@ -8,7 +8,10 @@ import type {
   DepartmentDto,
   DepartmentListQuery,
   DepartmentPageDto,
+  DepartmentStatus,
+  DepartmentUpdate,
 } from './department-types.js';
+import { DEPARTMENT_STATUSES } from './department-types.js';
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -159,6 +162,107 @@ export async function createDepartment(
 
   try {
     const record = await deps.repository.createDepartment(actor, input);
+    return { ok: true, department: record };
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      'code' in err &&
+      (err as Record<string, unknown>).code === '23505'
+    ) {
+      return { ok: false, status: 409, reason: 'A department with that name already exists.' };
+    }
+    throw err;
+  }
+}
+
+// --- Update ---
+
+const UPDATE_KEYS = new Set(['name', 'code', 'status']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ParseDepartmentUpdateResult =
+  | { readonly ok: true; readonly value: DepartmentUpdate }
+  | { readonly ok: false; readonly errors: readonly string[] };
+
+export function parseDepartmentUpdate(raw: unknown): ParseDepartmentUpdateResult {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, errors: ['body must be a JSON object'] };
+  }
+  const input = raw as Record<string, unknown>;
+  const errors: string[] = [];
+
+  for (const key of Object.keys(input)) {
+    if (!UPDATE_KEYS.has(key)) {
+      errors.push(`unknown property: ${key}`);
+    }
+  }
+
+  const hasAtLeastOne =
+    (UPDATE_KEYS.has('name') && input.name !== undefined) ||
+    (UPDATE_KEYS.has('code') && input.code !== undefined) ||
+    (UPDATE_KEYS.has('status') && input.status !== undefined);
+  if (!hasAtLeastOne) {
+    errors.push('at least one of name, code, status is required');
+  }
+
+  if (input.name !== undefined) {
+    if (typeof input.name !== 'string' || input.name.length === 0 || input.name.length > MAX_NAME) {
+      errors.push(`name must be a non-empty string up to ${MAX_NAME} chars`);
+    }
+  }
+  if (input.code !== undefined) {
+    if (typeof input.code !== 'string' || input.code.length === 0 || input.code.length > MAX_CODE) {
+      errors.push(`code must be a non-empty string up to ${MAX_CODE} chars`);
+    }
+  }
+  if (input.status !== undefined) {
+    if (!DEPARTMENT_STATUSES.includes(input.status as DepartmentStatus)) {
+      errors.push(`status must be one of: ${DEPARTMENT_STATUSES.join(', ')}`);
+    }
+  }
+
+  if (errors.length > 0) return { ok: false, errors };
+
+  const value: DepartmentUpdate = {
+    ...(input.name !== undefined ? { name: input.name as string } : {}),
+    ...(input.code !== undefined ? { code: input.code as string } : {}),
+    ...(input.status !== undefined ? { status: input.status as DepartmentStatus } : {}),
+  };
+  return { ok: true, value };
+}
+
+export function parseDepartmentId(raw: string): string | null {
+  return UUID_RE.test(raw) ? raw : null;
+}
+
+export type UpdateDepartmentResult =
+  | { readonly ok: true; readonly department: DepartmentDto }
+  | { readonly ok: false; readonly status: 403; readonly reason: string }
+  | { readonly ok: false; readonly status: 404; readonly reason: string }
+  | { readonly ok: false; readonly status: 409; readonly reason: string };
+
+export async function updateDepartment(
+  deps: DepartmentDeps,
+  actor: Actor,
+  id: string,
+  input: DepartmentUpdate,
+): Promise<UpdateDepartmentResult> {
+  const permissions = deps.permissions ?? ORG_PERMISSIONS;
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'department', tenantId: actor.tenantId },
+    permissions,
+  );
+  if (!decision.allowed) {
+    return { ok: false, status: 403, reason: decision.reason };
+  }
+
+  try {
+    const record = await deps.repository.updateDepartment(actor, id, input);
+    if (record === null) {
+      return { ok: false, status: 404, reason: 'Department not found.' };
+    }
     return { ok: true, department: record };
   } catch (err: unknown) {
     if (

@@ -3,7 +3,15 @@ import { ORG_PERMISSIONS } from './permissions.js';
 import { encodeCursor, decodeCursor } from './cursor.js';
 import type { TeamRepository } from './team-repository.js';
 import type { Actor } from './types.js';
-import type { TeamCreate, TeamDto, TeamListQuery, TeamPageDto } from './team-types.js';
+import type {
+  TeamCreate,
+  TeamDto,
+  TeamListQuery,
+  TeamPageDto,
+  TeamStatus,
+  TeamUpdate,
+} from './team-types.js';
+import { TEAM_STATUSES } from './team-types.js';
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -152,6 +160,110 @@ export async function createTeam(
 
   try {
     const record = await deps.repository.createTeam(actor, input);
+    return { ok: true, team: record };
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      'code' in err &&
+      (err as Record<string, unknown>).code === '23505'
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        reason: 'A team with that name already exists in this department.',
+      };
+    }
+    throw err;
+  }
+}
+
+// --- Update ---
+
+const UPDATE_KEYS = new Set(['name', 'departmentId', 'status']);
+
+export type ParseTeamUpdateResult =
+  | { readonly ok: true; readonly value: TeamUpdate }
+  | { readonly ok: false; readonly errors: readonly string[] };
+
+export function parseTeamUpdate(raw: unknown): ParseTeamUpdateResult {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, errors: ['body must be a JSON object'] };
+  }
+  const input = raw as Record<string, unknown>;
+  const errors: string[] = [];
+
+  for (const key of Object.keys(input)) {
+    if (!UPDATE_KEYS.has(key)) {
+      errors.push(`unknown property: ${key}`);
+    }
+  }
+
+  const hasField =
+    input.name !== undefined || input.departmentId !== undefined || input.status !== undefined;
+  if (!hasField) {
+    errors.push('at least one of name, departmentId, status is required');
+  }
+
+  if (input.name !== undefined) {
+    if (typeof input.name !== 'string' || input.name.length === 0 || input.name.length > MAX_NAME) {
+      errors.push(`name must be a non-empty string up to ${MAX_NAME} chars`);
+    }
+  }
+  if (input.departmentId !== undefined && input.departmentId !== null) {
+    if (typeof input.departmentId !== 'string' || !UUID_RE.test(input.departmentId)) {
+      errors.push('departmentId must be a valid UUID or null');
+    }
+  }
+  if (input.status !== undefined) {
+    if (!TEAM_STATUSES.includes(input.status as TeamStatus)) {
+      errors.push(`status must be one of: ${TEAM_STATUSES.join(', ')}`);
+    }
+  }
+
+  if (errors.length > 0) return { ok: false, errors };
+
+  const value: TeamUpdate = {
+    ...(input.name !== undefined ? { name: input.name as string } : {}),
+    ...(input.departmentId !== undefined
+      ? { departmentId: input.departmentId as string | null }
+      : {}),
+    ...(input.status !== undefined ? { status: input.status as TeamStatus } : {}),
+  };
+  return { ok: true, value };
+}
+
+export function parseTeamId(raw: string): string | null {
+  return UUID_RE.test(raw) ? raw : null;
+}
+
+export type UpdateTeamResult =
+  | { readonly ok: true; readonly team: TeamDto }
+  | { readonly ok: false; readonly status: 403; readonly reason: string }
+  | { readonly ok: false; readonly status: 404; readonly reason: string }
+  | { readonly ok: false; readonly status: 409; readonly reason: string };
+
+export async function updateTeam(
+  deps: TeamDeps,
+  actor: Actor,
+  id: string,
+  input: TeamUpdate,
+): Promise<UpdateTeamResult> {
+  const permissions = deps.permissions ?? ORG_PERMISSIONS;
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'team', tenantId: actor.tenantId },
+    permissions,
+  );
+  if (!decision.allowed) {
+    return { ok: false, status: 403, reason: decision.reason };
+  }
+
+  try {
+    const record = await deps.repository.updateTeam(actor, id, input);
+    if (record === null) {
+      return { ok: false, status: 404, reason: 'Team not found.' };
+    }
     return { ok: true, team: record };
   } catch (err: unknown) {
     if (

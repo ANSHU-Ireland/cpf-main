@@ -2,7 +2,13 @@ import type { Pool } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
 import { PgAuditWriter } from '@cpf/audit';
 import type { Actor } from './types.js';
-import type { TeamCreate, TeamListQuery, TeamRecord, TeamStatus } from './team-types.js';
+import type {
+  TeamCreate,
+  TeamListQuery,
+  TeamRecord,
+  TeamStatus,
+  TeamUpdate,
+} from './team-types.js';
 
 export interface TeamListResult {
   readonly items: readonly TeamRecord[];
@@ -13,6 +19,7 @@ export interface TeamListResult {
 export interface TeamRepository {
   listTeams(actor: Actor, query: TeamListQuery): Promise<TeamListResult>;
   createTeam(actor: Actor, input: TeamCreate): Promise<TeamRecord>;
+  updateTeam(actor: Actor, id: string, input: TeamUpdate): Promise<TeamRecord | null>;
 }
 
 export interface PgTeamRepositoryOptions {
@@ -110,6 +117,51 @@ export class PgTeamRepository implements TeamRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: { name: input.name, departmentId: input.departmentId ?? null },
+      });
+
+      return toRecord(row);
+    });
+  }
+
+  async updateTeam(actor: Actor, id: string, input: TeamUpdate): Promise<TeamRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const sets: string[] = [];
+      const params: unknown[] = [actor.tenantId, id];
+      let idx = 3;
+
+      if (input.name !== undefined) {
+        sets.push(`name = $${idx++}`);
+        params.push(input.name);
+      }
+      if (input.departmentId !== undefined) {
+        sets.push(`department_id = $${idx++}`);
+        params.push(input.departmentId);
+      }
+      if (input.status !== undefined) {
+        sets.push(`status = $${idx++}`);
+        params.push(input.status);
+      }
+
+      const res = await client.query<TeamRow>(
+        `UPDATE tenant.teams
+            SET ${sets.join(', ')}, updated_at = now()
+          WHERE tenant_id = $1 AND id = $2
+         RETURNING ${COLUMNS}`,
+        params,
+      );
+
+      const row = res.rows[0];
+      if (row === undefined) return null;
+
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'team.update',
+        resourceType: 'team',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: input as unknown as Record<string, unknown>,
       });
 
       return toRecord(row);

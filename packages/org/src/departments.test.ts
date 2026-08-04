@@ -31,6 +31,7 @@ function repo(result: DepartmentListResult): DepartmentRepository {
     listDepartments: () => Promise.resolve(result),
     createDepartment: (_actor: Actor, input: DepartmentCreate) =>
       Promise.resolve(dept({ name: input.name, code: input.code ?? null })),
+    updateDepartment: () => Promise.resolve(null),
   };
 }
 
@@ -146,6 +147,7 @@ describe('createDepartment', () => {
         err.code = '23505';
         return Promise.reject(err);
       },
+      updateDepartment: () => Promise.resolve(null),
     };
     const result = await createDepartment({ repository: dupRepo }, admin, { name: 'Engineering' });
     expect(result.ok).toBe(false);

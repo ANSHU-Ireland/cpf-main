@@ -26,6 +26,7 @@ function repo(result: TeamListResult): TeamRepository {
     listTeams: () => Promise.resolve(result),
     createTeam: (_actor: Actor, input: TeamCreate) =>
       Promise.resolve(team({ name: input.name, departmentId: input.departmentId ?? null })),
+    updateTeam: () => Promise.resolve(null),
   };
 }
 
@@ -151,6 +152,7 @@ describe('createTeam', () => {
         err.code = '23505';
         return Promise.reject(err);
       },
+      updateTeam: () => Promise.resolve(null),
     };
     const result = await createTeam({ repository: dupRepo }, admin, { name: 'Frontend' });
     expect(result.ok).toBe(false);

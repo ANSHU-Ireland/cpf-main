@@ -32,6 +32,7 @@ function service(
   return {
     listDepartments: () => Promise.resolve(list),
     createDepartment: () => Promise.resolve(create),
+    updateDepartment: () => Promise.resolve(create),
   };
 }
 

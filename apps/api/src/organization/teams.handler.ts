@@ -1,14 +1,18 @@
 import {
   parseTeamCreate,
+  parseTeamId,
   parseTeamListQuery,
+  parseTeamUpdate,
   type Actor,
   type CreateTeamResult,
   type TeamCreate,
   type TeamDto,
   type TeamListQuery,
   type TeamPageDto,
+  type TeamUpdate,
   type ListTeamsResult,
   type RawTeamListQuery,
+  type UpdateTeamResult,
 } from '@cpf/org';
 import {
   ensureCorrelationId,
@@ -21,6 +25,7 @@ import {
 export interface TeamService {
   listTeams(actor: Actor, query: TeamListQuery): Promise<ListTeamsResult>;
   createTeam(actor: Actor, input: TeamCreate): Promise<CreateTeamResult>;
+  updateTeam(actor: Actor, id: string, input: TeamUpdate): Promise<UpdateTeamResult>;
 }
 
 export interface GetTeamsRequest {
@@ -102,4 +107,61 @@ export async function handlePostOrganizationTeam(
     correlationId,
     detail: result.reason,
   });
+}
+
+export interface PatchTeamRequest {
+  readonly actor: Actor;
+  readonly teamId: string;
+  readonly body: unknown;
+  readonly correlationId?: string;
+}
+
+export async function handlePatchOrganizationTeam(
+  service: TeamService,
+  req: PatchTeamRequest,
+): Promise<TeamResponse> {
+  const correlationId = ensureCorrelationId(req.correlationId);
+
+  const id = parseTeamId(req.teamId);
+  if (id === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'teamId must be a valid UUID.',
+    });
+  }
+
+  const parsed = parseTeamUpdate(req.body);
+  if (!parsed.ok) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'The request body failed validation.',
+      errors: parsed.errors.map((message) => ({ detail: message })),
+    });
+  }
+
+  const result = await service.updateTeam(req.actor, id, parsed.value);
+  if (result.ok) {
+    return jsonResponse(200, result.team, correlationId);
+  }
+  if (result.status === 409) {
+    return problemResponse({
+      status: 409,
+      title: 'Conflict',
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  if (result.status === 404) {
+    return problemResponse({
+      status: 404,
+      title: 'Not Found',
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return problemResponse({ status: 403, title: 'Forbidden', correlationId, detail: result.reason });
 }

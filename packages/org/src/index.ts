@@ -12,3 +12,6 @@ export * from './departments.js';
 export * from './team-types.js';
 export * from './team-repository.js';
 export * from './teams.js';
+export * from './campaign-types.js';
+export * from './campaign-repository.js';
+export * from './campaigns.js';

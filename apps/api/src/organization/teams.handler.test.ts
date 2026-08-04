@@ -32,6 +32,7 @@ function service(
   return {
     listTeams: () => Promise.resolve(list),
     createTeam: () => Promise.resolve(create),
+    updateTeam: () => Promise.resolve(create),
   };
 }
 

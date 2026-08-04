@@ -28,7 +28,11 @@ const page = {
 const ok: ListMembersResult = { ok: true, page };
 
 function service(result: ListMembersResult): MemberService {
-  return { listMembers: () => Promise.resolve(result) };
+  return {
+    listMembers: () => Promise.resolve(result),
+    updateMemberStatus: () => Promise.resolve({ ok: true, member: page.items[0]! }),
+    replaceMemberRoles: () => Promise.resolve({ ok: true, member: page.items[0]! }),
+  };
 }
 
 describe('handleGetOrganizationMembers', () => {

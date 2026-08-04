@@ -29,3 +29,9 @@ export interface TeamCreate {
   readonly name: string;
   readonly departmentId?: string;
 }
+
+export interface TeamUpdate {
+  readonly name?: string;
+  readonly departmentId?: string | null;
+  readonly status?: TeamStatus;
+}
