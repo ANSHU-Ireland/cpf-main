@@ -9,3 +9,4 @@ export * from './account/support-cases.handler.js';
 export * from './account/support-case-detail.handler.js';
 export * from './organization/organization.handler.js';
 export * from './organization/members.handler.js';
+export * from './organization/departments.handler.js';

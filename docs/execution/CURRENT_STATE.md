@@ -204,10 +204,23 @@ resuming. Do not re-plan the whole project or redo completed work.
   4 handler + 2 live-Postgres (lists only caller-tenant members with roles aggregated; never
   surfaces members from another tenant via RLS).
 
+- **Organisation departments (`get_organization_departments` + audited
+  `post_organization_departments`; FR-EA-03) — first tenant-RLS audited CRUD pair:** `@cpf/org`
+  gains `listDepartments` (keyset-paginated over `(created_at, id)` DESC through `tenant_isolation`
+  + `v2_tenant_isolation` RLS) and `createDepartment` (INSERT with audited `department.create`
+  event, catching `23505` unique-violation → 409). Deny-by-default on `employer_admin` with
+  resource `department` (read/write). `PgDepartmentRepository` operates under the non-superuser
+  `cpf_app` role so RLS is enforced. Concrete `DepartmentDto`
+  (id/name/code/status/createdAt/updatedAt) inside `DepartmentPageDto` (items/nextCursor/total).
+  `apps/api` `handleGetOrganizationDepartments` (200 / 422 / 403) and
+  `handlePostOrganizationDepartment` (200 / 422 / 409 / 403). ASM-16. Tests: 10 unit + 7 handler +
+  3 live-Postgres (create + list in own tenant, RLS hides other tenant's dept, duplicate → 409,
+  audit event with 64-hex hash).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**286/286**:
-272 prior + 8 member unit + 4 handler + 2 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**309/309**:
+286 prior + 10 dept unit + 7 handler + 3 live-pg + 3 handler-level for 409/403).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

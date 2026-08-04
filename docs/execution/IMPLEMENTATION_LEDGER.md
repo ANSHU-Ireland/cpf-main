@@ -47,6 +47,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done with linked evidence · 
 | Organisation members list (Employer Admin, `@cpf/org`)    | FR-EA-02; ASM-15                             | `packages/org` (`listMembers`, `PgMemberRepository`, keyset-paginated over memberships+users+roles)                 | Vitest (10: 8 unit + 2 live-pg) | this ledger; ASM-15                     | ✅     |
 | Organisation members HTTP boundary                        | OpenAPI `get_organization_members`           | `apps/api` (`handleGetOrganizationMembers`)                                                                         | Vitest (4, 200/422/403)         | this ledger                             | ✅     |
 
+| Organisation departments (list + audited create, @cpf/org) | FR-EA-03; ASM-16                             | packages/org (listDepartments, createDepartment, PgDepartmentRepository, keyset-paginated, audited department.create) | Vitest (13: 10 unit + 3 live-pg) | this ledger; ASM-16                     | ?     |
+| Organisation departments HTTP boundary                        | OpenAPI *_organization_departments         | pps/api (handleGetOrganizationDepartments, handlePostOrganizationDepartment)                                             | Vitest (7, 200/422/409/403)      | this ledger                             | ?     |
 ## Later waves
 
 Waves 1–12 are enumerated in NEXT_ACTION.md and tracked as they begin. No requirement row is

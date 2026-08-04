@@ -11,4 +11,6 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'organization' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'organization' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'organization_member' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'department' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'department' },
 ];

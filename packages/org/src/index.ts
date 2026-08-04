@@ -6,3 +6,6 @@ export * from './organization.js';
 export * from './member-types.js';
 export * from './member-repository.js';
 export * from './members.js';
+export * from './department-types.js';
+export * from './department-repository.js';
+export * from './departments.js';
