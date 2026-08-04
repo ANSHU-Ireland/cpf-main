@@ -1,28 +1,28 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — user-visible security events (`get_me_security_events`)
+## Immediate next slice: Wave 1 — notification preferences (`get`/`patch` `/me/notification-preferences`)
 
-**Goal:** complete the account self-service read surface with the security-events feed
-(`get_me_security_events`, FR-ACC-18, `x-audit-event: false`), reading the caller's own
-`iam.account_security_events` through the self RLS policy, keyset-paginated like sessions.
+**Goal:** the next account self-service surface — read and update the caller's notification
+preferences over `iam.notification_preferences` (self RLS), the update being an audited write.
 
 **Source identifiers:**
 
-- OpenAPI `get_me_security_events` (SecurityEventPage, cursor/limit paging).
-- SQL `iam.account_security_events` (per-user self RLS).
-- Invariants §9 (server-verified identity).
+- OpenAPI notification-preference operations (read + update).
+- SQL `iam.notification_preferences` (self RLS `notification_preference_self`).
+- Invariants §9 (server-verified identity); audit-integrity invariant for the update.
 
 **Steps:**
 
-1. `@cpf/account`: security-event read use-case + projection (reuse keyset paging helpers).
-2. Tests: unit (authz/paging) + live-pg (own events only via RLS).
-3. `apps/api` handler + tests; update ledgers; commit.
+1. `@cpf/account`: preference read + audited update use-cases (reuse `PgAuditWriter`).
+2. Tests: unit (authz/validation) + live-pg (own prefs only via RLS; update writes a chained event).
+3. `apps/api` handlers + tests; update ledgers; commit.
 
 ## Completed this loop
 
 - **`patch_me` first audited write** — `@cpf/audit` hash-chain + `updateMe` + `handlePatchMe`.
-- **Account session vertical** — `get_me_sessions` (keyset paging) + audited
-  `delete_me_sessions_sessionId`, layered over the `user_session_self` RLS policy. 120/120 green.
+- **Account session vertical** — `get_me_sessions` keyset paging + audited `delete_me_sessions_sessionId`.
+- **Security-events feed** — `get_me_security_events` over a non-RLS table with explicit `user_id`
+  scoping (ASM-07), reusing generic keyset-cursor helpers. 131/131 green.
 
 ## Standing rules for the loop
 

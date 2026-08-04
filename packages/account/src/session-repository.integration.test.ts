@@ -55,6 +55,13 @@ describe.skipIf(!dbAvailable)(
        ON CONFLICT (id) DO NOTHING`,
         [SESSION_A, SESSION_B, OTHER_SESSION, USER3, OTHER_USER],
       );
+      // Reset to active so the revoke test is idempotent across repeated runs.
+      await pool.query(
+        `UPDATE iam.user_sessions
+            SET revoked_at = NULL, revocation_reason = NULL
+          WHERE id = ANY($1::uuid[])`,
+        [[SESSION_A, SESSION_B, OTHER_SESSION]],
+      );
     }, 120_000);
 
     afterAll(async () => {

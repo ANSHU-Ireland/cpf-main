@@ -78,11 +78,18 @@ resuming. Do not re-plan the whole project or redo completed work.
   and `handleDeleteMeSession` (200 `{revoked:true}` / 403 / 404). Tests: 10 unit + 6 handler + 3
   live-Postgres (own sessions only via RLS, audited revoke writes a 64-hex `event_hash`, another
   user's session cannot be revoked → 404).
+- **Security-events feed (`get_me_security_events`; FR-ACC-18, ASM-07):** `@cpf/account` reads the
+  caller's own `iam.account_security_events` newest-first, keyset-paginated via generic
+  `encodeCursor`/`decodeCursor` helpers. This table has **no RLS** (ASM-07), so scoping is enforced
+  by an explicit `WHERE user_id = $1` predicate on every query; the `SecurityEventDto` projection
+  omits `ip_hash`/`user_agent_hash`. `apps/api` `handleGetMeSecurityEvents` (422 on bad paging,
+  else 200 `SecurityEventPage`). Tests: 6 unit + 3 handler + 2 live-Postgres (own events only,
+  newest-first, keyset paging walks pages).
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**120/120**:
-101 prior + 10 session unit + 6 session handler + 3 session live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**131/131**:
+120 prior + 6 security-event unit + 3 handler + 2 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

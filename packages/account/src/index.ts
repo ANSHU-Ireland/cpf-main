@@ -8,3 +8,7 @@ export * from './session-types.js';
 export * from './session-repository.js';
 export * from './list-sessions.js';
 export * from './revoke-session.js';
+export * from './cursor.js';
+export * from './security-event-types.js';
+export * from './security-event-repository.js';
+export * from './list-security-events.js';
