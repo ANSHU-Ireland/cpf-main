@@ -56,4 +56,6 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'decision' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'notification_template' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'notification_template' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'governance_doc' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'governance_doc' },
 ];

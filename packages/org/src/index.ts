@@ -54,6 +54,7 @@ export * from './campaign-dashboard.js';
 export * from './candidate-portal.js';
 export * from './governance-ai-systems.js';
 export * from './governance-risk-controls.js';
+export * from './governance-docs.js';
 export * from './integrations.js';
 export * from './candidate-imports.js';
 export * from './bookings.js';
