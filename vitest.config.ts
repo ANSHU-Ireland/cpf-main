@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Loads .env (e.g. DATABASE_URL) for integration tests; no-op when absent.
+    setupFiles: ['dotenv/config'],
     include: ['packages/**/*.test.ts', 'apps/**/*.test.ts'],
     coverage: {
       provider: 'v8',

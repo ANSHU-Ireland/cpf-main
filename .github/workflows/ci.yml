@@ -29,6 +29,34 @@ jobs:
       - name: Unit tests + coverage
         run: pnpm exec vitest run --coverage
 
-  # DB integration / RLS tests run only where a Postgres service is available (EXT-01).
-  # A dedicated job with a postgres service container will be enabled once the db package
-  # lands; until then the unit suite above is authoritative for CI green.
+  # DB integration / RLS tests against a real Postgres service (resolves EXT-01 in CI).
+  db-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cpf_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cpf_dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: DB integration + schema/RLS tests
+        run: pnpm exec vitest run packages/db

@@ -21,14 +21,20 @@ resuming. Do not re-plan the whole project or redo completed work.
   coverage with 100%-branch gate on invariant modules. CI workflow `.github/workflows/ci.yml`.
 - **First safety module `@cpf/domain`:** `ai-output-guard` (forbidden AI outputs) and
   `rubric-aggregate` (human-only deterministic aggregation). 28 tests, 100% branch coverage.
+- **Database foundation `@cpf/db` (EXT-01 resolved):** connected to local PostgreSQL 18.4,
+  `cpf_dev` created, v2.0 baseline applies cleanly. `ensureBaselineApplied` + schema-facts
+  integration test (CONFLICT-001 138/139, `audit.events` partition, RLS on `runtime.sessions`).
+  3 tests green against live Postgres; `describe.skipIf` keeps CI green without a DB. CI gained a
+  `postgres:16` service job. Evidence: `docs/execution/evidence/wave0-db.md`.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (28/28).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**31/31**:
+28 domain + 3 live DB).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 
-- **EXT-01 Docker absent** — blocks live Postgres/RLS integration tests. Highest-value unblock.
+- ~~EXT-01 Docker/Postgres~~ **RESOLVED** — local Postgres connected; `DATABASE_URL` in `.env`.
 - EXT-02..07 — Vercel, AWS, AI keys, signing, legal/DPO, validated assessment content (later waves).
 
 ## Release judgement

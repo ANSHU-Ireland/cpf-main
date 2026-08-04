@@ -20,9 +20,10 @@ operations) and wire a CI drift check, so all later API work is contract-first (
 
 ## Then (Wave 0 tail → Wave 1 entry)
 
-- `@cpf/policy` deny-by-default RBAC/ABAC skeleton + tenant-context type + negative tests.
-- `@cpf/db` migration runner over the SQL baseline + CONFLICT-001 partition regression test
-  (gated on Postgres availability, EXT-01).
+- `@cpf/policy` deny-by-default RBAC/ABAC skeleton + tenant-context type + negative tests,
+  layered over the DB RLS defence-in-depth already validated in `@cpf/db`.
+- Extend `@cpf/db` with a tenant-context helper (`set_config('app.tenant_id', …)`) and a
+  cross-tenant RLS negative test proving isolation on `runtime.sessions`.
 - Then Wave 1: design tokens → `@cpf/ui` primitives → account/identity vertical.
 
 ## Standing rules for the loop
