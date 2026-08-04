@@ -181,10 +181,22 @@ resuming. Do not re-plan the whole project or redo completed work.
   (200 / 422 / 403 / 404). Tests: 7 unit + 4 handler + 2 live-Postgres (Employer Admin reads their
   own org with jsonb settings projected; a caller without the role is denied 403).
 
+- **Organisation settings update (`patch_organization`; FR-EA-01) — first Employer Admin audited
+  write:** `updateOrganization` applies a partial update over the writable subset only
+  (`displayName`/`defaultTimezone`/`branding`/`settings`); identity/lifecycle fields
+  (`slug`/`status`/`legalName`/timestamps) are never mutable and unknown/immutable keys are rejected
+  (422), with at least one field required. Same no-RLS service-layer scoping as the read
+  (`WHERE id = <caller tenant>`), deny-by-default on the `employer_admin` `write` grant, and the
+  `organization.update` audit event is hash-chained in the **same transaction** as the `UPDATE`
+  (`x-audit-event: true`). `IdempotencyKey` is accepted but not yet deduplicated (no idempotency
+  store; ASM-14). `apps/api` `handlePatchOrganization` (200 / 422 / 403 / 404). Tests: 8 unit +
+  4 handler + 1 live-Postgres (an Employer Admin update writes a 64-hex `event_hash` and persists the
+  new values).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**259/259**:
-246 prior + 7 org unit + 4 handler + 2 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**272/272**:
+259 prior + 8 update unit + 4 handler + 1 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

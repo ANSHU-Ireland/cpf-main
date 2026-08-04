@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { Actor, GetOrganizationResult } from '@cpf/org';
-import { handleGetOrganization, type OrganizationService } from './organization.handler.js';
+import type { Actor, GetOrganizationResult, UpdateOrganizationResult } from '@cpf/org';
+import {
+  handleGetOrganization,
+  handlePatchOrganization,
+  type OrganizationService,
+} from './organization.handler.js';
 
 const actor: Actor = { userId: 'user-1', tenantId: 'tenant-1', roles: ['employer_admin'] };
 
@@ -22,8 +26,14 @@ const orgDto = {
 
 const ok: GetOrganizationResult = { ok: true, organization: orgDto };
 
-function service(result: GetOrganizationResult): OrganizationService {
-  return { getOrganization: () => Promise.resolve(result) };
+function service(
+  result: GetOrganizationResult,
+  update: UpdateOrganizationResult = { ok: true, organization: orgDto },
+): OrganizationService {
+  return {
+    getOrganization: () => Promise.resolve(result),
+    updateOrganization: () => Promise.resolve(update),
+  };
 }
 
 describe('handleGetOrganization', () => {
@@ -58,6 +68,43 @@ describe('handleGetOrganization', () => {
       actor,
       query: {},
     });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('handlePatchOrganization', () => {
+  it('returns 200 with the updated organisation', async () => {
+    const updated = { ...orgDto, displayName: 'Acme Europe' };
+    const res = await handlePatchOrganization(service(ok, { ok: true, organization: updated }), {
+      actor,
+      body: { displayName: 'Acme Europe' },
+      correlationId: 'corr-2',
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers['X-Correlation-ID']).toBe('corr-2');
+    expect(res.body).toEqual(updated);
+  });
+
+  it('returns 422 for an empty patch body', async () => {
+    const res = await handlePatchOrganization(service(ok), { actor, body: {} });
+    expect(res.status).toBe(422);
+    expect(res.headers['Content-Type']).toBe('application/problem+json');
+  });
+
+  it('maps a 404 update result to problem+json', async () => {
+    const res = await handlePatchOrganization(service(ok, { ok: false, status: 404 }), {
+      actor,
+      body: { displayName: 'Acme Europe' },
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers['Content-Type']).toBe('application/problem+json');
+  });
+
+  it('maps a 403 update result to problem+json', async () => {
+    const res = await handlePatchOrganization(
+      service(ok, { ok: false, status: 403, reason: 'denied' }),
+      { actor, body: { displayName: 'Acme Europe' } },
+    );
     expect(res.status).toBe(403);
   });
 });

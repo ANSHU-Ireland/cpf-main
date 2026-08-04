@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { Pool } from 'pg';
 import { createPool, isDatabaseConfigured, ensureBaselineApplied } from '@cpf/db';
 import { PgOrganizationRepository } from './organization-repository.js';
-import { getOrganization } from './organization.js';
+import { getOrganization, updateOrganization } from './organization.js';
 import { EMPLOYER_ADMIN_ROLE } from './permissions.js';
 
 const dbAvailable = isDatabaseConfigured();
@@ -34,6 +34,15 @@ describe.skipIf(!dbAvailable)('get_organization against live Postgres (own-org r
          VALUES ($1, 'admin@org-m.example', 'Mia', 'employer_user', 'active')
        ON CONFLICT (id) DO NOTHING`,
       [ADMIN],
+    );
+
+    // This suite mutates ORG_M; reset it to its seeded values so reruns are deterministic.
+    await pool.query(
+      `UPDATE tenant.organizations
+          SET display_name = 'Org M', default_timezone = 'Europe/Dublin',
+              branding = '{"logoUrl":"m.png"}'::jsonb, settings = '{"seatLimit":50}'::jsonb
+        WHERE id = $1`,
+      [ORG_M],
     );
   }, 120_000);
 
@@ -67,5 +76,37 @@ describe.skipIf(!dbAvailable)('get_organization against live Postgres (own-org r
     if (result.ok) {
       expect(result.organization.id).not.toBe(OTHER_ORG);
     }
+  });
+
+  it('applies an audited update to the caller-own organisation', async () => {
+    const repository = new PgOrganizationRepository(pool, { role: 'cpf_app' });
+    const actor = { userId: ADMIN, tenantId: ORG_M, roles: [EMPLOYER_ADMIN_ROLE] };
+
+    const result = await updateOrganization({ repository }, actor, {
+      displayName: 'Org M Europe',
+      settings: { seatLimit: 75 },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.organization.displayName).toBe('Org M Europe');
+      expect(result.organization.settings).toEqual({ seatLimit: 75 });
+    }
+
+    const row = await pool.query<{ display_name: string; settings: unknown }>(
+      'SELECT display_name, settings FROM tenant.organizations WHERE id = $1',
+      [ORG_M],
+    );
+    expect(row.rows[0]?.display_name).toBe('Org M Europe');
+
+    const audit = await pool.query<{ event_hash: string }>(
+      `SELECT event_hash
+         FROM audit.events
+        WHERE tenant_id = $1 AND action = 'organization.update' AND resource_id = $1
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT 1`,
+      [ORG_M],
+    );
+    expect(audit.rows[0]?.event_hash).toMatch(/^[0-9a-f]{64}$/);
   });
 });

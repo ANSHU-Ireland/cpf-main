@@ -6,7 +6,8 @@ import type { Permission } from '@cpf/policy';
  */
 export const EMPLOYER_ADMIN_ROLE = 'employer_admin';
 
-/** Minimal grant for the Employer Admin organisation surface. */
+/** Minimal grants for the Employer Admin organisation surface (read + settings update). */
 export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'organization' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'organization' },
 ];

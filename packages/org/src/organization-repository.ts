@@ -1,11 +1,14 @@
 import type { Pool } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
+import { PgAuditWriter } from '@cpf/audit';
 import type { Actor } from './types.js';
-import type { OrganizationRecord, OrganizationStatus } from './types.js';
+import type { OrganizationRecord, OrganizationStatus, OrganizationUpdate } from './types.js';
 
 export interface OrganizationRepository {
   /** Loads the caller's own organisation, or `null` if it does not exist. */
   getOrganization(actor: Actor): Promise<OrganizationRecord | null>;
+  /** Applies a partial update to the caller's own organisation, or `null` if it does not exist. */
+  updateOrganization(actor: Actor, update: OrganizationUpdate): Promise<OrganizationRecord | null>;
 }
 
 export interface PgOrganizationRepositoryOptions {
@@ -83,6 +86,64 @@ export class PgOrganizationRepository implements OrganizationRepository {
       );
       const row = res.rows[0];
       return row === undefined ? null : toRecord(row);
+    });
+  }
+
+  async updateOrganization(
+    actor: Actor,
+    update: OrganizationUpdate,
+  ): Promise<OrganizationRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const set: string[] = [];
+      const values: unknown[] = [actor.tenantId];
+      const fields: string[] = [];
+
+      if (update.displayName !== undefined) {
+        values.push(update.displayName);
+        set.push(`display_name = $${values.length}`);
+        fields.push('displayName');
+      }
+      if (update.defaultTimezone !== undefined) {
+        values.push(update.defaultTimezone);
+        set.push(`default_timezone = $${values.length}`);
+        fields.push('defaultTimezone');
+      }
+      if (update.branding !== undefined) {
+        values.push(JSON.stringify(update.branding));
+        set.push(`branding = $${values.length}::jsonb`);
+        fields.push('branding');
+      }
+      if (update.settings !== undefined) {
+        values.push(JSON.stringify(update.settings));
+        set.push(`settings = $${values.length}::jsonb`);
+        fields.push('settings');
+      }
+
+      const res = await client.query<OrganizationRow>(
+        `UPDATE tenant.organizations
+            SET ${set.join(', ')}, updated_at = now()
+          WHERE id = $1
+        RETURNING ${COLUMNS}`,
+        values,
+      );
+      const row = res.rows[0];
+      if (row === undefined) {
+        return null;
+      }
+
+      // `patch_organization` is x-audit-event: true — chain the event in the same transaction.
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'organization.update',
+        resourceType: 'organization',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { fields },
+      });
+
+      return toRecord(row);
     });
   }
 }

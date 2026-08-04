@@ -34,3 +34,15 @@ export interface OrganizationRecord {
 
 /** Response projection for `get_organization` (replaces the `GenericRecord` placeholder). */
 export type OrganizationDto = OrganizationRecord;
+
+/**
+ * The subset of organisation fields an Employer Admin may mutate via `patch_organization`. Identity
+ * and lifecycle fields (`slug`, `status`, `legalName`, timestamps) are never writable from this
+ * surface. All fields are optional; a patch must set at least one.
+ */
+export interface OrganizationUpdate {
+  readonly displayName?: string;
+  readonly defaultTimezone?: string;
+  readonly branding?: Readonly<Record<string, unknown>>;
+  readonly settings?: Readonly<Record<string, unknown>>;
+}
