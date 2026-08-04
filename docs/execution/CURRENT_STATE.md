@@ -26,11 +26,15 @@ resuming. Do not re-plan the whole project or redo completed work.
   integration test (CONFLICT-001 138/139, `audit.events` partition, RLS on `runtime.sessions`).
   3 tests green against live Postgres; `describe.skipIf` keeps CI green without a DB. CI gained a
   `postgres:16` service job. Evidence: `docs/execution/evidence/wave0-db.md`.
+- **Contract types `@cpf/contracts`:** `openapi-typescript` generates `src/generated/openapi.ts`
+  from the baseline; a generated runtime `operation-manifest.ts` lists all **244** operations
+  (operationId/method/path). 3 tests assert count/uniqueness/shape. CI `contracts:check` gate
+  regenerates and `git diff --exit-code`s to prevent DTO drift (RISK-04).
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**31/31**:
-28 domain + 3 live DB).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**34/34**:
+28 domain + 3 live DB + 3 contracts).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

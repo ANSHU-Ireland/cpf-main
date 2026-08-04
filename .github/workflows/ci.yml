@@ -26,6 +26,8 @@ jobs:
         run: pnpm run lint
       - name: Typecheck
         run: pnpm run typecheck
+      - name: Contract drift check (OpenAPI → generated)
+        run: pnpm --filter @cpf/contracts run contracts:check
       - name: Unit tests + coverage
         run: pnpm exec vitest run --coverage
 

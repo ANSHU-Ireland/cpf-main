@@ -1,0 +1,19 @@
+{
+  "name": "@cpf/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "generate:types": "openapi-typescript ../../docs/source-of-truth/originals/cpf_openapi_baseline_v2.0.yaml -o src/generated/openapi.ts",
+    "generate:manifest": "node scripts/generate-manifest.ts",
+    "generate": "pnpm run generate:types && pnpm run generate:manifest && prettier --write \"src/generated/**\"",
+    "contracts:check": "pnpm run generate && git diff --exit-code -- src/generated",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.4",
+    "yaml": "^2.6.1"
+  }
+}

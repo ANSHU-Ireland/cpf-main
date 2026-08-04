@@ -1,22 +1,23 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: `@cpf/contracts` from the OpenAPI baseline
+## Immediate next slice: `@cpf/policy` + tenant-context RLS negative test
 
-**Goal:** derive typed request/response schemas from `cpf_openapi_baseline_v2.0.yaml` (244
-operations) and wire a CI drift check, so all later API work is contract-first (RISK-04).
+**Goal:** deny-by-default RBAC/ABAC skeleton with a verified server-side tenant context, and a
+cross-tenant RLS negative test proving isolation on `runtime.sessions` (Contract §12, invariant §9).
 
 **Source identifiers:**
 
-- OpenAPI: `docs/source-of-truth/originals/cpf_openapi_baseline_v2.0.yaml` (244 operationIds).
-- TRD §architecture (types generated/validated from OpenAPI; prevent DTO drift).
+- SQL: `iam.current_tenant_id()` (reads `app.tenant_id` GUC), RLS policies `v2_tenant_isolation`.
+- Invariants §9 (tenant identity from verified server context, deny-by-default), §10 (segregation).
 
 **Steps:**
 
-1. Add `packages/contracts` with a pinned OpenAPI→TS type generator (e.g. `openapi-typescript`).
-2. Generate `src/generated/openapi.ts`; commit generated output; add `contracts:check` script
-   that regenerates and `git diff --exit-code`s to fail CI on drift.
-3. Add a smoke test asserting the generated type surface exports the 244 operation paths.
-4. Update IMPLEMENTATION_LEDGER + CURRENT_STATE; commit.
+1. `@cpf/db`: add `withTenant(pool, tenantId, fn)` setting `app.tenant_id`/`app.user_id` via
+   `set_config(...)` on a dedicated connection, plus a non-superuser app role so RLS is enforced.
+2. Add a cross-tenant negative test: seed two tenants, assert tenant A cannot read tenant B rows.
+3. `@cpf/policy`: pure deny-by-default `can(actor, action, resource)` predicate + unit tests
+   (100% branch on the policy module, like the domain invariants).
+4. Update ledgers; commit.
 
 ## Then (Wave 0 tail → Wave 1 entry)
 

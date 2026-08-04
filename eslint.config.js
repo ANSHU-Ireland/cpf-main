@@ -9,6 +9,7 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       '**/node_modules/**',
+      '**/src/generated/**',
       'docs/source-of-truth/originals/**',
     ],
   },
