@@ -24,3 +24,6 @@ export * from './onboarding.js';
 export * from './support-case-types.js';
 export * from './support-case-repository.js';
 export * from './support-cases.js';
+export * from './support-message-types.js';
+export * from './support-case-detail-repository.js';
+export * from './support-case-detail.js';

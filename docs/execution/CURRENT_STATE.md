@@ -152,10 +152,27 @@ resuming. Do not re-plan the whole project or redo completed work.
   `event_hash` with `requester_user_id`/`tenant_id` set; list returns only the caller's own case and
   never another requester's in the same tenant).
 
+- **Support case detail + messages (`get_me_support_cases_caseId` + audited
+  `post_me_support_cases_caseId_messages`; FR-ACC-16/FR-SUP-02):** `@cpf/account` reads a case's
+  thread and appends requester messages over `support.case_messages` (also `v2_tenant_isolation`
+  RLS). ASM-12 restricts the `/me` surface to the **requester** relationship (case accessed only when
+  `requester_user_id`=caller; missing/non-owned → 404) and to `requester` **visibility only** —
+  `internal`/`restricted` messages are never read or written here, and appended messages are forced to
+  `visibility='requester'`, `author_user_id`=caller. `getCaseDetail` returns a concrete
+  `SupportCaseDetailDto` (the case fields plus a keyset-paginated `messages` page over
+  `(created_at, id)`); `addMessage` inserts a body-only message (attachments deferred → `[]`) and
+  chains a `support_case.message.create` `audit.events` row in the same `withTenant` transaction
+  (`x-audit-event: true`). The `{caseId}` segment is UUID-validated (422) before touching a `uuid`
+  column. `apps/api` `handleGetMeSupportCase` (200 detail / 422 / 403 / 404) and
+  `handlePostMeSupportCaseMessage` (200 message / 422 / 403 / 404). Tests: 15 unit + 10 handler +
+  3 live-Postgres (thread returns only `requester`-visible messages, never the seeded `internal`
+  one; audited add writes a 64-hex `event_hash` with `visibility='requester'`; a case owned by
+  another requester in the same tenant yields 404).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**218/218**:
-197 prior + 13 support-case unit + 6 handler + 2 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**246/246**:
+218 prior + 15 detail unit + 10 handler + 3 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

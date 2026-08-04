@@ -31,7 +31,7 @@ export interface PgSupportCaseRepositoryOptions {
 /** Initial status for a submitted case. */
 const INITIAL_STATUS: SupportCaseStatus = 'open';
 
-interface SupportCaseRow {
+export interface SupportCaseRow {
   id: string;
   case_reference: string;
   category: string;
@@ -47,7 +47,7 @@ interface SupportCaseRow {
   resolved_at: Date | null;
 }
 
-function toRecord(row: SupportCaseRow): SupportCaseRecord {
+export function mapSupportCaseRow(row: SupportCaseRow): SupportCaseRecord {
   return {
     id: row.id,
     caseReference: row.case_reference,
@@ -65,7 +65,7 @@ function toRecord(row: SupportCaseRow): SupportCaseRecord {
   };
 }
 
-const RETURNING = `id, case_reference, category, severity, subject, description, purpose, status,
+export const SUPPORT_CASE_COLUMNS = `id, case_reference, category, severity, subject, description, purpose, status,
                    sla_due_at, resolution, created_at, updated_at, resolved_at`;
 
 /**
@@ -106,7 +106,7 @@ export class PgSupportCaseRepository implements SupportCaseRepository {
       params.push(query.limit + 1);
 
       const res = await client.query<SupportCaseRow>(
-        `SELECT ${RETURNING}
+        `SELECT ${SUPPORT_CASE_COLUMNS}
            FROM support.cases
           WHERE requester_user_id = $1
             ${keyset}
@@ -117,7 +117,7 @@ export class PgSupportCaseRepository implements SupportCaseRepository {
 
       const hasMore = res.rows.length > query.limit;
       const rows = hasMore ? res.rows.slice(0, query.limit) : res.rows;
-      return { items: rows.map(toRecord), total, hasMore };
+      return { items: rows.map(mapSupportCaseRow), total, hasMore };
     });
   }
 
@@ -130,7 +130,7 @@ export class PgSupportCaseRepository implements SupportCaseRepository {
            (tenant_id, requester_user_id, case_reference, category, severity, subject,
             description, purpose, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING ${RETURNING}`,
+         RETURNING ${SUPPORT_CASE_COLUMNS}`,
         [
           actor.tenantId,
           actor.userId,
@@ -161,7 +161,7 @@ export class PgSupportCaseRepository implements SupportCaseRepository {
         metadata: { category: input.category, severity: input.severity },
       });
 
-      return toRecord(row);
+      return mapSupportCaseRow(row);
     });
   }
 }

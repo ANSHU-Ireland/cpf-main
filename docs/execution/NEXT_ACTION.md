@@ -1,27 +1,29 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — support case detail + messages (`get_me_support_cases_caseId` / `post_me_support_cases_caseId_messages`)
+## Immediate next slice: Wave 1 — read organisation settings (`get_organization`)
 
-**Goal:** the requester reads one of their own cases with its message thread and posts a message —
-a paginated authorised read plus an audited create over `support.case_messages`.
+**Goal:** an Employer Admin reads their own tenant's organisation settings — the first
+role-gated (not just `/me`-self) authorised read, opening the Employer Admin surface.
 
 **Source identifiers:**
 
-- OpenAPI `get_me_support_cases_caseId` (audit=false; "Requester or assigned support") /
-  `post_me_support_cases_caseId_messages` (audit=true; body `SupportMessageCreate`).
-- SQL `support.case_messages` (`case_id` FK, `author_user_id`, `visibility` CHECK, `body`,
-  `attachments` jsonb) — carries `v2_tenant_isolation`; enforce requester ownership of the parent
-  case explicitly.
+- OpenAPI `get_organization` (tag Employer Admin; FR-EA-01; audit=false; `x-required-roles:
+  [Employer Admin]`; `cursor`/`limit` query params; `staffBearer` security).
+- SQL `tenant.organizations` (tenant-scoped root; carries `tenant_isolation` RLS via
+  `iam.current_tenant_id()`).
 
 **Steps:**
 
-1. Confirm access rule (requester-owned case) + audit flags; the caller may only see `requester`-
-   visibility messages (never `internal`/`restricted`). Record ASM if projections are placeholders.
-2. `@cpf/account`: read-case-with-messages + audited add-message use-cases (deny-by-default).
-3. Tests: unit (authz/validation/visibility filter) + live-pg (own case only; message create writes
-   a chained event; foreign case → 404).
-4. `apps/api` handlers + tests; add `support.case_messages` grant to `vitest.globalsetup.ts`; update
-   ledgers; commit.
+1. Confirm the authorisation rule: **Employer Admin** role required (deny-by-default via `@cpf/policy`
+   against a new `organization` resource type) — this is the first non-`self_*` grant. Confirm the
+   200 projection; record an ASM for the concrete `OrganizationDto` (baseline is a `GenericRecord`
+   placeholder) and for how `cursor`/`limit` apply to a single-org read.
+2. `@cpf/account` (or a new `@cpf/org` module — decide and record): a deny-by-default
+   `getOrganization` read over `tenant.organizations` (RLS-scoped; assumed `cpf_app` role).
+3. Tests: unit (authz: Employer Admin allowed, other roles 403; projection) + live-pg (RLS returns
+   only the caller's tenant org).
+4. `apps/api` `handleGetOrganization` (200 / 403) + tests; add any new grant to
+   `vitest.globalsetup.ts`; update ledgers; commit.
 
 > **Deferred:** `post_me_data_export` (FR-ACC-19) and `post_me_deactivation` (FR-ACC-20) are blocked
 > on the hiring candidate vertical + user→candidate identity resolution — see ASM-09. Revisit once
@@ -46,7 +48,11 @@ a paginated authorised read plus an audited create over `support.case_messages`.
 - **Support cases (collection)** — `get_me_support_cases` keyset paging + audited
   `post_me_support_cases` over `support.cases` (`v2_tenant_isolation` RLS + explicit
   `requester_user_id` scoping); server-set requester/tenant/`SC-<uuid>` reference/`open` status,
-  concrete `SupportCaseDto` (ASM-11). 218/218 green.
+  concrete `SupportCaseDto` (ASM-11).
+- **Support case detail + messages** — `get_me_support_cases_caseId` (case + keyset-paginated
+  requester-visible thread) + audited `post_me_support_cases_caseId_messages` over
+  `support.case_messages`; requester-only relationship, `requester` visibility only (never
+  `internal`/`restricted`), UUID-validated path, 404 for missing/non-owned (ASM-12). 246/246 green.
 
 ## Standing rules for the loop
 
