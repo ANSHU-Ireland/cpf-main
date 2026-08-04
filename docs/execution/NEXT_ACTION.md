@@ -1,29 +1,36 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — read organisation settings (`get_organization`)
+## Immediate next slice: Wave 1 — organisation settings update (`patch_organization`)
 
-**Goal:** an Employer Admin reads their own tenant's organisation settings — the first
-role-gated (not just `/me`-self) authorised read, opening the Employer Admin surface.
+**Goal:** an Employer Admin updates the permitted subset of their own tenant's organisation settings —
+the first **audited** Employer Admin write, paired with the just-shipped read.
 
 **Source identifiers:**
 
-- OpenAPI `get_organization` (tag Employer Admin; FR-EA-01; audit=false; `x-required-roles:
-  [Employer Admin]`; `cursor`/`limit` query params; `staffBearer` security).
-- SQL `tenant.organizations` (tenant-scoped root; carries `tenant_isolation` RLS via
-  `iam.current_tenant_id()`).
+- OpenAPI `patch_organization` (tag Employer Admin; FR-EA-01; audit=**true**; `IdempotencyKey`; body
+  `GenericCommand`; `x-required-roles: [Employer Admin]`).
+- SQL `tenant.organizations` — **no RLS** (it is only in the `trg_updated_at` trigger array, not
+  either RLS array, and has no `tenant_id`); same service-layer `WHERE id = <caller tenant>` scoping
+  as the read. `display_name`/`default_timezone`/`branding`/`settings` are candidate mutable fields.
 
 **Steps:**
 
-1. Confirm the authorisation rule: **Employer Admin** role required (deny-by-default via `@cpf/policy`
-   against a new `organization` resource type) — this is the first non-`self_*` grant. Confirm the
-   200 projection; record an ASM for the concrete `OrganizationDto` (baseline is a `GenericRecord`
-   placeholder) and for how `cursor`/`limit` apply to a single-org read.
-2. `@cpf/account` (or a new `@cpf/org` module — decide and record): a deny-by-default
-   `getOrganization` read over `tenant.organizations` (RLS-scoped; assumed `cpf_app` role).
-3. Tests: unit (authz: Employer Admin allowed, other roles 403; projection) + live-pg (RLS returns
-   only the caller's tenant org).
-4. `apps/api` `handleGetOrganization` (200 / 403) + tests; add any new grant to
-   `vitest.globalsetup.ts`; update ledgers; commit.
+1. Decide the permitted mutable field set (e.g. `displayName`, `defaultTimezone`, `branding`,
+   `settings`) — never `slug`/`status`/`legal_name` from this surface. Record an ASM for the writable
+   projection.
+2. `@cpf/org`: `parseOrganizationUpdate` (reject unknown/immutable keys, bounded strings, jsonb
+   guards) + audited `updateOrganization` use-case (deny-by-default write; chains an
+   `organization.update` event in the same `withTenant` tx; `x-audit-event: true`).
+3. Tests: unit (authz/validation/immutable-field rejection) + live-pg (own-org update writes a
+   chained event). Add `GRANT UPDATE ON tenant.organizations`.
+4. `apps/api` `handlePatchOrganization` + tests; update ledgers; commit.
+
+> **Note:** the `get_organization` read is DONE this loop — new `@cpf/org` package,
+> `PgOrganizationRepository` (own-org read, no RLS → `WHERE id = <caller tenant>`),
+> `handleGetOrganization`, `GRANT SELECT ON tenant.organizations`, ASM-13 (role code `employer_admin`
+>
+> - concrete `OrganizationDto`). Correction vs the prior plan: `tenant.organizations` carries **no**
+>   RLS (verified in DDL), so isolation is service-layer only.
 
 > **Deferred:** `post_me_data_export` (FR-ACC-19) and `post_me_deactivation` (FR-ACC-20) are blocked
 > on the hiring candidate vertical + user→candidate identity resolution — see ASM-09. Revisit once
@@ -52,7 +59,10 @@ role-gated (not just `/me`-self) authorised read, opening the Employer Admin sur
 - **Support case detail + messages** — `get_me_support_cases_caseId` (case + keyset-paginated
   requester-visible thread) + audited `post_me_support_cases_caseId_messages` over
   `support.case_messages`; requester-only relationship, `requester` visibility only (never
-  `internal`/`restricted`), UUID-validated path, 404 for missing/non-owned (ASM-12). 246/246 green.
+  `internal`/`restricted`), UUID-validated path, 404 for missing/non-owned (ASM-12).
+- **Organisation read (Employer Admin)** — new `@cpf/org` package; `get_organization` over
+  `tenant.organizations` (no RLS → service-layer `WHERE id = <caller tenant>`), deny-by-default on
+  the `employer_admin` role, concrete `OrganizationDto` (ASM-13). 259/259 green.
 
 ## Standing rules for the loop
 

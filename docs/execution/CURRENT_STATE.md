@@ -169,10 +169,22 @@ resuming. Do not re-plan the whole project or redo completed work.
   one; audited add writes a 64-hex `event_hash` with `visibility='requester'`; a case owned by
   another requester in the same tenant yields 404).
 
+- **Organisation read (`get_organization`; FR-EA-01) — first Employer Admin surface (`@cpf/org`):**
+  a new `@cpf/org` package reads the caller's own `tenant.organizations` row. The table carries **no
+  RLS** (it is only in the `updated_at` trigger array, not either RLS array, and has no `tenant_id`),
+  so scoping is service-layer: `WHERE id = <caller tenant>`, with no `{id}` path param and thus no
+  cross-tenant vector. Access is deny-by-default and gated on the `employer_admin` role (ASM-13);
+  `getOrganization` returns a concrete `OrganizationDto`
+  (id/slug/legalName/displayName/status/dataRegion/defaultTimezone/branding/settings/timestamps),
+  projecting `branding`/`settings` jsonb as objects. The declared `cursor`/`limit` params are
+  bounds-validated (422) but inert (no child collection). `apps/api` `handleGetOrganization`
+  (200 / 422 / 403 / 404). Tests: 7 unit + 4 handler + 2 live-Postgres (Employer Admin reads their
+  own org with jsonb settings projected; a caller without the role is denied 403).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**246/246**:
-218 prior + 15 detail unit + 10 handler + 3 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**259/259**:
+246 prior + 7 org unit + 4 handler + 2 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

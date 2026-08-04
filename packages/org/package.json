@@ -1,5 +1,5 @@
 {
-  "name": "@cpf/api",
+  "name": "@cpf/org",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cpf/account": "workspace:*",
-    "@cpf/http": "workspace:*",
-    "@cpf/org": "workspace:*"
+    "@cpf/audit": "workspace:*",
+    "@cpf/db": "workspace:*",
+    "@cpf/policy": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
   }
 }

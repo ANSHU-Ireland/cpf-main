@@ -7,3 +7,4 @@ export * from './account/preferences.handler.js';
 export * from './account/onboarding.handler.js';
 export * from './account/support-cases.handler.js';
 export * from './account/support-case-detail.handler.js';
+export * from './organization/organization.handler.js';
