@@ -1,28 +1,28 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — first audited write (`patch_me`)
+## Immediate next slice: Wave 1 — account session vertical (sign-in / current session)
 
-**Goal:** the first mutation vertical that writes an audit event. Update the caller's own profile
-fields via `patch_me`, authorized deny-by-default, persisted through the tenant RLS context, and
-recorded as a hash-chained `audit.events` row (this operation is `x-audit-event: true`).
+**Goal:** extend the identity vertical beyond profile read/update toward authentication. The next
+mutation-free-then-audited slice is the current-session view and session revocation, layered over
+the proven policy + RLS + audit defence-in-depth.
 
 **Source identifiers:**
 
-- OpenAPI `patch_me` (request body, 200 `UserProfile`, Problem responses).
-- SQL `audit.events` (append-only, `previous_hash`/`event_hash` chain); `iam.user_profiles` self RLS.
+- OpenAPI account/session operations (e.g. list/revoke `user_sessions`).
+- SQL `iam.user_sessions` (per-user rows), `audit.events` (revocation is `x-audit-event: true`).
 - Invariants §9 (server-verified identity), audit-integrity invariant.
 
 **Steps:**
 
-1. `@cpf/account`: `updateMe` use-case (validate patch → authorize → update → append audit event).
-2. An `AuditWriter` that computes `event_hash` over the previous hash (tamper-evident chain).
-3. Tests: unit (authz/validation) + live-pg (update visible only in-tenant; audit row written+chained).
-4. `apps/api` `patch_me` handler; update ledgers; commit.
+1. `@cpf/account`: session read use-case (list caller's own sessions via RLS context).
+2. Session revoke as the next audited write, reusing `PgAuditWriter`.
+3. Tests: unit (authz) + live-pg (own sessions only; revoke writes a chained audit row).
+4. `apps/api` handler + `apps/web` view; update ledgers; commit.
 
-## Then (Wave 1 continuation)
+## Completed this loop
 
-- Account/identity vertical (sign-in, tenant selection) wired UI + API + policy + audit + tests.
-- Layer each new endpoint over the validated policy/RLS defence-in-depth.
+- **`patch_me` first audited write** — `@cpf/audit` hash-chain + `@cpf/account` `updateMe` +
+  `apps/api` `handlePatchMe`. 101/101 tests green (incl. live-Postgres audit proof).
 
 ## Standing rules for the loop
 

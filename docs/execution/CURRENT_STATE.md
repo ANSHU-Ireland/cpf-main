@@ -56,11 +56,23 @@ resuming. Do not re-plan the whole project or redo completed work.
   / 403 / 404 problem+json (correlation id echoed in header and body). `apps/web` `AccountProfileView`
   renders the profile as an accessible labelled region (roles list, no-membership fallback), tested
   under jsdom. `UserProfile` projection recorded as ASM-06.
+- **Tamper-evident audit `@cpf/audit`:** deterministic `computeEventHash(previousHash, event)`
+  (SHA-256 over canonical, key-order-independent serialization) and a `PgAuditWriter` that appends
+  to `audit.events` on the caller's transaction client, chaining `event_hash` from the tenant's
+  most recent event. 4 unit tests (determinism, key-order independence, field sensitivity, chain).
+- **First audited write `patch_me` (FR-ACC-04, `x-audit-event: true`):** `@cpf/account` gains a
+  concrete `ProfileUpdate` DTO + `parseProfileUpdate` boundary validation (unknown-property
+  rejection, enum checks, non-empty patch → 422), a `write self_profile` grant, and `updateMe`
+  (deny-by-default authorize → whitelisted-column upsert of `iam.user_profiles` **and** a chained
+  `audit.events` append in one `withTenant` transaction). `apps/api` `handlePatchMe` returns 422
+  problem+json on invalid bodies, else maps to 200/403/404. Tests: 7 validate + 3 updateMe unit +
+  5 patch handler + 2 live-Postgres (profile persisted + audit row written with 64-hex
+  `event_hash`, `previous_hash` chained across successive writes).
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**80/80**:
-67 prior + 5 http + 4 api handler + 4 web view).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**101/101**:
+80 prior + 4 audit hash + 7 validate + 3 updateMe unit + 5 patch handler + 2 updateMe live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

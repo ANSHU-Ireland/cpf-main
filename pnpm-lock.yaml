@@ -87,12 +87,25 @@ importers:
 
   packages/account:
     dependencies:
+      '@cpf/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@cpf/db':
         specifier: workspace:*
         version: link:../db
       '@cpf/policy':
         specifier: workspace:*
         version: link:../policy
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.3
+
+  packages/audit:
+    dependencies:
       pg:
         specifier: ^8.13.1
         version: 8.22.0

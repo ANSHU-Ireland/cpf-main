@@ -6,7 +6,10 @@ import type { Actor, ProfileData } from './types.js';
 const actor: Actor = { userId: 'user-1', tenantId: 'tenant-1', roles: ['employer_admin'] };
 
 function repo(data: ProfileData): AccountRepository {
-  return { findProfileData: () => Promise.resolve(data) };
+  return {
+    findProfileData: () => Promise.resolve(data),
+    applyProfileUpdate: () => Promise.resolve(data),
+  };
 }
 
 describe('getMe', () => {

@@ -41,3 +41,19 @@ export interface UserProfileDto {
   readonly status: string;
   readonly tenant: TenantContextDto | null;
 }
+
+export const PROFILE_THEMES = ['system', 'light', 'dark', 'high_contrast'] as const;
+export const PROFILE_DENSITIES = ['comfortable', 'compact'] as const;
+
+export type ProfileTheme = (typeof PROFILE_THEMES)[number];
+export type ProfileDensity = (typeof PROFILE_DENSITIES)[number];
+
+/** Concrete `patch_me` request projection (ProfileUpdate); only self-service fields are permitted. */
+export interface ProfileUpdate {
+  readonly preferredName?: string;
+  readonly locale?: string;
+  readonly timezone?: string;
+  readonly theme?: ProfileTheme;
+  readonly density?: ProfileDensity;
+  readonly reducedMotion?: boolean;
+}

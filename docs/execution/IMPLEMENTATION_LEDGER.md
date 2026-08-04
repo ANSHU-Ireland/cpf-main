@@ -24,6 +24,9 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done with linked evidence · 
 | `get_me` account vertical (server)        | FR-ACC-04, FR-ACC-12        | `packages/account`                                 | Vitest (6: 4 unit + 2 live RLS) | this ledger                             | ✅     |     | `@cpf/http` problem+json / correlation | RFC 9457; OpenAPI errors | `packages/http`            | Vitest (5) | ProblemDetails schema | ✅  |
 | `get_me` HTTP boundary                    | OpenAPI `get_me`; ASM-06    | `apps/api`                                         | Vitest (4, 200/403/404)         | this ledger                             | ✅     |
 | Account profile view (UI)                 | FR-ACC-04; WCAG 2.2 AA      | `apps/web`                                         | Vitest (4, jsdom a11y)          | this ledger                             | ✅     |     | CI foundation (+ postgres service)     | Contract §17             | `.github/workflows/ci.yml` | CI run     | ci.yml                | ✅  |
+| `@cpf/audit` hash-chained writer          | Invariants (audit); §audit  | `packages/audit`                                   | Vitest (4, determinism+chain)   | this ledger                             | ✅     |
+| `patch_me` first audited write            | FR-ACC-04; `x-audit-event`  | `packages/account` (`updateMe`, `validate`)        | Vitest (12: 7+3 unit + 2 live)  | this ledger                             | ✅     |
+| `patch_me` HTTP boundary                  | OpenAPI `patch_me`          | `apps/api` (`handlePatchMe`)                       | Vitest (5, 200/422/403/404)     | this ledger                             | ✅     |
 
 ## Later waves
 
