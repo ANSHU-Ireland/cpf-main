@@ -118,10 +118,27 @@ resuming. Do not re-plan the whole project or redo completed work.
   live-Postgres (RLS-scoped read filters non-boolean accessibility, audited replace writes a 64-hex
   `event_hash` and persists the new values).
 
+- **Onboarding checklist (`get_me_onboarding` + audited `put_me_onboarding_stepCode`; FR-ACC-15):**
+  `@cpf/account` reads/updates the caller's own `iam.onboarding_progress` rows. The table has NO
+  row-level security (like `account_security_events`; ASM-10), so every query is scoped by an
+  explicit `user_id = $1` predicate. `get_me_onboarding` keyset-paginates over `(updated_at, id)`
+  reusing the generic cursor helpers → concrete `OnboardingStepDto` inside `OnboardingPage`.
+  `put_me_onboarding_stepCode` is **update-only**: it targets one existing step keyed by
+  `(user_id, roleCode, stepCode, materialVersion)` (the body supplies the required `roleCode` +
+  optional `materialVersion`; the path supplies `stepCode`), sets the user-settable status
+  (`in_progress`/`completed`/`dismissed`; `completed` stamps `completed_at`), and chains an
+  `onboarding.step.update` `audit.events` row in the same `withTenant` transaction
+  (`x-audit-event: true`); a missing row yields 404 (no row is invented). `apps/api`
+  `handleGetMeOnboarding` (200 `OnboardingPage` / 403 / 422) and `handlePutMeOnboardingStep`
+  (422 on bad input, else 200 step / 403 / 404). Baseline `OnboardingPage` items / `put` body /
+  response were `GenericRecord`/`GenericCommand` placeholders → concrete DTOs recorded as ASM-10.
+  Tests: 16 unit + 7 handler + 3 live-Postgres (user-scoped list, audited completion writes a
+  64-hex `event_hash` and stamps `completed_at`, 404 when no step matches).
+
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**171/171**:
-151 prior + 12 general-preference unit + 6 handler + 2 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**197/197**:
+171 prior + 16 onboarding unit + 7 handler + 3 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

@@ -36,6 +36,7 @@ export async function setup(): Promise<void> {
     await pool.query('GRANT SELECT, UPDATE ON iam.user_sessions TO cpf_app');
     await pool.query('GRANT SELECT ON iam.account_security_events TO cpf_app');
     await pool.query('GRANT SELECT, INSERT, UPDATE ON iam.notification_preferences TO cpf_app');
+    await pool.query('GRANT SELECT, UPDATE ON iam.onboarding_progress TO cpf_app');
     await pool.query('GRANT SELECT, INSERT ON audit.events TO cpf_app');
   } finally {
     await pool.end();

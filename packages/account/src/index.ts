@@ -18,3 +18,6 @@ export * from './notification-preferences.js';
 export * from './preferences-types.js';
 export * from './preferences-repository.js';
 export * from './preferences.js';
+export * from './onboarding-types.js';
+export * from './onboarding-repository.js';
+export * from './onboarding.js';

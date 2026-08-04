@@ -1,26 +1,30 @@
 # Next Action — exactly one executable slice
 
-## Immediate next slice: Wave 1 — data export request (`post_me_data_export`)
+## Immediate next slice: Wave 1 — support cases (`get_me_support_cases` / `post_me_support_cases`)
 
-**Goal:** the caller requests a personal-data export (GDPR Art. 20 portability) — an audited command
-that enqueues an export request for the caller, deny-by-default and self-scoped.
+**Goal:** the caller lists and opens their own support cases — a paginated read plus an audited
+create over `support.cases`, deny-by-default and user-scoped.
 
 **Source identifiers:**
 
-- OpenAPI `post_me_data_export` (POST `/me/data-export`); confirm request/response schema + whether
-  it is `x-audit-event: true` and carries an Idempotency-Key.
-- SQL backing table for data-export requests (confirm table/columns + RLS in the baseline; record an
-  assumption if the projection is a `GenericCommand`/`GenericRecord` placeholder).
-- Invariants §9 (server-verified identity); audit-integrity invariant for the command.
+- OpenAPI `get_me_support_cases` / `post_me_support_cases` (paths under `/me/support-cases`); confirm
+  request/response schemas + audit flags + Idempotency-Key.
+- SQL `support.cases` (confirm columns, user linkage, and RLS in the baseline; record an assumption
+  if the projection is a `GenericCommand`/`GenericRecord` placeholder).
 
 **Steps:**
 
-1. Confirm the backing table + RLS and the operation's audit flag in the source files; record ASM if
-   the schema is a placeholder.
-2. `@cpf/account`: request-creation use-case (deny-by-default, audited via `PgAuditWriter`).
-3. Tests: unit (authz/validation) + live-pg (own request only via RLS; writes a chained event).
-4. `apps/api` handler + tests; add any new-table grant to `vitest.globalsetup.ts`; update ledgers;
+1. Confirm the backing table + RLS/user-scoping and the operations' audit flags; record ASM if a
+   schema is a placeholder.
+2. `@cpf/account` (or a new package): list + audited create use-cases (deny-by-default via
+   `PgAuditWriter`).
+3. Tests: unit (authz/validation) + live-pg (own cases only; create writes a chained event).
+4. `apps/api` handlers + tests; add any new-table grant to `vitest.globalsetup.ts`; update ledgers;
    commit.
+
+> **Deferred:** `post_me_data_export` (FR-ACC-19) and `post_me_deactivation` (FR-ACC-20) are blocked
+> on the hiring candidate vertical + user→candidate identity resolution — see ASM-09. Revisit once
+> `hiring.candidates` and identity verification exist.
 
 ## Completed this loop
 
@@ -34,7 +38,10 @@ that enqueues an export request for the caller, deny-by-default and self-scoped.
   removing a concurrent-DDL catalog race.
 - **General preferences** — `get_me_preferences` + audited `put_me_preferences` over the locale +
   accessibility subset of `iam.user_profiles` (`user_profile_self` RLS), bounded jsonb flags,
-  concrete `UserPreferencesDto` (ASM-08). 171/171 green.
+  concrete `UserPreferencesDto` (ASM-08).
+- **Onboarding checklist** — `get_me_onboarding` keyset paging + audited
+  `put_me_onboarding_stepCode` over `iam.onboarding_progress` (no RLS → explicit `user_id` scoping,
+  ASM-10); update-only of an existing step (404 if absent), user-settable statuses only. 197/197 green.
 
 ## Standing rules for the loop
 
