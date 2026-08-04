@@ -7,6 +7,7 @@ import type {
   ReviewerProfileCreate,
   ReviewerProfileListQuery,
   ReviewerProfileRecord,
+  ReviewerProfileUpdate,
   TrainingStatus,
 } from './reviewer-profile-types.js';
 
@@ -18,7 +19,13 @@ export interface ReviewerProfileListResult {
 
 export interface ReviewerProfileRepository {
   listProfiles(actor: Actor, query: ReviewerProfileListQuery): Promise<ReviewerProfileListResult>;
+  getProfile(actor: Actor, id: string): Promise<ReviewerProfileRecord | null>;
   createProfile(actor: Actor, input: ReviewerProfileCreate): Promise<ReviewerProfileRecord>;
+  updateProfile(
+    actor: Actor,
+    id: string,
+    input: ReviewerProfileUpdate,
+  ): Promise<ReviewerProfileRecord | null>;
 }
 
 interface ProfileRow {
@@ -126,6 +133,68 @@ export class PgReviewerProfileRepository implements ReviewerProfileRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: { userId: input.userId },
+      });
+
+      return toRecord(row);
+    });
+  }
+
+  async getProfile(actor: Actor, id: string): Promise<ReviewerProfileRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const res = await client.query<ProfileRow>(
+        `SELECT ${COLUMNS} FROM hiring.reviewer_profiles WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, id],
+      );
+      const row = res.rows[0];
+      return row === undefined ? null : toRecord(row);
+    });
+  }
+
+  async updateProfile(
+    actor: Actor,
+    id: string,
+    input: ReviewerProfileUpdate,
+  ): Promise<ReviewerProfileRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const sets: string[] = [];
+      const params: unknown[] = [actor.tenantId, id];
+      let idx = 3;
+
+      if (input.expertise !== undefined) {
+        sets.push(`expertise = $${idx++}::jsonb`);
+        params.push(JSON.stringify(input.expertise));
+      }
+      if (input.maxActiveReviews !== undefined) {
+        sets.push(`max_active_reviews = $${idx++}`);
+        params.push(input.maxActiveReviews);
+      }
+      if (input.conflictDeclarationRequired !== undefined) {
+        sets.push(`conflict_declaration_required = $${idx++}`);
+        params.push(input.conflictDeclarationRequired);
+      }
+
+      if (sets.length === 0) return null;
+
+      const res = await client.query<ProfileRow>(
+        `UPDATE hiring.reviewer_profiles
+            SET ${sets.join(', ')}, updated_at = now()
+          WHERE tenant_id = $1 AND id = $2
+         RETURNING ${COLUMNS}`,
+        params,
+      );
+
+      const row = res.rows[0];
+      if (row === undefined) return null;
+
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'reviewer_profile.update',
+        resourceType: 'reviewer_profile',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: input as unknown as Record<string, unknown>,
       });
 
       return toRecord(row);

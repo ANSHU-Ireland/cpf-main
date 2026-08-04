@@ -8,6 +8,7 @@ import type {
   ReviewerProfileDto,
   ReviewerProfileListQuery,
   ReviewerProfilePageDto,
+  ReviewerProfileUpdate,
 } from './reviewer-profile-types.js';
 
 const DEFAULT_LIMIT = 25;
@@ -182,4 +183,132 @@ export async function createReviewerProfile(
     }
     throw err;
   }
+}
+
+const UPDATE_KEYS = new Set(['expertise', 'maxActiveReviews', 'conflictDeclarationRequired']);
+
+export type ParseProfileUpdateResult =
+  | { readonly ok: true; readonly value: ReviewerProfileUpdate }
+  | { readonly ok: false; readonly errors: readonly string[] };
+
+export function parseProfileUpdate(raw: unknown): ParseProfileUpdateResult {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, errors: ['body must be a JSON object'] };
+  }
+  const input = raw as Record<string, unknown>;
+  const errors: string[] = [];
+
+  for (const key of Object.keys(input)) {
+    if (!UPDATE_KEYS.has(key)) errors.push(`unknown property: ${key}`);
+  }
+
+  const hasField =
+    input.expertise !== undefined ||
+    input.maxActiveReviews !== undefined ||
+    input.conflictDeclarationRequired !== undefined;
+  if (!hasField) {
+    errors.push('at least one field is required');
+  }
+
+  if (input.expertise !== undefined) {
+    if (!Array.isArray(input.expertise)) {
+      errors.push('expertise must be an array of strings');
+    } else if (input.expertise.length > MAX_EXPERTISE_ITEMS) {
+      errors.push(`expertise must have at most ${MAX_EXPERTISE_ITEMS} items`);
+    } else {
+      for (const item of input.expertise) {
+        if (typeof item !== 'string' || item.length === 0 || item.length > MAX_EXPERTISE_LEN) {
+          errors.push(
+            `each expertise item must be a non-empty string up to ${MAX_EXPERTISE_LEN} chars`,
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  if (input.maxActiveReviews !== undefined && input.maxActiveReviews !== null) {
+    if (
+      typeof input.maxActiveReviews !== 'number' ||
+      !Number.isInteger(input.maxActiveReviews) ||
+      input.maxActiveReviews < 1
+    ) {
+      errors.push('maxActiveReviews must be a positive integer or null');
+    }
+  }
+
+  if (input.conflictDeclarationRequired !== undefined) {
+    if (typeof input.conflictDeclarationRequired !== 'boolean') {
+      errors.push('conflictDeclarationRequired must be a boolean');
+    }
+  }
+
+  if (errors.length > 0) return { ok: false, errors };
+
+  const value: ReviewerProfileUpdate = {};
+  if (input.expertise !== undefined) {
+    (value as { expertise: readonly string[] }).expertise = input.expertise as string[];
+  }
+  if (input.maxActiveReviews !== undefined) {
+    (value as { maxActiveReviews: number | null }).maxActiveReviews = input.maxActiveReviews as
+      number | null;
+  }
+  if (input.conflictDeclarationRequired !== undefined) {
+    (value as { conflictDeclarationRequired: boolean }).conflictDeclarationRequired =
+      input.conflictDeclarationRequired as boolean;
+  }
+  return { ok: true, value };
+}
+
+export function parseProfileId(raw: string): string | null {
+  return UUID_RE.test(raw) ? raw : null;
+}
+
+export type GetProfileResult =
+  | { readonly ok: true; readonly profile: ReviewerProfileDto }
+  | { readonly ok: false; readonly status: 403; readonly reason: string }
+  | { readonly ok: false; readonly status: 404; readonly reason: string };
+
+export async function getReviewerProfile(
+  deps: ReviewerProfileDeps,
+  actor: Actor,
+  id: string,
+): Promise<GetProfileResult> {
+  const permissions = deps.permissions ?? ORG_PERMISSIONS;
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'read',
+    { type: 'reviewer_profile', tenantId: actor.tenantId },
+    permissions,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+
+  const record = await deps.repository.getProfile(actor, id);
+  if (record === null) return { ok: false, status: 404, reason: 'Reviewer profile not found.' };
+  return { ok: true, profile: record };
+}
+
+export type UpdateProfileResult =
+  | { readonly ok: true; readonly profile: ReviewerProfileDto }
+  | { readonly ok: false; readonly status: 403; readonly reason: string }
+  | { readonly ok: false; readonly status: 404; readonly reason: string };
+
+export async function updateReviewerProfile(
+  deps: ReviewerProfileDeps,
+  actor: Actor,
+  id: string,
+  input: ReviewerProfileUpdate,
+): Promise<UpdateProfileResult> {
+  const permissions = deps.permissions ?? ORG_PERMISSIONS;
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'reviewer_profile', tenantId: actor.tenantId },
+    permissions,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+
+  const record = await deps.repository.updateProfile(actor, id, input);
+  if (record === null) return { ok: false, status: 404, reason: 'Reviewer profile not found.' };
+  return { ok: true, profile: record };
 }

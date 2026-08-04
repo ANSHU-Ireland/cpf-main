@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import type { Actor, ListProfilesResult, CreateProfileResult } from '@cpf/org';
+import type {
+  Actor,
+  ListProfilesResult,
+  CreateProfileResult,
+  GetProfileResult,
+  UpdateProfileResult,
+} from '@cpf/org';
 import {
   handleGetReviewerProfiles,
   handlePostReviewerProfile,
+  handleGetReviewerProfile,
+  handlePatchReviewerProfile,
   type ReviewerProfileService,
 } from './reviewer-profiles.handler.js';
 
@@ -26,9 +34,13 @@ const page = { items: [profileDto], nextCursor: null, total: 1 };
 function service(overrides: Partial<ReviewerProfileService> = {}): ReviewerProfileService {
   const listOk: ListProfilesResult = { ok: true, page };
   const createOk: CreateProfileResult = { ok: true, profile: profileDto };
+  const getOk: GetProfileResult = { ok: true, profile: profileDto };
+  const updateOk: UpdateProfileResult = { ok: true, profile: profileDto };
   return {
     listProfiles: () => Promise.resolve(listOk),
     createProfile: () => Promise.resolve(createOk),
+    getProfile: () => Promise.resolve(getOk),
+    updateProfile: () => Promise.resolve(updateOk),
     ...overrides,
   };
 }
@@ -66,5 +78,49 @@ describe('handlePostReviewerProfile', () => {
       { actor, body: { userId: VALID_ID } },
     );
     expect(res.status).toBe(409);
+  });
+});
+
+describe('handleGetReviewerProfile', () => {
+  it('returns 200', async () => {
+    const res = await handleGetReviewerProfile(service(), { actor, profileId: VALID_ID });
+    expect(res.status).toBe(200);
+  });
+  it('returns 422 for bad id', async () => {
+    const res = await handleGetReviewerProfile(service(), { actor, profileId: 'bad' });
+    expect(res.status).toBe(422);
+  });
+  it('returns 404 when not found', async () => {
+    const res = await handleGetReviewerProfile(
+      service({ getProfile: () => Promise.resolve({ ok: false, status: 404, reason: 'x' }) }),
+      { actor, profileId: VALID_ID },
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('handlePatchReviewerProfile', () => {
+  it('returns 200 on success', async () => {
+    const res = await handlePatchReviewerProfile(service(), {
+      actor,
+      profileId: VALID_ID,
+      body: { expertise: ['python'] },
+    });
+    expect(res.status).toBe(200);
+  });
+  it('returns 422 for empty body', async () => {
+    const res = await handlePatchReviewerProfile(service(), {
+      actor,
+      profileId: VALID_ID,
+      body: {},
+    });
+    expect(res.status).toBe(422);
+  });
+  it('returns 404 when not found', async () => {
+    const res = await handlePatchReviewerProfile(
+      service({ updateProfile: () => Promise.resolve({ ok: false, status: 404, reason: 'x' }) }),
+      { actor, profileId: VALID_ID, body: { expertise: ['go'] } },
+    );
+    expect(res.status).toBe(404);
   });
 });

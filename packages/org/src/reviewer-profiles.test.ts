@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   listReviewerProfiles,
   createReviewerProfile,
+  getReviewerProfile,
+  updateReviewerProfile,
   parseProfileListQuery,
   parseProfileCreate,
+  parseProfileUpdate,
+  parseProfileId,
 } from './reviewer-profiles.js';
 import type {
   ReviewerProfileRepository,
@@ -36,8 +40,10 @@ function repo(overrides: Partial<ReviewerProfileRepository> = {}): ReviewerProfi
   const listResult: ReviewerProfileListResult = { items: [profile()], total: 1, hasMore: false };
   return {
     listProfiles: () => Promise.resolve(listResult),
+    getProfile: () => Promise.resolve(profile()),
     createProfile: (_a: Actor, input: ReviewerProfileCreate) =>
       Promise.resolve(profile({ userId: input.userId })),
+    updateProfile: () => Promise.resolve(profile()),
     ...overrides,
   };
 }
@@ -126,5 +132,63 @@ describe('createReviewerProfile', () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe(403);
+  });
+});
+
+describe('parseProfileUpdate', () => {
+  it('accepts expertise update', () => {
+    const r = parseProfileUpdate({ expertise: ['python'] });
+    expect(r.ok).toBe(true);
+  });
+  it('accepts maxActiveReviews null', () => {
+    const r = parseProfileUpdate({ maxActiveReviews: null });
+    expect(r.ok).toBe(true);
+  });
+  it('rejects empty body', () => {
+    expect(parseProfileUpdate({}).ok).toBe(false);
+  });
+});
+
+describe('parseProfileId', () => {
+  it('accepts UUID', () => {
+    expect(parseProfileId('11111111-1111-1111-1111-111111111111')).not.toBeNull();
+  });
+  it('rejects non-UUID', () => {
+    expect(parseProfileId('bad')).toBeNull();
+  });
+});
+
+describe('getReviewerProfile', () => {
+  it('returns profile for admin', async () => {
+    const r = await getReviewerProfile({ repository: repo() }, admin, 'prof-1');
+    expect(r.ok).toBe(true);
+  });
+  it('returns 404 when not found', async () => {
+    const r = await getReviewerProfile(
+      { repository: repo({ getProfile: () => Promise.resolve(null) }) },
+      admin,
+      'missing',
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(404);
+  });
+});
+
+describe('updateReviewerProfile', () => {
+  it('updates for admin', async () => {
+    const r = await updateReviewerProfile({ repository: repo() }, admin, 'prof-1', {
+      expertise: ['go'],
+    });
+    expect(r.ok).toBe(true);
+  });
+  it('returns 404 when not found', async () => {
+    const r = await updateReviewerProfile(
+      { repository: repo({ updateProfile: () => Promise.resolve(null) }) },
+      admin,
+      'missing',
+      { expertise: ['go'] },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(404);
   });
 });

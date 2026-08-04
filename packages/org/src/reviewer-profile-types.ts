@@ -36,3 +36,9 @@ export interface ReviewerProfileCreate {
   readonly expertise?: readonly string[];
   readonly maxActiveReviews?: number;
 }
+
+export interface ReviewerProfileUpdate {
+  readonly expertise?: readonly string[];
+  readonly maxActiveReviews?: number | null;
+  readonly conflictDeclarationRequired?: boolean;
+}
