@@ -30,11 +30,18 @@ resuming. Do not re-plan the whole project or redo completed work.
   from the baseline; a generated runtime `operation-manifest.ts` lists all **244** operations
   (operationId/method/path). 3 tests assert count/uniqueness/shape. CI `contracts:check` gate
   regenerates and `git diff --exit-code`s to prevent DTO drift (RISK-04).
+- **Tenant isolation proven `@cpf/db` + `@cpf/policy`:** `withTenant()` opens a transaction, sets
+  a non-superuser `SET LOCAL ROLE cpf_app` and `app.tenant_id`/`app.user_id` GUCs so RLS is
+  enforced (invariant §9). A cross-tenant negative test seeds two orgs/departments and proves
+  tenant A cannot read tenant B rows, and empty tenant → deny-by-default (0 rows). `@cpf/policy`
+  adds a pure deny-by-default `can(actor, action, resource, permissions)` predicate (cross-tenant
+  denied unless platform staff **and** explicitly permitted). 4 RLS + 7 policy tests; policy at
+  100% branch coverage. Contract §12.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**34/34**:
-28 domain + 3 live DB + 3 contracts).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**45/45**:
+28 domain + 3 contracts + 3 db-facts + 4 tenant-isolation + 7 policy).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 
