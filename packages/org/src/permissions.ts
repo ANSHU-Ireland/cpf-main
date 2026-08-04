@@ -32,4 +32,10 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'accommodation' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'notice_acknowledgement' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'notice_acknowledgement' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'assessment' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'assessment' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'ai_model' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'ai_model' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'review_assignment' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'review_assignment' },
 ];

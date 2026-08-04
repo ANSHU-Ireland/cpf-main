@@ -2,7 +2,11 @@ import { can } from '@cpf/policy';
 import type { Actor } from './types.js';
 import { ORG_PERMISSIONS } from './permissions.js';
 import { ACCOMMODATION_STATUSES } from './accommodation-types.js';
-import type { AccommodationCreate, AccommodationStatus, AccommodationStatusUpdate } from './accommodation-types.js';
+import type {
+  AccommodationCreate,
+  AccommodationStatus,
+  AccommodationStatusUpdate,
+} from './accommodation-types.js';
 import type { AccommodationRepository } from './accommodation-repository.js';
 
 // --- parsers ---
@@ -13,7 +17,8 @@ const VALID_STATUSES: ReadonlySet<string> = new Set(ACCOMMODATION_STATUSES);
 export function parseAccommodationCreate(
   raw: unknown,
 ): { ok: true; value: AccommodationCreate } | { ok: false; errors: string[] } {
-  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body must be object'] };
+  if (raw === null || typeof raw !== 'object')
+    return { ok: false, errors: ['body must be object'] };
   const obj = raw as Record<string, unknown>;
   const errors: string[] = [];
   if (typeof obj['requestSummary'] !== 'string' || obj['requestSummary'].length === 0) {
@@ -21,7 +26,10 @@ export function parseAccommodationCreate(
   } else if (obj['requestSummary'].length > 2000) {
     errors.push('requestSummary too long');
   }
-  if (obj['operationalAdjustments'] !== undefined && (typeof obj['operationalAdjustments'] !== 'object' || obj['operationalAdjustments'] === null)) {
+  if (
+    obj['operationalAdjustments'] !== undefined &&
+    (typeof obj['operationalAdjustments'] !== 'object' || obj['operationalAdjustments'] === null)
+  ) {
     errors.push('operationalAdjustments must be object');
   }
   if (errors.length > 0) return { ok: false, errors };
@@ -29,7 +37,13 @@ export function parseAccommodationCreate(
     requestSummary: obj['requestSummary'] as string,
   };
   if (obj['operationalAdjustments'] !== undefined) {
-    return { ok: true, value: { ...value, operationalAdjustments: obj['operationalAdjustments'] as Record<string, unknown> } };
+    return {
+      ok: true,
+      value: {
+        ...value,
+        operationalAdjustments: obj['operationalAdjustments'] as Record<string, unknown>,
+      },
+    };
   }
   return { ok: true, value };
 }
@@ -37,7 +51,8 @@ export function parseAccommodationCreate(
 export function parseAccommodationStatusUpdate(
   raw: unknown,
 ): { ok: true; value: AccommodationStatusUpdate } | { ok: false; errors: string[] } {
-  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body must be object'] };
+  if (raw === null || typeof raw !== 'object')
+    return { ok: false, errors: ['body must be object'] };
   const obj = raw as Record<string, unknown>;
   if (typeof obj['status'] !== 'string' || !VALID_STATUSES.has(obj['status'])) {
     return { ok: false, errors: ['status must be one of: ' + ACCOMMODATION_STATUSES.join(', ')] };

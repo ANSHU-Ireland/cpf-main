@@ -13,7 +13,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function parseNoticeCreate(
   raw: unknown,
 ): { ok: true; value: NoticeCreate } | { ok: false; errors: string[] } {
-  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body must be object'] };
+  if (raw === null || typeof raw !== 'object')
+    return { ok: false, errors: ['body must be object'] };
   const obj = raw as Record<string, unknown>;
   const errors: string[] = [];
   if (typeof obj['noticeType'] !== 'string' || !VALID_TYPES.has(obj['noticeType'])) {
@@ -25,7 +26,13 @@ export function parseNoticeCreate(
     errors.push('noticeVersion too long');
   }
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, value: { noticeType: obj['noticeType'] as NoticeType, noticeVersion: obj['noticeVersion'] as string } };
+  return {
+    ok: true,
+    value: {
+      noticeType: obj['noticeType'] as NoticeType,
+      noticeVersion: obj['noticeVersion'] as string,
+    },
+  };
 }
 
 export function parseNoticeApplicationId(id: string): string | null {
