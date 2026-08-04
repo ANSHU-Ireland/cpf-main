@@ -24,17 +24,6 @@ describe.skipIf(!dbAvailable)(
       await ensureBaselineApplied(pool);
 
       await pool.query(
-        `DO $$ BEGIN
-         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cpf_app') THEN
-           CREATE ROLE cpf_app NOSUPERUSER;
-         END IF;
-       END $$;`,
-      );
-      await pool.query('GRANT USAGE ON SCHEMA iam, audit TO cpf_app');
-      await pool.query('GRANT SELECT, UPDATE ON iam.user_sessions TO cpf_app');
-      await pool.query('GRANT SELECT, INSERT ON audit.events TO cpf_app');
-
-      await pool.query(
         `INSERT INTO tenant.organizations (id, slug, legal_name, display_name, status)
          VALUES ($1, 'org-f', 'Org F Ltd', 'Org F', 'active')
        ON CONFLICT (id) DO NOTHING`,

@@ -17,20 +17,6 @@ describe.skipIf(!dbAvailable)('updateMe against live Postgres (audited write + R
     await ensureBaselineApplied(pool);
 
     await pool.query(
-      `DO $$ BEGIN
-         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cpf_app') THEN
-           CREATE ROLE cpf_app NOSUPERUSER;
-         END IF;
-       END $$;`,
-    );
-    await pool.query('GRANT USAGE ON SCHEMA iam, audit TO cpf_app');
-    await pool.query(
-      'GRANT SELECT ON iam.users, iam.memberships, iam.membership_roles, iam.roles TO cpf_app',
-    );
-    await pool.query('GRANT SELECT, INSERT, UPDATE ON iam.user_profiles TO cpf_app');
-    await pool.query('GRANT SELECT, INSERT ON audit.events TO cpf_app');
-
-    await pool.query(
       `INSERT INTO tenant.organizations (id, slug, legal_name, display_name, status)
          VALUES ($1, 'org-e', 'Org E Ltd', 'Org E', 'active')
        ON CONFLICT (id) DO NOTHING`,

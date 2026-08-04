@@ -19,17 +19,6 @@ describe.skipIf(!dbAvailable)('Tenant isolation via row-level security', () => {
     pool = createPool();
     await ensureBaselineApplied(pool);
 
-    // Least-privilege, non-superuser role so FORCE RLS is actually enforced.
-    await pool.query(
-      `DO $$ BEGIN
-         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cpf_app') THEN
-           CREATE ROLE cpf_app NOSUPERUSER;
-         END IF;
-       END $$;`,
-    );
-    await pool.query('GRANT USAGE ON SCHEMA tenant, iam TO cpf_app');
-    await pool.query('GRANT SELECT ON tenant.departments TO cpf_app');
-
     await pool.query(
       `INSERT INTO tenant.organizations (id, slug, legal_name, display_name, status)
          VALUES ($1, 'org-a', 'Org A Ltd', 'Org A', 'active'),

@@ -85,11 +85,30 @@ resuming. Do not re-plan the whole project or redo completed work.
   omits `ip_hash`/`user_agent_hash`. `apps/api` `handleGetMeSecurityEvents` (422 on bad paging,
   else 200 `SecurityEventPage`). Tests: 6 unit + 3 handler + 2 live-Postgres (own events only,
   newest-first, keyset paging walks pages).
+- **Notification preferences (`get_me_notification_preferences` + audited
+  `put_me_notification_preferences`; FR-ACC-14):** `@cpf/account` reads/updates the caller's own
+  `iam.notification_preferences` through the `notification_preference_self` RLS policy.
+  `parsePreferenceUpdate` rejects unknown props (top-level + per-item), validates channel/digest
+  enums and non-empty categories, dedupes `channel::category`, and caps at 200 items → 422.
+  `applyPreferenceUpdate` upserts each setting (`ON CONFLICT (user_id,channel,category)`) with a
+  **mandatory guard** — a `mandatory` row can never be disabled by the user (server forces
+  `enabled=true`) — then chains a `notification_preferences.update` `audit.events` row in the same
+  `withTenant` transaction (`x-audit-event: true`). `apps/api` `handleGetMeNotificationPreferences`
+  (422 on bad paging, else 200 `NotificationPreferencePage`) and
+  `handlePutMeNotificationPreferences` (422 on bad body, else 200 page / 403). Tests: 12 unit + 6
+  handler + 2 live-Postgres (RLS hides other users, audited upsert writes a 64-hex `event_hash`,
+  mandatory preference stays enabled despite a disable request).
+- **Integration-test provisioning centralised:** the `cpf_app` role + all table/schema grants are
+  now created once in a Vitest `globalSetup` (`vitest.globalsetup.ts`) instead of per-file
+  `beforeAll` DDL. This removes a concurrent `CREATE ROLE`/`GRANT` catalog race
+  ("tuple concurrently updated") that could flake parallel integration suites; each test keeps only
+  its data seeding.
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**131/131**:
-120 prior + 6 security-event unit + 3 handler + 2 live-pg).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**151/151**:
+131 prior + 12 notification-preference unit + 6 handler + 2 live-pg; the two previously-flaky
+integ suites are green now that role provisioning is serialised in `globalSetup`).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

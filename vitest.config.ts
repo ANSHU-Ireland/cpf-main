@@ -13,6 +13,8 @@ export default defineConfig({
     ],
     // Loads .env (e.g. DATABASE_URL) for integration tests; no-op when absent.
     setupFiles: ['dotenv/config', './vitest.setup.ui.ts'],
+    // Provisions the cpf_app role + grants once (avoids concurrent DDL races).
+    globalSetup: ['./vitest.globalsetup.ts'],
     include: ['packages/**/*.test.ts', 'packages/**/*.test.tsx', 'apps/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',

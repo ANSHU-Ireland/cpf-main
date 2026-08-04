@@ -12,3 +12,6 @@ export * from './cursor.js';
 export * from './security-event-types.js';
 export * from './security-event-repository.js';
 export * from './list-security-events.js';
+export * from './notification-preference-types.js';
+export * from './notification-preference-repository.js';
+export * from './notification-preferences.js';
