@@ -12,4 +12,6 @@ export const ACCOUNT_PERMISSIONS: readonly Permission[] = [
   { role: AUTHENTICATED_ROLE, action: 'read', resourceType: 'self_security_event' },
   { role: AUTHENTICATED_ROLE, action: 'read', resourceType: 'self_notification_pref' },
   { role: AUTHENTICATED_ROLE, action: 'write', resourceType: 'self_notification_pref' },
+  { role: AUTHENTICATED_ROLE, action: 'read', resourceType: 'self_preferences' },
+  { role: AUTHENTICATED_ROLE, action: 'write', resourceType: 'self_preferences' },
 ];

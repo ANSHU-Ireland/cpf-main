@@ -3,3 +3,4 @@ export * from './account/patch-me.handler.js';
 export * from './account/sessions.handler.js';
 export * from './account/security-events.handler.js';
 export * from './account/notification-preferences.handler.js';
+export * from './account/preferences.handler.js';

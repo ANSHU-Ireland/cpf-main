@@ -29,26 +29,26 @@ export interface NotificationPreferencesService {
   ): Promise<UpdatePreferencesResult>;
 }
 
-export interface GetPreferencesRequest {
+export interface GetNotificationPreferencesRequest {
   readonly actor: Actor;
   readonly query: RawPreferenceQuery;
   readonly correlationId?: string;
 }
 
-export interface PutPreferencesRequest {
+export interface PutNotificationPreferencesRequest {
   readonly actor: Actor;
   readonly body: unknown;
   readonly correlationId?: string;
 }
 
-export type PreferencesResponse =
+export type NotificationPreferencesResponse =
   HttpResponse<NotificationPreferencePageDto> | HttpResponse<ProblemDetails>;
 
 /** HTTP boundary for `get_me_notification_preferences`: 422 on bad paging, else 200 page. */
 export async function handleGetMeNotificationPreferences(
   service: NotificationPreferencesService,
-  req: GetPreferencesRequest,
-): Promise<PreferencesResponse> {
+  req: GetNotificationPreferencesRequest,
+): Promise<NotificationPreferencesResponse> {
   const correlationId = ensureCorrelationId(req.correlationId);
 
   const parsed = parsePreferenceQuery(req.query);
@@ -77,8 +77,8 @@ export async function handleGetMeNotificationPreferences(
 /** HTTP boundary for `put_me_notification_preferences`: 422 on bad body, else 200 refreshed page. */
 export async function handlePutMeNotificationPreferences(
   service: NotificationPreferencesService,
-  req: PutPreferencesRequest,
-): Promise<PreferencesResponse> {
+  req: PutNotificationPreferencesRequest,
+): Promise<NotificationPreferencesResponse> {
   const correlationId = ensureCorrelationId(req.correlationId);
 
   const parsed = parsePreferenceUpdate(req.body);

@@ -34,6 +34,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done with linked evidence · 
 | Notification preferences (audited upsert)   | FR-ACC-14; `x-audit-event`              | `packages/account` (`listNotificationPreferences`, `updateNotificationPreferences`)     | Vitest (14: 12 unit + 2 live)   | this ledger                             | ✅     |
 | Notification-prefs HTTP boundary            | OpenAPI `*_me_notification_preferences` | `apps/api` (`handleGetMeNotificationPreferences`, `handlePutMeNotificationPreferences`) | Vitest (6, 200/422/403)         | this ledger                             | ✅     |
 | Integration role provisioning (globalSetup) | Contract §17 (test integrity)           | `vitest.globalsetup.ts`, `vitest.config.ts`                                             | Vitest (all integ suites green) | this ledger                             | ✅     |
+| General preferences (audited replace)       | FR-ACC-12/13; `x-audit-event`; ASM-08   | `packages/account` (`getPreferences`, `replacePreferences`)                             | Vitest (14: 12 unit + 2 live)   | this ledger; ASM-08                     | ✅     |
+| Preferences HTTP boundary                   | OpenAPI `*_me_preferences`              | `apps/api` (`handleGetMePreferences`, `handlePutMePreferences`)                         | Vitest (6, 200/422/403/404)     | this ledger                             | ✅     |
 
 ## Later waves
 

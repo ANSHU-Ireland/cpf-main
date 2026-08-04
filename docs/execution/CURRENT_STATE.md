@@ -103,12 +103,25 @@ resuming. Do not re-plan the whole project or redo completed work.
   `beforeAll` DDL. This removes a concurrent `CREATE ROLE`/`GRANT` catalog race
   ("tuple concurrently updated") that could flake parallel integration suites; each test keeps only
   its data seeding.
+- **General preferences (`get_me_preferences` + audited `put_me_preferences`; FR-ACC-12/13):**
+  `@cpf/account` reads/replaces the caller's locale + accessibility subset of `iam.user_profiles`
+  through the `user_profile_self` RLS policy. `parsePreferencesUpdate` enforces PUT full-replace
+  semantics (all fields required), bounds locale/timezone/dateFormat, checks theme/density enums,
+  and validates `accessibility` as a bounded object of boolean flags (≤50 keys) — rejecting unknown
+  props and non-boolean values → 422. `replacePreferences` upserts the columns
+  (`ON CONFLICT (user_id)`) writing `accessibility_preferences` as jsonb, then chains a
+  `preferences.update` `audit.events` row in the same `withTenant` transaction
+  (`x-audit-event: true`); reads filter legacy non-boolean jsonb entries. `apps/api`
+  `handleGetMePreferences` (200 `UserPreferences` / 403 / 404) and `handlePutMePreferences`
+  (422 on bad body, else 200 stored view / 403). `UserPreferences` was a `GenericRecord` placeholder
+  → concrete `UserPreferencesDto` projection recorded as ASM-08. Tests: 12 unit + 6 handler + 2
+  live-Postgres (RLS-scoped read filters non-boolean accessibility, audited replace writes a 64-hex
+  `event_hash` and persists the new values).
 
 ## Last green baseline (verified this session)
 
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**151/151**:
-131 prior + 12 notification-preference unit + 6 handler + 2 live-pg; the two previously-flaky
-integ suites are green now that role provisioning is serialised in `globalSetup`).
+`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**171/171**:
+151 prior + 12 general-preference unit + 6 handler + 2 live-pg).
 
 ## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
 

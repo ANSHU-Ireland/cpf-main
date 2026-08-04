@@ -15,3 +15,6 @@ export * from './list-security-events.js';
 export * from './notification-preference-types.js';
 export * from './notification-preference-repository.js';
 export * from './notification-preferences.js';
+export * from './preferences-types.js';
+export * from './preferences-repository.js';
+export * from './preferences.js';
