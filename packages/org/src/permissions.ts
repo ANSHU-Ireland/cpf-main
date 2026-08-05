@@ -68,4 +68,10 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'deployer_readiness' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'plugin' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'plugin' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'prompt_version' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'prompt_version' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'audit_evidence' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'audit_evidence' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'submission_report' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'submission_report' },
 ];
