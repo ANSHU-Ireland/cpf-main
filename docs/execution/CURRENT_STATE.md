@@ -1,6 +1,6 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) frontend runnable_
+_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) + assessment-runtime frontend runnable_
 
 ## Where we are
 
@@ -59,6 +59,31 @@ Two things are now true and both are **green** (format + typecheck + lint + 1,39
 - **Verification**: web typecheck + repo typecheck + lint clean; all 6 candidate pages and 5
   candidate API routes smoke-tested 200 on `next dev`; action validation returns 422 on short
   reasons; POST creates return 201; full repo suite still 1,399/153 green.
+
+### Assessment-runtime frontend — evidence
+
+- **Screens** under `apps/web/app/candidate/assessment/**` and `apps/web/app/candidate/attempt/[id]/**`
+  (14 total): **readiness** (RUN-01: environment/consent checklist gate before start), attempt
+  **runtime shell** (server-authoritative countdown timer + autosave badge + tabbed navigation),
+  **overview** (section→task map with status badges + "open next task"), three **task editors**
+  (document / code / spreadsheet, shared `TaskRunner`, per-task flag + autosave), **AI panel**
+  (labelled assistant that logs every exchange and never scores), **plugin runs** (candidate-run
+  tests/tools with status), **artifacts** (upload evidence), **flags & break controls**,
+  **recovery** (connection-issue re-entry), **submit** (final confirmation), **receipt**
+  (immutable submission reference), and **unavailable** (expired/voided state).
+- **Invariants honoured**: the countdown is **server-authoritative** — the client anchors to
+  `serverNow` and only ticks the display; expiry is decided by the server (`projectAttempt`). AI is
+  explicitly labelled, every message is logged with a provenance reference, and it **never**
+  produces a score/rank/decision. Submit is **idempotent** (receipt minted once). No candidate-facing
+  scoring anywhere.
+- **Data seam**: runtime view-models + `apiClient` methods + synthetic Next route handlers under
+  `app/api/candidate/attempt/[id]/**` (`tasks`, `ai`, `plugin`, `artifacts`, `controls`, `submit`,
+  plus GET/reset on the attempt). A single in-memory `runtimeStore` (`ATTEMPT_ID`) models sections,
+  tasks, autosave, AI thread, plugin runs, artifacts, breaks and submission.
+- **Verification**: web typecheck + repo typecheck + lint clean; all 13 runtime pages + 5 GET API
+  routes smoke-tested 200 on `next dev`; mutating routes verified — save/ai/plugin/controls happy
+  paths 200, missing-taskId and 1-char AI message return 422, plugin/artifacts create 201,
+  double-submit is idempotent (same receipt), reset 200; full repo suite still 1,399/153 green.
 
 ## Historical Wave 0 record (unchanged)
 

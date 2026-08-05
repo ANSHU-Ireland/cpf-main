@@ -12,6 +12,13 @@ import type {
   SecurityEventView,
   SessionView,
 } from './types';
+import type {
+  AiMessageView,
+  ArtifactView,
+  AttemptControlsView,
+  AttemptView,
+  PluginRunView,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -114,5 +121,55 @@ export const apiClient = {
     request<ComplaintView>('/api/candidate/complaints', {
       method: 'POST',
       body: JSON.stringify({ subject, detail }),
+    }),
+
+  // ── Assessment runtime ──
+  getAttempt: (id: string): Promise<AttemptView> =>
+    request<AttemptView>(`/api/candidate/attempt/${encodeURIComponent(id)}`),
+  startAttempt: (id: string): Promise<AttemptView> =>
+    request<AttemptView>(`/api/candidate/attempt/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'start' }),
+    }),
+  saveTask: (id: string, taskId: string, response: string): Promise<AttemptView> =>
+    request<AttemptView>(`/api/candidate/attempt/${encodeURIComponent(id)}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ taskId, response }),
+    }),
+  submitAttempt: (id: string): Promise<AttemptView> =>
+    request<AttemptView>(`/api/candidate/attempt/${encodeURIComponent(id)}/submit`, {
+      method: 'POST',
+    }),
+  getAiMessages: (id: string): Promise<Collection<AiMessageView>> =>
+    request<Collection<AiMessageView>>(`/api/candidate/attempt/${encodeURIComponent(id)}/ai`),
+  sendAiMessage: (id: string, body: string): Promise<Collection<AiMessageView>> =>
+    request<Collection<AiMessageView>>(`/api/candidate/attempt/${encodeURIComponent(id)}/ai`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+  getPluginRuns: (id: string): Promise<Collection<PluginRunView>> =>
+    request<Collection<PluginRunView>>(`/api/candidate/attempt/${encodeURIComponent(id)}/plugin`),
+  runPlugin: (id: string, name: string, input: string): Promise<PluginRunView> =>
+    request<PluginRunView>(`/api/candidate/attempt/${encodeURIComponent(id)}/plugin`, {
+      method: 'POST',
+      body: JSON.stringify({ name, input }),
+    }),
+  getArtifacts: (id: string): Promise<Collection<ArtifactView>> =>
+    request<Collection<ArtifactView>>(`/api/candidate/attempt/${encodeURIComponent(id)}/artifacts`),
+  uploadArtifact: (id: string, name: string, sizeLabel: string): Promise<ArtifactView> =>
+    request<ArtifactView>(`/api/candidate/attempt/${encodeURIComponent(id)}/artifacts`, {
+      method: 'POST',
+      body: JSON.stringify({ name, sizeLabel }),
+    }),
+  getControls: (id: string): Promise<AttemptControlsView> =>
+    request<AttemptControlsView>(`/api/candidate/attempt/${encodeURIComponent(id)}/controls`),
+  controlsAction: (
+    id: string,
+    action: 'flag' | 'break' | 'end_break',
+    taskId?: string,
+  ): Promise<AttemptControlsView> =>
+    request<AttemptControlsView>(`/api/candidate/attempt/${encodeURIComponent(id)}/controls`, {
+      method: 'POST',
+      body: JSON.stringify({ action, taskId }),
     }),
 };

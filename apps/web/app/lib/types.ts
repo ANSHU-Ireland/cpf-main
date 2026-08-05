@@ -137,3 +137,86 @@ export interface ComplaintView {
   readonly status: ComplaintStatus;
   readonly submittedAt: string;
 }
+
+/* ── Assessment runtime (RUN-01 … RUN-13) ─────────────────────────────────────────────────── */
+
+export type AttemptStatus =
+  'ready' | 'in_progress' | 'paused' | 'submitting' | 'submitted' | 'expired' | 'voided';
+
+export type TaskKind = 'document' | 'code' | 'sheet';
+export type TaskStatus = 'not_started' | 'in_progress' | 'saved' | 'flagged';
+export type AutosaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+/** A single task within an attempt. `response` is the candidate's own work; provenance is tracked. */
+export interface AttemptTaskView {
+  readonly id: string;
+  readonly sectionId: string;
+  readonly kind: TaskKind;
+  readonly title: string;
+  readonly prompt: string;
+  readonly status: TaskStatus;
+  readonly response: string;
+  readonly savedAt: string | null;
+  readonly flagged: boolean;
+}
+
+export interface AttemptSectionView {
+  readonly id: string;
+  readonly title: string;
+  readonly taskIds: readonly string[];
+}
+
+/**
+ * A candidate attempt. The timer is server-authoritative: `deadlineAt` and `serverNow` are issued by
+ * the server so the client renders remaining time without owning it. No score is ever present here.
+ */
+export interface AttemptView {
+  readonly id: string;
+  readonly assessmentTitle: string;
+  readonly status: AttemptStatus;
+  readonly deadlineAt: string;
+  readonly serverNow: string;
+  readonly autosave: AutosaveState;
+  readonly sections: readonly AttemptSectionView[];
+  readonly tasks: readonly AttemptTaskView[];
+  readonly submittedAt: string | null;
+  readonly receiptRef: string | null;
+}
+
+/** A governed AI collaboration message. Always labelled; never yields a score or recommendation. */
+export interface AiMessageView {
+  readonly id: string;
+  readonly role: 'candidate' | 'assistant';
+  readonly body: string;
+  readonly at: string;
+  readonly provenanceRef: string | null;
+}
+
+export type PluginRunStatus = 'idle' | 'running' | 'passed' | 'failed';
+
+export interface PluginRunView {
+  readonly id: string;
+  readonly name: string;
+  readonly input: string;
+  readonly output: string;
+  readonly status: PluginRunStatus;
+  readonly ranAt: string;
+}
+
+export type ArtifactStatus = 'uploaded' | 'scanning' | 'clean' | 'rejected';
+
+export interface ArtifactView {
+  readonly id: string;
+  readonly name: string;
+  readonly sizeLabel: string;
+  readonly status: ArtifactStatus;
+  readonly uploadedAt: string;
+}
+
+export type BreakStatus = 'none' | 'requested' | 'active';
+
+export interface AttemptControlsView {
+  readonly flaggedTaskIds: readonly string[];
+  readonly breakStatus: BreakStatus;
+  readonly breaksRemaining: number;
+}

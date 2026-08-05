@@ -12,6 +12,14 @@ import type {
   SecurityEventView,
   SessionView,
 } from './types';
+import type {
+  AiMessageView,
+  ArtifactView,
+  AttemptControlsView,
+  AttemptTaskView,
+  AttemptView,
+  PluginRunView,
+} from './types';
 
 /**
  * Process-local synthetic data source for the demo web app. This is intentionally in-memory and
@@ -291,5 +299,233 @@ export const candidateStore = {
     };
     complaints.unshift(created);
     return created;
+  },
+};
+
+/* ── Assessment runtime store ─────────────────────────────────────────────────────────────── */
+
+const ATTEMPT_ID = 'att_frontend_demo';
+
+interface RuntimeState {
+  status: AttemptView['status'];
+  deadlineAt: number; // epoch ms; server-authoritative
+  autosave: AttemptView['autosave'];
+  submittedAt: string | null;
+  receiptRef: string | null;
+  tasks: AttemptTaskView[];
+  aiMessages: AiMessageView[];
+  pluginRuns: PluginRunView[];
+  artifacts: ArtifactView[];
+  breakStatus: AttemptControlsView['breakStatus'];
+  breaksRemaining: number;
+}
+
+function freshRuntime(): RuntimeState {
+  return {
+    status: 'in_progress',
+    deadlineAt: Date.now() + 55 * 60 * 1000,
+    autosave: 'saved',
+    submittedAt: null,
+    receiptRef: null,
+    tasks: [
+      {
+        id: 'task_doc',
+        sectionId: 'sec_written',
+        kind: 'document',
+        title: 'Design rationale',
+        prompt:
+          'Explain how you would structure a reusable component library for a design system. Cover tokens, theming and accessibility.',
+        status: 'in_progress',
+        response: '',
+        savedAt: null,
+        flagged: false,
+      },
+      {
+        id: 'task_code',
+        sectionId: 'sec_practical',
+        kind: 'code',
+        title: 'Debounce utility',
+        prompt:
+          'Implement a typed `debounce(fn, waitMs)` helper and describe how you would test it. Run the sample tests when ready.',
+        status: 'not_started',
+        response: '',
+        savedAt: null,
+        flagged: false,
+      },
+      {
+        id: 'task_sheet',
+        sectionId: 'sec_practical',
+        kind: 'sheet',
+        title: 'Data reconciliation',
+        prompt:
+          'Using the provided workbook, reconcile the two ledgers and summarise the discrepancies. Validate before saving.',
+        status: 'not_started',
+        response: '',
+        savedAt: null,
+        flagged: false,
+      },
+    ],
+    aiMessages: [],
+    pluginRuns: [],
+    artifacts: [],
+    breakStatus: 'none',
+    breaksRemaining: 1,
+  };
+}
+
+let runtime = freshRuntime();
+
+const SECTIONS: AttemptView['sections'] = [
+  { id: 'sec_written', title: 'Written', taskIds: ['task_doc'] },
+  { id: 'sec_practical', title: 'Practical', taskIds: ['task_code', 'task_sheet'] },
+];
+
+function projectAttempt(): AttemptView {
+  const now = Date.now();
+  let status = runtime.status;
+  if (status === 'in_progress' && now >= runtime.deadlineAt) {
+    status = 'expired';
+    runtime.status = 'expired';
+  }
+  return {
+    id: ATTEMPT_ID,
+    assessmentTitle: 'Frontend Practical (Demo, not validated)',
+    status,
+    deadlineAt: new Date(runtime.deadlineAt).toISOString(),
+    serverNow: new Date(now).toISOString(),
+    autosave: runtime.autosave,
+    sections: SECTIONS,
+    tasks: runtime.tasks.map((t) => ({ ...t })),
+    submittedAt: runtime.submittedAt,
+    receiptRef: runtime.receiptRef,
+  };
+}
+
+export const runtimeStore = {
+  attemptId(): string {
+    return ATTEMPT_ID;
+  },
+  getAttempt(): AttemptView {
+    return projectAttempt();
+  },
+  startAttempt(): AttemptView {
+    if (runtime.status === 'ready') runtime.status = 'in_progress';
+    return projectAttempt();
+  },
+  saveTask(taskId: string, response: string): AttemptView {
+    const index = runtime.tasks.findIndex((t) => t.id === taskId);
+    if (index !== -1) {
+      const current = runtime.tasks[index];
+      if (current !== undefined) {
+        runtime.tasks[index] = {
+          ...current,
+          response,
+          status: current.flagged ? 'flagged' : 'saved',
+          savedAt: new Date().toISOString(),
+        };
+      }
+      runtime.autosave = 'saved';
+    }
+    return projectAttempt();
+  },
+  getAiMessages(): Collection<AiMessageView> {
+    return { items: runtime.aiMessages, total: runtime.aiMessages.length };
+  },
+  sendAiMessage(body: string): Collection<AiMessageView> {
+    const at = new Date().toISOString();
+    const candidateMsg: AiMessageView = {
+      id: randomId('aim'),
+      role: 'candidate',
+      body,
+      at,
+      provenanceRef: null,
+    };
+    const assistantMsg: AiMessageView = {
+      id: randomId('aim'),
+      role: 'assistant',
+      body: 'AI assistant (labelled, logged): here is a general approach you can adapt. This is guidance only — it never contributes to any score or recommendation about you.',
+      at: new Date(Date.now() + 500).toISOString(),
+      provenanceRef: randomId('prov'),
+    };
+    runtime.aiMessages.push(candidateMsg, assistantMsg);
+    return { items: runtime.aiMessages, total: runtime.aiMessages.length };
+  },
+  getPluginRuns(): Collection<PluginRunView> {
+    return { items: runtime.pluginRuns, total: runtime.pluginRuns.length };
+  },
+  runPlugin(name: string, input: string): PluginRunView {
+    const passed = input.trim().length > 0;
+    const run: PluginRunView = {
+      id: randomId('run'),
+      name,
+      input,
+      output: passed
+        ? 'All 4 sample checks passed. Output captured with provenance for the reviewer.'
+        : 'No input provided — provide input to execute the plugin.',
+      status: passed ? 'passed' : 'failed',
+      ranAt: new Date().toISOString(),
+    };
+    runtime.pluginRuns.unshift(run);
+    return run;
+  },
+  getArtifacts(): Collection<ArtifactView> {
+    return { items: runtime.artifacts, total: runtime.artifacts.length };
+  },
+  uploadArtifact(name: string, sizeLabel: string): ArtifactView {
+    const artifact: ArtifactView = {
+      id: randomId('art'),
+      name,
+      sizeLabel,
+      status: 'clean',
+      uploadedAt: new Date().toISOString(),
+    };
+    runtime.artifacts.unshift(artifact);
+    return artifact;
+  },
+  getControls(): AttemptControlsView {
+    return {
+      flaggedTaskIds: runtime.tasks.filter((t) => t.flagged).map((t) => t.id),
+      breakStatus: runtime.breakStatus,
+      breaksRemaining: runtime.breaksRemaining,
+    };
+  },
+  toggleFlag(taskId: string): AttemptControlsView {
+    const index = runtime.tasks.findIndex((t) => t.id === taskId);
+    if (index !== -1) {
+      const current = runtime.tasks[index];
+      if (current !== undefined) {
+        const flagged = !current.flagged;
+        runtime.tasks[index] = {
+          ...current,
+          flagged,
+          status: flagged ? 'flagged' : current.savedAt ? 'saved' : 'in_progress',
+        };
+      }
+    }
+    return this.getControls();
+  },
+  requestBreak(): AttemptControlsView {
+    if (runtime.breakStatus === 'none' && runtime.breaksRemaining > 0) {
+      runtime.breakStatus = 'active';
+      runtime.breaksRemaining -= 1;
+    }
+    return this.getControls();
+  },
+  endBreak(): AttemptControlsView {
+    if (runtime.breakStatus === 'active') runtime.breakStatus = 'none';
+    return this.getControls();
+  },
+  submitAttempt(): AttemptView {
+    // Idempotent: a second submit returns the same receipt rather than duplicating.
+    if (runtime.status !== 'submitted') {
+      runtime.status = 'submitted';
+      runtime.submittedAt = new Date().toISOString();
+      runtime.receiptRef = randomId('rcpt').toUpperCase();
+    }
+    return projectAttempt();
+  },
+  resetAttempt(): AttemptView {
+    runtime = freshRuntime();
+    return projectAttempt();
   },
 };

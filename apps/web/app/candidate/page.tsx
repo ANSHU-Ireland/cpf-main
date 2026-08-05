@@ -120,6 +120,10 @@ export default function CandidateHomePage(): React.JSX.Element {
                     You have no upcoming assessments scheduled.
                   </p>
                 )}
+                <p style={{ margin: 0 }}>
+                  <Link href="/candidate/assessment/readiness">Go to assessment readiness</Link> to
+                  run your pre-checks and begin.
+                </p>
                 <p style={{ marginBlockEnd: 0, color: 'var(--color-muted)', fontSize: '0.9rem' }}>
                   Your assessment is reviewed by a qualified person. You will never be scored or
                   ranked automatically, and any AI observations are only ever aids to a human
