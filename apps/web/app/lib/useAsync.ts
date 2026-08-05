@@ -15,12 +15,16 @@ export type AsyncState<T> =
 export function useAsync<T>(loader: () => Promise<T>): {
   readonly state: AsyncState<T>;
   readonly reload: () => void;
+  readonly setData: (data: T) => void;
 } {
   const [state, setState] = useState<AsyncState<T>>({ status: 'loading' });
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => {
     setState({ status: 'loading' });
     setNonce((n) => n + 1);
+  }, []);
+  const setData = useCallback((data: T) => {
+    setState({ status: 'ready', data });
   }, []);
 
   useEffect(() => {
@@ -41,5 +45,5 @@ export function useAsync<T>(loader: () => Promise<T>): {
     // `loader` is intentionally captured once per screen; `nonce` drives explicit reloads.
   }, [nonce]);
 
-  return { state, reload };
+  return { state, reload, setData };
 }

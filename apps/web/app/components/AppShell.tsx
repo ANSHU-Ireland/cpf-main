@@ -6,6 +6,8 @@ export interface AppShellProps {
   readonly navLabel: string;
   readonly navItems: readonly NavItem[];
   readonly children: ReactNode;
+  readonly homeHref?: string;
+  readonly workspaceLabel?: string;
 }
 
 /**
@@ -13,7 +15,13 @@ export interface AppShellProps {
  * layout. Collapses to a single column below the medium breakpoint via CSS grid + media query
  * embedded here (kept local to the shell so the token variables remain the only shared styling).
  */
-export function AppShell({ navLabel, navItems, children }: AppShellProps): React.JSX.Element {
+export function AppShell({
+  navLabel,
+  navItems,
+  children,
+  homeHref = '/account/profile',
+  workspaceLabel = 'Workspace',
+}: AppShellProps): React.JSX.Element {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <style
@@ -44,10 +52,10 @@ export function AppShell({ navLabel, navItems, children }: AppShellProps): React
         }}
       >
         <Link
-          href="/account/profile"
+          href={homeHref}
           style={{ fontWeight: 700, textDecoration: 'none', color: 'var(--color-ink)' }}
         >
-          CPF <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>Workspace</span>
+          CPF <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>{workspaceLabel}</span>
         </Link>
         <Link
           href="/sign-in"

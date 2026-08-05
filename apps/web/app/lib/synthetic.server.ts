@@ -1,8 +1,14 @@
 import type {
+  AccommodationView,
+  CandidateApplicationView,
   Collection,
+  ComplaintView,
+  DataRightsRequestView,
+  DataRightsType,
   NoticeView,
   PreferencesView,
   ProfileView,
+  ScheduleSlotView,
   SecurityEventView,
   SessionView,
 } from './types';
@@ -12,6 +18,10 @@ import type {
  * fabricated — no real personal data — matching the "Synthetic demo environment" invariant. It is
  * the single seam that a real `@cpf/*` API adapter will replace.
  */
+
+function randomId(prefix: string): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 const profile: ProfileView = {
   userId: 'usr_demo_reviewer',
@@ -131,5 +141,155 @@ export const syntheticStore = {
     const updated: NoticeView = { ...current, acknowledged: true };
     notices[index] = updated;
     return updated;
+  },
+};
+
+/* ── Candidate journey synthetic data ─────────────────────────────────────────────────────── */
+
+const applications: CandidateApplicationView[] = [
+  {
+    id: 'app_frontend_northwind',
+    employerName: 'Northwind Assessments (Demo)',
+    role: 'Frontend Engineer',
+    assessmentTitle: 'Frontend Practical (Demo, not validated)',
+    status: 'invited',
+    invitedAt: '2026-08-02T10:00:00.000Z',
+    dueAt: '2026-08-12T17:00:00.000Z',
+    decision: null,
+  },
+  {
+    id: 'app_data_globex',
+    employerName: 'Globex Talent (Demo)',
+    role: 'Data Analyst',
+    assessmentTitle: 'Spreadsheet & Data Reasoning (Demo, not validated)',
+    status: 'under_review',
+    invitedAt: '2026-07-18T09:00:00.000Z',
+    dueAt: null,
+    decision: null,
+  },
+  {
+    id: 'app_support_initech',
+    employerName: 'Initech Hiring (Demo)',
+    role: 'Support Specialist',
+    assessmentTitle: 'Written Scenarios (Demo, not validated)',
+    status: 'decision_available',
+    invitedAt: '2026-06-30T09:00:00.000Z',
+    dueAt: null,
+    decision: {
+      outcome: 'Progressed to interview',
+      rationale:
+        'The reviewing panel judged the written scenarios to meet the role’s communication bar. This decision was recorded by a named employer reviewer.',
+      decidedBy: 'A. Employer (Decision Owner)',
+      issuedAt: '2026-07-15T14:30:00.000Z',
+    },
+  },
+];
+
+const accommodations: AccommodationView[] = [
+  {
+    id: 'acc_extra_time',
+    category: 'Extra time',
+    summary: 'Requested 25% additional time for timed tasks.',
+    status: 'approved',
+    submittedAt: '2026-07-19T11:00:00.000Z',
+    adjustment: '25% additional time applied to timed tasks.',
+  },
+];
+
+const scheduleSlots: ScheduleSlotView[] = [
+  {
+    id: 'slot_a',
+    assessmentTitle: 'Frontend Practical (Demo, not validated)',
+    startsAt: '2026-08-10T09:00:00.000Z',
+    endsAt: '2026-08-10T11:00:00.000Z',
+    timezone: 'Europe/London',
+    mode: 'supervised_desktop',
+    selected: false,
+  },
+  {
+    id: 'slot_b',
+    assessmentTitle: 'Frontend Practical (Demo, not validated)',
+    startsAt: '2026-08-11T13:00:00.000Z',
+    endsAt: '2026-08-11T15:00:00.000Z',
+    timezone: 'Europe/London',
+    mode: 'supervised_desktop',
+    selected: false,
+  },
+];
+
+const dataRights: DataRightsRequestView[] = [];
+
+const complaints: ComplaintView[] = [];
+
+export const candidateStore = {
+  getApplications(): Collection<CandidateApplicationView> {
+    return { items: applications, total: applications.length };
+  },
+  applicationAction(
+    id: string,
+    action: 'withdraw' | 'explanation' | 'human_review',
+  ): CandidateApplicationView | null {
+    const index = applications.findIndex((a) => a.id === id);
+    if (index === -1) return null;
+    const current = applications[index];
+    if (current === undefined) return null;
+    // Withdrawal is the only state transition; explanation/human-review are logged requests that
+    // do not mutate the application (a real adapter would create superseding records + audit).
+    const updated: CandidateApplicationView =
+      action === 'withdraw' ? { ...current, status: 'withdrawn' } : current;
+    applications[index] = updated;
+    return updated;
+  },
+  getAccommodations(): Collection<AccommodationView> {
+    return { items: accommodations, total: accommodations.length };
+  },
+  createAccommodation(category: string, summary: string): AccommodationView {
+    const created: AccommodationView = {
+      id: randomId('acc'),
+      category,
+      summary,
+      status: 'requested',
+      submittedAt: new Date().toISOString(),
+      adjustment: null,
+    };
+    accommodations.unshift(created);
+    return created;
+  },
+  getSchedule(): Collection<ScheduleSlotView> {
+    return { items: scheduleSlots, total: scheduleSlots.length };
+  },
+  selectSlot(slotId: string): Collection<ScheduleSlotView> {
+    for (let i = 0; i < scheduleSlots.length; i += 1) {
+      const slot = scheduleSlots[i];
+      if (slot !== undefined) scheduleSlots[i] = { ...slot, selected: slot.id === slotId };
+    }
+    return { items: scheduleSlots, total: scheduleSlots.length };
+  },
+  getDataRights(): Collection<DataRightsRequestView> {
+    return { items: dataRights, total: dataRights.length };
+  },
+  createDataRightsRequest(type: DataRightsType, note: string): DataRightsRequestView {
+    const created: DataRightsRequestView = {
+      id: randomId('dr'),
+      type,
+      status: 'received',
+      submittedAt: new Date().toISOString(),
+      note: note.trim() === '' ? null : note,
+    };
+    dataRights.unshift(created);
+    return created;
+  },
+  getComplaints(): Collection<ComplaintView> {
+    return { items: complaints, total: complaints.length };
+  },
+  createComplaint(subject: string): ComplaintView {
+    const created: ComplaintView = {
+      id: randomId('cmp'),
+      subject,
+      status: 'open',
+      submittedAt: new Date().toISOString(),
+    };
+    complaints.unshift(created);
+    return created;
   },
 };

@@ -1,8 +1,14 @@
 import type {
+  AccommodationView,
+  CandidateApplicationView,
   Collection,
+  ComplaintView,
+  DataRightsRequestView,
+  DataRightsType,
   NoticeView,
   PreferencesView,
   ProfileView,
+  ScheduleSlotView,
   SecurityEventView,
   SessionView,
 } from './types';
@@ -67,5 +73,46 @@ export const apiClient = {
     request<{ mfaRequired: boolean }>('/api/auth/sign-in', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    }),
+
+  // ── Candidate journey ──
+  getApplications: (): Promise<Collection<CandidateApplicationView>> =>
+    request<Collection<CandidateApplicationView>>('/api/candidate/applications'),
+  applicationAction: (
+    id: string,
+    action: 'withdraw' | 'explanation' | 'human_review',
+    reason: string,
+  ): Promise<CandidateApplicationView> =>
+    request<CandidateApplicationView>(
+      `/api/candidate/applications/${encodeURIComponent(id)}/actions`,
+      { method: 'POST', body: JSON.stringify({ action, reason }) },
+    ),
+  getAccommodations: (): Promise<Collection<AccommodationView>> =>
+    request<Collection<AccommodationView>>('/api/candidate/accommodations'),
+  createAccommodation: (category: string, summary: string): Promise<AccommodationView> =>
+    request<AccommodationView>('/api/candidate/accommodations', {
+      method: 'POST',
+      body: JSON.stringify({ category, summary }),
+    }),
+  getSchedule: (): Promise<Collection<ScheduleSlotView>> =>
+    request<Collection<ScheduleSlotView>>('/api/candidate/schedule'),
+  selectSlot: (slotId: string): Promise<Collection<ScheduleSlotView>> =>
+    request<Collection<ScheduleSlotView>>('/api/candidate/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ slotId }),
+    }),
+  getDataRights: (): Promise<Collection<DataRightsRequestView>> =>
+    request<Collection<DataRightsRequestView>>('/api/candidate/data-rights'),
+  createDataRightsRequest: (type: DataRightsType, note: string): Promise<DataRightsRequestView> =>
+    request<DataRightsRequestView>('/api/candidate/data-rights', {
+      method: 'POST',
+      body: JSON.stringify({ type, note }),
+    }),
+  getComplaints: (): Promise<Collection<ComplaintView>> =>
+    request<Collection<ComplaintView>>('/api/candidate/complaints'),
+  createComplaint: (subject: string, detail: string): Promise<ComplaintView> =>
+    request<ComplaintView>('/api/candidate/complaints', {
+      method: 'POST',
+      body: JSON.stringify({ subject, detail }),
     }),
 };

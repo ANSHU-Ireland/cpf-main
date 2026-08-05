@@ -1,6 +1,6 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 frontend (web app shell + account/auth journey) runnable_
+_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) frontend runnable_
 
 ## Where we are
 
@@ -10,15 +10,18 @@ Two things are now true and both are **green** (format + typecheck + lint + 1,39
    deny-by-default authorization, HTTP handlers and tests across `@cpf/account`, `@cpf/org` and
    `apps/api`. This is the vertical-slice **backend** for every operation.
 2. **Frontend was previously ~1% and is now bootstrapped.** A runnable **Next.js (App Router)** web
-   app exists in `apps/web` with a role-aware shell and the full **account + auth journey**
+   app exists in `apps/web` with a role-aware shell, the full **account + auth journey**
    (sign-in, MFA, password recovery, activation, profile, preferences, sessions, security activity,
-   notices, support). Every page and API route returns 200 under `next dev`.
+   notices, support), and the full **candidate journey** (home dashboard, applications with
+   human-oversight actions, accommodations, scheduling, data & privacy, complaints). Every page
+   and API route returns 200 under `next dev`.
 
-> Honest scope note: reaching "244/244 operations" satisfied only the *operation-count* bullet of
+> Honest scope note: reaching "244/244 operations" satisfied only the _operation-count_ bullet of
 > the §20 completion definition — it is **backend-only**. The §20 requirement that **all 125
 > wireframe interfaces** be coded with state/responsive/a11y coverage is still largely open: this
-> checkpoint moves that from **1/125** to a runnable foundation plus **~11 account/auth screens**.
-> Remaining: candidate, assessment-runtime, reviewer, employer-admin, platform/assessment-admin,
+> checkpoint moves that from **1/125** to a runnable foundation plus **~11 account/auth screens**
+> and **6 candidate screens**.
+> Remaining: assessment-runtime, reviewer, employer-admin, platform/assessment-admin,
 > governance, support/ops boards; the 4 known UI/API gaps; workers/ai-gateway/companion; and
 > Vercel/AWS deployment.
 
@@ -37,6 +40,25 @@ Two things are now true and both are **green** (format + typecheck + lint + 1,39
   replace. `Field` prop types relaxed to `string | undefined` for `exactOptionalPropertyTypes`.
 - **Verification**: `pnpm --filter @cpf/web typecheck` clean; all routes smoke-tested 200 on
   `next dev` (pages + GET/PATCH/POST/DELETE handlers); full repo suite still 1,399/153 green.
+
+### Wave 4 frontend (candidate journey) — evidence
+
+- **Screens** under `apps/web/app/candidate/**` behind a dedicated `AppShell` (candidate nav,
+  `homeHref=/candidate`): **home dashboard** (open applications / decisions / offered slots
+  summary + "what happens next"), **applications** (status badges + human decision rationale with a
+  "Made by a person" marker; withdraw, request-explanation and request-human-review actions),
+  **accommodations** (sensitive-request form + list; only the approved operational `adjustment` is
+  ever surfaced), **scheduling** (choose/booked slots, supervised-desktop mode), **data & privacy**
+  (export/rectification/erasure/restriction requests + status), **complaints** (raise + track).
+- **Invariants honoured**: no scores/ranks are ever shown to the candidate; decisions carry a
+  human rationale and decider; accommodation clinical detail is segregated (only an approved
+  adjustment string is exposed); all AI framed as an aid to a human reviewer.
+- **Data seam**: candidate view-models + `apiClient` methods + synthetic Next route handlers under
+  `app/api/candidate/**` (`applications`, `applications/[id]/actions`, `accommodations`,
+  `schedule`, `data-rights`, `complaints`). `useAsync` gained `setData` for optimistic slot booking.
+- **Verification**: web typecheck + repo typecheck + lint clean; all 6 candidate pages and 5
+  candidate API routes smoke-tested 200 on `next dev`; action validation returns 422 on short
+  reasons; POST creates return 201; full repo suite still 1,399/153 green.
 
 ## Historical Wave 0 record (unchanged)
 

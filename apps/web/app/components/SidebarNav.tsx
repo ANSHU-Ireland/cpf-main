@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 export interface NavItem {
   readonly href: string;
   readonly label: string;
+  /** When true, the item is active only on an exact path match (for section index links). */
+  readonly exact?: boolean;
 }
 
 export interface SidebarNavProps {
@@ -20,7 +22,8 @@ export function SidebarNav({ items, label }: SidebarNavProps): React.JSX.Element
     <nav aria-label={label}>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '2px' }}>
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active =
+            pathname === item.href || (item.exact !== true && pathname.startsWith(`${item.href}/`));
           return (
             <li key={item.href}>
               <Link
