@@ -63,6 +63,21 @@ import type {
   TeamView,
   TemplateView,
 } from './types';
+import type {
+  AccessGrantView,
+  AdminDashboardView,
+  AdminSupportCaseView,
+  AuditEventView,
+  FeatureFlagView,
+  JobStatus,
+  JobView,
+  ReleaseView,
+  SubscriptionView,
+  TenantDetailView,
+  TenantStaffView,
+  TenantStatus,
+  TenantView,
+} from './types';
 
 /**
  * Process-local synthetic data source for the demo web app. This is intentionally in-memory and
@@ -1558,5 +1573,350 @@ export const employerStore = {
 
   reset(): void {
     employer = freshEmployer();
+  },
+};
+
+// ── Platform admin store (CPF Super Admin) ─────────────────────────────────────────────────────
+// Invariants: privileged access is time-bound, justified, approved and visible; no silent impersonation.
+
+export const ADMIN_TENANT_ID = 'tnt_frontend_demo';
+
+interface AdminState {
+  tenants: TenantView[];
+  staff: TenantStaffView[];
+  subscription: SubscriptionView;
+  flags: FeatureFlagView[];
+  jobs: JobView[];
+  audit: AuditEventView[];
+  releases: ReleaseView[];
+  cases: AdminSupportCaseView[];
+  grants: AccessGrantView[];
+}
+
+function freshAdmin(): AdminState {
+  return {
+    tenants: [
+      {
+        id: ADMIN_TENANT_ID,
+        name: 'Acme Talent',
+        slug: 'acme',
+        status: 'active',
+        plan: 'Scale',
+        staffCount: 3,
+        createdAt: new Date(Date.now() - 90 * 86400000).toISOString(),
+      },
+      {
+        id: 'tnt_globex',
+        name: 'Globex',
+        slug: 'globex',
+        status: 'trial',
+        plan: 'Trial',
+        staffCount: 1,
+        createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+      },
+    ],
+    staff: [
+      {
+        id: 'stf_1',
+        name: 'Dana Owner',
+        email: 'dana@acme.example',
+        role: 'employer_admin',
+        status: 'active',
+      },
+      {
+        id: 'stf_2',
+        name: 'Sam Recruiter',
+        email: 'sam@acme.example',
+        role: 'recruiter',
+        status: 'active',
+      },
+    ],
+    subscription: {
+      tenantId: ADMIN_TENANT_ID,
+      plan: 'Scale',
+      seatsLimit: 25,
+      effectiveFrom: new Date(Date.now() - 60 * 86400000).toISOString(),
+      renewsAt: new Date(Date.now() + 305 * 86400000).toISOString(),
+    },
+    flags: [
+      {
+        id: 'flg_ai',
+        key: 'governed_ai_panel',
+        description: 'Enable the governed AI assistance panel in runtime.',
+        enabled: true,
+        rollout: '100%',
+      },
+      {
+        id: 'flg_beta',
+        key: 'beta_reports',
+        description: 'New employer report types.',
+        enabled: false,
+        rollout: '0%',
+      },
+    ],
+    jobs: [
+      {
+        id: 'job_1',
+        name: 'nightly-evidence-bundle',
+        status: 'complete',
+        attempts: 1,
+        queuedAt: new Date(Date.now() - 6 * 3600000).toISOString(),
+      },
+      {
+        id: 'job_2',
+        name: 'webhook-redelivery',
+        status: 'failed',
+        attempts: 3,
+        queuedAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+      },
+    ],
+    audit: [
+      {
+        id: 'aud_1',
+        actor: 'dana@acme.example',
+        action: 'campaign.activate',
+        target: 'cmp_active_demo',
+        at: new Date(Date.now() - 3600000).toISOString(),
+      },
+      {
+        id: 'aud_2',
+        actor: 'super@cpf.example',
+        action: 'tenant.suspend',
+        target: 'tnt_old',
+        at: new Date(Date.now() - 5 * 3600000).toISOString(),
+      },
+    ],
+    releases: [
+      {
+        id: 'rel_1',
+        title: 'DB maintenance — EU region',
+        kind: 'maintenance',
+        status: 'scheduled',
+        window: new Date(Date.now() + 3 * 86400000).toISOString(),
+      },
+    ],
+    cases: [
+      {
+        id: 'cse_1',
+        subject: 'Candidate cannot start attempt',
+        tenantName: 'Acme Talent',
+        priority: 'high',
+        status: 'new',
+        assignee: null,
+      },
+    ],
+    grants: [
+      {
+        id: 'grt_1',
+        requester: 'agent@cpf.example',
+        scope: 'tenant:acme read-only',
+        justification: 'Investigate reported attempt failure (ticket SUP-1042).',
+        status: 'requested',
+        expiresAt: null,
+        approver: null,
+      },
+    ],
+  };
+}
+
+let admin: AdminState = freshAdmin();
+
+export const adminStore = {
+  tenantId: ADMIN_TENANT_ID,
+
+  getDashboard(): AdminDashboardView {
+    return {
+      tenants: admin.tenants.length,
+      activeIncidents: 0,
+      failedJobs: admin.jobs.filter((j) => j.status === 'failed').length,
+      openAccessGrants: admin.grants.filter(
+        (g) => g.status === 'requested' || g.status === 'active',
+      ).length,
+      alerts: [
+        { id: 'alt_1', severity: 'warning', message: 'One background job failed and needs retry.' },
+        {
+          id: 'alt_2',
+          severity: 'info',
+          message: 'A privileged access request is awaiting approval.',
+        },
+      ],
+    };
+  },
+
+  getTenants(): Collection<TenantView> {
+    return { items: admin.tenants, total: admin.tenants.length };
+  },
+  createTenant(name: string, slug: string): TenantView {
+    const t: TenantView = {
+      id: randomId('tnt'),
+      name,
+      slug,
+      status: 'trial',
+      plan: 'Trial',
+      staffCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    admin.tenants.unshift(t);
+    return t;
+  },
+  getTenant(id: string): TenantDetailView | null {
+    const t = admin.tenants.find((x) => x.id === id);
+    if (t === undefined) return null;
+    return {
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      status: t.status,
+      plan: t.plan,
+      region: 'eu-west',
+      seatsUsed: t.staffCount,
+      seatsLimit: admin.subscription.seatsLimit,
+    };
+  },
+  setTenantStatus(id: string, status: TenantStatus): TenantDetailView | null {
+    const index = admin.tenants.findIndex((t) => t.id === id);
+    if (index === -1) return null;
+    const current = admin.tenants[index];
+    if (current === undefined) return null;
+    admin.tenants[index] = { ...current, status };
+    return this.getTenant(id);
+  },
+
+  getStaff(): Collection<TenantStaffView> {
+    return { items: admin.staff, total: admin.staff.length };
+  },
+  inviteStaff(email: string, role: string): TenantStaffView {
+    const s: TenantStaffView = {
+      id: randomId('stf'),
+      name: email.split('@')[0] ?? email,
+      email,
+      role,
+      status: 'invited',
+    };
+    admin.staff.push(s);
+    return s;
+  },
+
+  getSubscription(): SubscriptionView {
+    return admin.subscription;
+  },
+  updateSubscription(plan: string, seatsLimit: number): SubscriptionView {
+    admin.subscription = { ...admin.subscription, plan, seatsLimit };
+    return admin.subscription;
+  },
+
+  getFlags(): Collection<FeatureFlagView> {
+    return { items: admin.flags, total: admin.flags.length };
+  },
+  createFlag(key: string, description: string): FeatureFlagView {
+    const f: FeatureFlagView = {
+      id: randomId('flg'),
+      key,
+      description,
+      enabled: false,
+      rollout: '0%',
+    };
+    admin.flags.push(f);
+    return f;
+  },
+  toggleFlag(id: string): FeatureFlagView | null {
+    const index = admin.flags.findIndex((f) => f.id === id);
+    if (index === -1) return null;
+    const current = admin.flags[index];
+    if (current === undefined) return null;
+    const enabled = !current.enabled;
+    const next: FeatureFlagView = { ...current, enabled, rollout: enabled ? '100%' : '0%' };
+    admin.flags[index] = next;
+    return next;
+  },
+
+  getJobs(): Collection<JobView> {
+    return { items: admin.jobs, total: admin.jobs.length };
+  },
+  actOnJob(id: string, action: 'retry' | 'cancel'): JobView | null {
+    const index = admin.jobs.findIndex((j) => j.id === id);
+    if (index === -1) return null;
+    const current = admin.jobs[index];
+    if (current === undefined) return null;
+    const status: JobStatus = action === 'retry' ? 'queued' : 'cancelled';
+    const next: JobView = {
+      ...current,
+      status,
+      attempts: action === 'retry' ? current.attempts + 1 : current.attempts,
+    };
+    admin.jobs[index] = next;
+    return next;
+  },
+
+  getAudit(): Collection<AuditEventView> {
+    return { items: admin.audit, total: admin.audit.length };
+  },
+
+  getReleases(): Collection<ReleaseView> {
+    return { items: admin.releases, total: admin.releases.length };
+  },
+  scheduleRelease(title: string, kind: 'maintenance' | 'release'): ReleaseView {
+    const r: ReleaseView = {
+      id: randomId('rel'),
+      title,
+      kind,
+      status: 'scheduled',
+      window: new Date(Date.now() + 7 * 86400000).toISOString(),
+    };
+    admin.releases.unshift(r);
+    return r;
+  },
+
+  getCases(): Collection<AdminSupportCaseView> {
+    return { items: admin.cases, total: admin.cases.length };
+  },
+  assignCase(id: string, assignee: string): AdminSupportCaseView | null {
+    const index = admin.cases.findIndex((c) => c.id === id);
+    if (index === -1) return null;
+    const current = admin.cases[index];
+    if (current === undefined) return null;
+    const next: AdminSupportCaseView = { ...current, assignee, status: 'assigned' };
+    admin.cases[index] = next;
+    return next;
+  },
+
+  getGrants(): Collection<AccessGrantView> {
+    return { items: admin.grants, total: admin.grants.length };
+  },
+  requestGrant(scope: string, justification: string): AccessGrantView {
+    const g: AccessGrantView = {
+      id: randomId('grt'),
+      requester: 'you@cpf.example',
+      scope,
+      justification,
+      status: 'requested',
+      expiresAt: null,
+      approver: null,
+    };
+    admin.grants.unshift(g);
+    return g;
+  },
+  actOnGrant(id: string, action: 'approve' | 'revoke'): AccessGrantView | null {
+    const index = admin.grants.findIndex((g) => g.id === id);
+    if (index === -1) return null;
+    const current = admin.grants[index];
+    if (current === undefined) return null;
+    let next: AccessGrantView;
+    if (action === 'approve') {
+      next = {
+        ...current,
+        status: 'active',
+        approver: 'super@cpf.example',
+        expiresAt: new Date(Date.now() + 2 * 3600000).toISOString(),
+      };
+    } else {
+      next = { ...current, status: 'revoked' };
+    }
+    admin.grants[index] = next;
+    return next;
+  },
+
+  reset(): void {
+    admin = freshAdmin();
   },
 };

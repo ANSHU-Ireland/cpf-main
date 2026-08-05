@@ -569,3 +569,112 @@ export interface ReadinessItemView {
   readonly detail: string;
   readonly resolved: boolean;
 }
+
+// ── Platform admin journey (CPF Super Admin) ──
+// Invariants: strict privilege boundaries, no silent impersonation, time-bound justified access.
+
+export interface AdminDashboardView {
+  readonly tenants: number;
+  readonly activeIncidents: number;
+  readonly failedJobs: number;
+  readonly openAccessGrants: number;
+  readonly alerts: readonly {
+    readonly id: string;
+    readonly severity: string;
+    readonly message: string;
+  }[];
+}
+
+export type TenantStatus = 'active' | 'trial' | 'suspended' | 'archived';
+export interface TenantView {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly status: TenantStatus;
+  readonly plan: string;
+  readonly staffCount: number;
+  readonly createdAt: string;
+}
+
+export interface TenantDetailView {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly status: TenantStatus;
+  readonly plan: string;
+  readonly region: string;
+  readonly seatsUsed: number;
+  readonly seatsLimit: number;
+}
+
+export type StaffStatus = 'active' | 'invited' | 'suspended';
+export interface TenantStaffView {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: string;
+  readonly status: StaffStatus;
+}
+
+export interface SubscriptionView {
+  readonly tenantId: string;
+  readonly plan: string;
+  readonly seatsLimit: number;
+  readonly effectiveFrom: string;
+  readonly renewsAt: string;
+}
+
+export interface FeatureFlagView {
+  readonly id: string;
+  readonly key: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly rollout: string;
+}
+
+export type JobStatus = 'queued' | 'running' | 'partial' | 'failed' | 'cancelled' | 'complete';
+export interface JobView {
+  readonly id: string;
+  readonly name: string;
+  readonly status: JobStatus;
+  readonly attempts: number;
+  readonly queuedAt: string;
+}
+
+export interface AuditEventView {
+  readonly id: string;
+  readonly actor: string;
+  readonly action: string;
+  readonly target: string;
+  readonly at: string;
+}
+
+export type ReleaseStatus = 'scheduled' | 'in_progress' | 'complete' | 'cancelled';
+export interface ReleaseView {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: 'maintenance' | 'release';
+  readonly status: ReleaseStatus;
+  readonly window: string;
+}
+
+export type SupportCaseStatus = 'new' | 'assigned' | 'in_progress' | 'resolved';
+export interface AdminSupportCaseView {
+  readonly id: string;
+  readonly subject: string;
+  readonly tenantName: string;
+  readonly priority: 'low' | 'normal' | 'high' | 'urgent';
+  readonly status: SupportCaseStatus;
+  readonly assignee: string | null;
+}
+
+export type AccessGrantStatus = 'requested' | 'approved' | 'active' | 'expired' | 'revoked';
+export interface AccessGrantView {
+  readonly id: string;
+  readonly requester: string;
+  readonly scope: string;
+  readonly justification: string;
+  readonly status: AccessGrantStatus;
+  readonly expiresAt: string | null;
+  readonly approver: string | null;
+}

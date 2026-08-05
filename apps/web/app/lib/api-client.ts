@@ -59,6 +59,20 @@ import type {
   TeamView,
   TemplateView,
 } from './types';
+import type {
+  AccessGrantView,
+  AdminDashboardView,
+  AdminSupportCaseView,
+  AuditEventView,
+  FeatureFlagView,
+  JobView,
+  ReleaseView,
+  SubscriptionView,
+  TenantDetailView,
+  TenantStaffView,
+  TenantStatus,
+  TenantView,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -486,5 +500,92 @@ export const apiClient = {
     request<ReadinessItemView>('/api/employer/readiness', {
       method: 'POST',
       body: JSON.stringify({ itemId }),
+    }),
+
+  // ── Platform admin journey (CPF Super Admin) ──
+  getAdminDashboard: (): Promise<AdminDashboardView> =>
+    request<AdminDashboardView>('/api/admin/dashboard'),
+
+  getTenants: (): Promise<Collection<TenantView>> =>
+    request<Collection<TenantView>>('/api/admin/tenants'),
+  createTenant: (name: string, slug: string): Promise<TenantView> =>
+    request<TenantView>('/api/admin/tenants', {
+      method: 'POST',
+      body: JSON.stringify({ name, slug }),
+    }),
+  getTenant: (id: string): Promise<TenantDetailView> =>
+    request<TenantDetailView>(`/api/admin/tenants/${id}`),
+  setTenantStatus: (id: string, status: TenantStatus): Promise<TenantDetailView> =>
+    request<TenantDetailView>(`/api/admin/tenants/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  getTenantStaff: (id: string): Promise<Collection<TenantStaffView>> =>
+    request<Collection<TenantStaffView>>(`/api/admin/tenants/${id}/staff`),
+  inviteStaff: (id: string, email: string, role: string): Promise<TenantStaffView> =>
+    request<TenantStaffView>(`/api/admin/tenants/${id}/staff`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+
+  getSubscription: (id: string): Promise<SubscriptionView> =>
+    request<SubscriptionView>(`/api/admin/tenants/${id}/subscription`),
+  updateSubscription: (id: string, plan: string, seatsLimit: number): Promise<SubscriptionView> =>
+    request<SubscriptionView>(`/api/admin/tenants/${id}/subscription`, {
+      method: 'PUT',
+      body: JSON.stringify({ plan, seatsLimit }),
+    }),
+
+  getFeatureFlags: (): Promise<Collection<FeatureFlagView>> =>
+    request<Collection<FeatureFlagView>>('/api/admin/feature-flags'),
+  createFeatureFlag: (key: string, description: string): Promise<FeatureFlagView> =>
+    request<FeatureFlagView>('/api/admin/feature-flags', {
+      method: 'POST',
+      body: JSON.stringify({ key, description }),
+    }),
+  toggleFeatureFlag: (id: string): Promise<FeatureFlagView> =>
+    request<FeatureFlagView>('/api/admin/feature-flags', {
+      method: 'PATCH',
+      body: JSON.stringify({ id }),
+    }),
+
+  getJobs: (): Promise<Collection<JobView>> => request<Collection<JobView>>('/api/admin/jobs'),
+  actOnJob: (id: string, action: 'retry' | 'cancel'): Promise<JobView> =>
+    request<JobView>('/api/admin/jobs', {
+      method: 'POST',
+      body: JSON.stringify({ id, action }),
+    }),
+
+  getAuditEvents: (): Promise<Collection<AuditEventView>> =>
+    request<Collection<AuditEventView>>('/api/admin/audit'),
+
+  getReleases: (): Promise<Collection<ReleaseView>> =>
+    request<Collection<ReleaseView>>('/api/admin/releases'),
+  scheduleRelease: (title: string, kind: 'maintenance' | 'release'): Promise<ReleaseView> =>
+    request<ReleaseView>('/api/admin/releases', {
+      method: 'POST',
+      body: JSON.stringify({ title, kind }),
+    }),
+
+  getSupportCases: (): Promise<Collection<AdminSupportCaseView>> =>
+    request<Collection<AdminSupportCaseView>>('/api/admin/support'),
+  assignSupportCase: (id: string, assignee: string): Promise<AdminSupportCaseView> =>
+    request<AdminSupportCaseView>('/api/admin/support', {
+      method: 'POST',
+      body: JSON.stringify({ id, assignee }),
+    }),
+
+  getAccessGrants: (): Promise<Collection<AccessGrantView>> =>
+    request<Collection<AccessGrantView>>('/api/admin/privileged-access'),
+  requestAccessGrant: (scope: string, justification: string): Promise<AccessGrantView> =>
+    request<AccessGrantView>('/api/admin/privileged-access', {
+      method: 'POST',
+      body: JSON.stringify({ scope, justification }),
+    }),
+  actOnAccessGrant: (id: string, action: 'approve' | 'revoke'): Promise<AccessGrantView> =>
+    request<AccessGrantView>('/api/admin/privileged-access', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, action }),
     }),
 };
