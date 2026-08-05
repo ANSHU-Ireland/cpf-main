@@ -4,9 +4,12 @@ import {
   getInvitation,
   createInvitation,
   revokeInvitation,
+  resendInvitation,
+  extendInvitation,
   parseInvitationListQuery,
   parseInvitationCreate,
   parseInvitationId,
+  parseInvitationExtend,
 } from './invitations.js';
 import type { InvitationRepository, InvitationListResult } from './invitation-repository.js';
 import { EMPLOYER_ADMIN_ROLE } from './permissions.js';
@@ -42,6 +45,8 @@ function repo(overrides: Partial<InvitationRepository> = {}): InvitationReposito
     createInvitation: (_a: Actor, _appId: string, _input: InvitationCreate, tokenHash: string) =>
       Promise.resolve(inv({ tokenHash })),
     revokeInvitation: () => Promise.resolve(inv({ status: 'revoked' })),
+    resendInvitation: () => Promise.resolve(inv({ status: 'sent' })),
+    extendInvitation: () => Promise.resolve(inv()),
     ...overrides,
   };
 }
@@ -167,5 +172,64 @@ describe('revokeInvitation', () => {
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe(409);
+  });
+});
+
+describe('resendInvitation', () => {
+  it('resends', async () => {
+    const r = await resendInvitation({ repository: repo() }, admin, 'inv-1');
+    expect(r.ok).toBe(true);
+  });
+  it('403 without permission', async () => {
+    const r = await resendInvitation({ repository: repo() }, noRole, 'inv-1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(403);
+  });
+  it('404 when missing', async () => {
+    const r = await resendInvitation(
+      { repository: repo({ resendInvitation: () => Promise.resolve(null) }) },
+      admin,
+      'inv-1',
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(404);
+  });
+});
+
+describe('parseInvitationExtend', () => {
+  it('valid', () =>
+    expect(parseInvitationExtend({ expiresAt: '2026-12-31T23:59:59Z' }).ok).toBe(true));
+  it('invalid', () => expect(parseInvitationExtend({ expiresAt: 'nope' }).ok).toBe(false));
+});
+
+describe('extendInvitation', () => {
+  it('extends', async () => {
+    const r = await extendInvitation(
+      { repository: repo() },
+      admin,
+      'inv-1',
+      '2026-12-31T23:59:59Z',
+    );
+    expect(r.ok).toBe(true);
+  });
+  it('403 without permission', async () => {
+    const r = await extendInvitation(
+      { repository: repo() },
+      noRole,
+      'inv-1',
+      '2026-12-31T23:59:59Z',
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(403);
+  });
+  it('404 when missing', async () => {
+    const r = await extendInvitation(
+      { repository: repo({ extendInvitation: () => Promise.resolve(null) }) },
+      admin,
+      'inv-1',
+      '2026-12-31T23:59:59Z',
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(404);
   });
 });

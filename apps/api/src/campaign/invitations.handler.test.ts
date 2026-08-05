@@ -5,12 +5,16 @@ import type {
   GetInvitationResult,
   CreateInvitationResult,
   RevokeInvitationResult,
+  ResendInvitationResult,
+  ExtendInvitationResult,
 } from '@cpf/org';
 import {
   handleGetInvitations,
   handleGetInvitation,
   handlePostInvitation,
   handleRevokeInvitation,
+  handleResendInvitation,
+  handleExtendInvitation,
   type InvitationService,
 } from './invitations.handler.js';
 
@@ -46,6 +50,13 @@ function service(overrides: Partial<InvitationService> = {}): InvitationService 
     getInvitation: () => Promise.resolve(getOk),
     createInvitation: () => Promise.resolve(createOk),
     revokeInvitation: () => Promise.resolve(revokeOk),
+    resendInvitation: () =>
+      Promise.resolve({
+        ok: true,
+        invitation: { ...invDto, status: 'sent' },
+      } as ResendInvitationResult),
+    extendInvitation: () =>
+      Promise.resolve({ ok: true, invitation: invDto } as ExtendInvitationResult),
     ...overrides,
   };
 }
@@ -120,6 +131,54 @@ describe('handleRevokeInvitation', () => {
   });
   it('returns 422 for bad id', async () => {
     const res = await handleRevokeInvitation(service(), { actor, invitationId: 'bad' });
+    expect(res.status).toBe(422);
+  });
+});
+
+describe('handleResendInvitation', () => {
+  it('returns 200 on success', async () => {
+    const res = await handleResendInvitation(service(), { actor, invitationId: VALID_ID });
+    expect(res.status).toBe(200);
+  });
+  it('returns 404 when missing', async () => {
+    const res = await handleResendInvitation(
+      service({ resendInvitation: () => Promise.resolve({ ok: false, status: 404, reason: 'x' }) }),
+      { actor, invitationId: VALID_ID },
+    );
+    expect(res.status).toBe(404);
+  });
+  it('returns 422 for bad id', async () => {
+    const res = await handleResendInvitation(service(), { actor, invitationId: 'bad' });
+    expect(res.status).toBe(422);
+  });
+});
+
+describe('handleExtendInvitation', () => {
+  it('returns 200 on success', async () => {
+    const res = await handleExtendInvitation(service(), {
+      actor,
+      invitationId: VALID_ID,
+      applicationId: VALID_ID,
+      body: { expiresAt: '2026-12-31T23:59:59Z' },
+    });
+    expect(res.status).toBe(200);
+  });
+  it('returns 422 for invalid body', async () => {
+    const res = await handleExtendInvitation(service(), {
+      actor,
+      invitationId: VALID_ID,
+      applicationId: VALID_ID,
+      body: {},
+    });
+    expect(res.status).toBe(422);
+  });
+  it('returns 422 for bad id', async () => {
+    const res = await handleExtendInvitation(service(), {
+      actor,
+      invitationId: 'bad',
+      applicationId: VALID_ID,
+      body: { expiresAt: '2026-12-31T23:59:59Z' },
+    });
     expect(res.status).toBe(422);
   });
 });

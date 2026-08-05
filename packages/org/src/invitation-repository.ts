@@ -29,6 +29,8 @@ export interface InvitationRepository {
     tokenHash: string,
   ): Promise<InvitationRecord>;
   revokeInvitation(actor: Actor, id: string): Promise<InvitationRecord | null>;
+  resendInvitation(actor: Actor, id: string): Promise<InvitationRecord | null>;
+  extendInvitation(actor: Actor, id: string, expiresAt: string): Promise<InvitationRecord | null>;
 }
 
 interface InvitationRow {
@@ -188,6 +190,66 @@ export class PgInvitationRepository implements InvitationRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: {},
+      });
+
+      return toRecord(row);
+    });
+  }
+
+  async resendInvitation(actor: Actor, id: string): Promise<InvitationRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const res = await client.query<InvitationRow>(
+        `UPDATE hiring.invitations
+            SET sent_at = now()
+          WHERE tenant_id = $1 AND id = $2 AND status NOT IN ('revoked', 'completed', 'expired')
+         RETURNING ${COLUMNS}`,
+        [actor.tenantId, id],
+      );
+
+      const row = res.rows[0];
+      if (row === undefined) return null;
+
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'invitation.resend',
+        resourceType: 'invitation',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: {},
+      });
+
+      return toRecord(row);
+    });
+  }
+
+  async extendInvitation(
+    actor: Actor,
+    id: string,
+    expiresAt: string,
+  ): Promise<InvitationRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const res = await client.query<InvitationRow>(
+        `UPDATE hiring.invitations
+            SET expires_at = $3
+          WHERE tenant_id = $1 AND id = $2 AND status NOT IN ('revoked', 'completed', 'expired')
+         RETURNING ${COLUMNS}`,
+        [actor.tenantId, id, expiresAt],
+      );
+
+      const row = res.rows[0];
+      if (row === undefined) return null;
+
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'invitation.extend',
+        resourceType: 'invitation',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { expiresAt },
       });
 
       return toRecord(row);

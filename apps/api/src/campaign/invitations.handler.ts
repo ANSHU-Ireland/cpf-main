@@ -7,11 +7,16 @@ import {
   parseInvitationCreate,
   parseInvitationId,
   parseApplicationIdParam,
+  resendInvitation,
+  extendInvitation,
+  parseInvitationExtend,
   type InvitationDeps,
   type ListInvitationsResult,
   type GetInvitationResult,
   type CreateInvitationResult,
   type RevokeInvitationResult,
+  type ResendInvitationResult,
+  type ExtendInvitationResult,
   type RawInvitationListQuery,
 } from '@cpf/org';
 import type {
@@ -42,6 +47,8 @@ export interface InvitationService {
     input: InvitationCreate,
   ): Promise<CreateInvitationResult>;
   revokeInvitation(actor: Actor, id: string): Promise<RevokeInvitationResult>;
+  resendInvitation(actor: Actor, id: string): Promise<ResendInvitationResult>;
+  extendInvitation(actor: Actor, id: string, expiresAt: string): Promise<ExtendInvitationResult>;
 }
 
 export function createInvitationService(deps: InvitationDeps): InvitationService {
@@ -52,6 +59,8 @@ export function createInvitationService(deps: InvitationDeps): InvitationService
     createInvitation: (actor, applicationId, input) =>
       createInvitation(deps, actor, applicationId, input),
     revokeInvitation: (actor, id) => revokeInvitation(deps, actor, id),
+    resendInvitation: (actor, id) => resendInvitation(deps, actor, id),
+    extendInvitation: (actor, id, expiresAt) => extendInvitation(deps, actor, id, expiresAt),
   };
 }
 
@@ -222,4 +231,68 @@ export async function handleRevokeInvitation(
     correlationId,
     detail: result.reason,
   });
+}
+
+export async function handleResendInvitation(
+  service: InvitationService,
+  req: RevokeInvitationRequest,
+): Promise<InvitationResponse> {
+  const correlationId = ensureCorrelationId(req.correlationId);
+  const id = parseInvitationId(req.invitationId);
+  if (id === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'invitationId must be a valid UUID.',
+    });
+  }
+  const result = await service.resendInvitation(req.actor, id);
+  if (result.ok) return jsonResponse(200, result.invitation, correlationId);
+  if (result.status === 404) {
+    return problemResponse({
+      status: 404,
+      title: 'Not Found',
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return problemResponse({ status: 403, title: 'Forbidden', correlationId, detail: result.reason });
+}
+
+export async function handleExtendInvitation(
+  service: InvitationService,
+  req: PostInvitationRequest & { readonly invitationId: string },
+): Promise<InvitationResponse> {
+  const correlationId = ensureCorrelationId(req.correlationId);
+  const id = parseInvitationId(req.invitationId);
+  if (id === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'invitationId must be a valid UUID.',
+    });
+  }
+  const parsed = parseInvitationExtend(req.body);
+  if (!parsed.ok) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      correlationId,
+      detail: 'The request body failed validation.',
+      errors: parsed.errors.map((message) => ({ detail: message })),
+    });
+  }
+  const result = await service.extendInvitation(req.actor, id, parsed.value.expiresAt);
+  if (result.ok) return jsonResponse(200, result.invitation, correlationId);
+  if (result.status === 404) {
+    return problemResponse({
+      status: 404,
+      title: 'Not Found',
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return problemResponse({ status: 403, title: 'Forbidden', correlationId, detail: result.reason });
 }

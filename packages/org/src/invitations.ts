@@ -222,3 +222,65 @@ export async function revokeInvitation(
   }
   return { ok: true, invitation: record };
 }
+
+export type ResendInvitationResult =
+  | { readonly ok: true; readonly invitation: InvitationDto }
+  | { readonly ok: false; readonly status: 403 | 404; readonly reason: string };
+
+export async function resendInvitation(
+  deps: InvitationDeps,
+  actor: Actor,
+  id: string,
+): Promise<ResendInvitationResult> {
+  const permissions = deps.permissions ?? ORG_PERMISSIONS;
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'invitation', tenantId: actor.tenantId },
+    permissions,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+
+  const record = await deps.repository.resendInvitation(actor, id);
+  if (record === null) return { ok: false, status: 404, reason: 'Invitation not found.' };
+  return { ok: true, invitation: record };
+}
+
+export type ParseInvitationExtendResult =
+  | { readonly ok: true; readonly value: { readonly expiresAt: string } }
+  | { readonly ok: false; readonly errors: readonly string[] };
+
+export function parseInvitationExtend(raw: unknown): ParseInvitationExtendResult {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, errors: ['body must be a JSON object'] };
+  }
+  const input = raw as Record<string, unknown>;
+  if (typeof input['expiresAt'] !== 'string' || !ISO_DATE_RE.test(input['expiresAt'])) {
+    return { ok: false, errors: ['expiresAt must be an ISO 8601 date-time'] };
+  }
+  return { ok: true, value: { expiresAt: input['expiresAt'] } };
+}
+
+export type ExtendInvitationResult =
+  | { readonly ok: true; readonly invitation: InvitationDto }
+  | { readonly ok: false; readonly status: 403 | 404; readonly reason: string };
+
+export async function extendInvitation(
+  deps: InvitationDeps,
+  actor: Actor,
+  id: string,
+  expiresAt: string,
+): Promise<ExtendInvitationResult> {
+  const permissions = deps.permissions ?? ORG_PERMISSIONS;
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'invitation', tenantId: actor.tenantId },
+    permissions,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+
+  const record = await deps.repository.extendInvitation(actor, id, expiresAt);
+  if (record === null) return { ok: false, status: 404, reason: 'Invitation not found.' };
+  return { ok: true, invitation: record };
+}

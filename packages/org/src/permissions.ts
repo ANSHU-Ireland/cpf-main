@@ -58,4 +58,10 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'notification_template' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'governance_doc' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'governance_doc' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'governance_submission' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'governance_submission' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'webhook' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'webhook' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'deployer_readiness' },
+  { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'deployer_readiness' },
 ];
