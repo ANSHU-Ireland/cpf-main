@@ -20,6 +20,20 @@ import type {
   AttemptView,
   PluginRunView,
 } from './types';
+import type {
+  AssignmentView,
+  ClarificationView,
+  CriterionView,
+  EvidenceItemView,
+  IntegrityFlagView,
+  ObservationItemView,
+  ObservationsView,
+  ReviewResponseKind,
+  ReviewSubmissionView,
+  ReviewerAvailabilityView,
+  ReviewerProfileView,
+  TrainingModuleView,
+} from './types';
 
 /**
  * Process-local synthetic data source for the demo web app. This is intentionally in-memory and
@@ -527,5 +541,305 @@ export const runtimeStore = {
   resetAttempt(): AttemptView {
     runtime = freshRuntime();
     return projectAttempt();
+  },
+};
+
+// ── Reviewer journey store ──────────────────────────────────────────────────────────────────────
+// Enforces the evidence-first, human-only-scoring invariant: AI observations stay concealed until
+// the reviewer has independently scored every criterion, and no AI score/rank/band is ever stored.
+
+export const REVIEW_ASSIGNMENT_ID = 'asg_frontend_demo';
+
+interface ReviewState {
+  profile: ReviewerProfileView;
+  availability: ReviewerAvailabilityView;
+  training: TrainingModuleView[];
+  assignments: AssignmentView[];
+  evidence: EvidenceItemView[];
+  criteria: CriterionView[];
+  observations: ObservationItemView[];
+  observationsRevealed: boolean;
+  integrity: IntegrityFlagView[];
+  clarifications: ClarificationView[];
+  submittedAt: string | null;
+  receiptRef: string | null;
+}
+
+function freshReview(): ReviewState {
+  return {
+    profile: {
+      displayName: 'Rivka Demo',
+      disciplines: ['Backend engineering', 'Systems design'],
+      biography: 'Senior reviewer with a focus on distributed systems and code quality.',
+    },
+    availability: {
+      state: 'available',
+      weeklyCapacity: 6,
+      note: 'Prefer morning slots (UTC).',
+    },
+    training: [
+      {
+        id: 'trn_bias',
+        title: 'Bias awareness and fair review',
+        status: 'complete',
+        required: true,
+        completedAt: '2026-06-01T09:00:00.000Z',
+      },
+      {
+        id: 'trn_rubric',
+        title: 'Applying the criterion rubric',
+        status: 'in_progress',
+        required: true,
+        completedAt: null,
+      },
+      {
+        id: 'trn_integrity',
+        title: 'Integrity signals and escalation',
+        status: 'not_started',
+        required: false,
+        completedAt: null,
+      },
+    ],
+    assignments: [
+      {
+        id: REVIEW_ASSIGNMENT_ID,
+        assessmentTitle: 'Backend engineer — take-home',
+        candidateRef: 'Candidate 7F3A',
+        status: 'accepted',
+        dueAt: new Date(Date.now() + 36 * 3600 * 1000).toISOString(),
+        criterionCount: 3,
+        evidenceCount: 3,
+        assignedAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
+      },
+      {
+        id: 'asg_offered_demo',
+        assessmentTitle: 'Data analyst — case study',
+        candidateRef: 'Candidate 2B91',
+        status: 'offered',
+        dueAt: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
+        criterionCount: 4,
+        evidenceCount: 2,
+        assignedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+      },
+    ],
+    evidence: [
+      {
+        id: 'ev_doc',
+        title: 'Design write-up',
+        kind: 'document',
+        excerpt: 'The service is partitioned by tenant with row-level security enforced at the…',
+        status: 'unreviewed',
+      },
+      {
+        id: 'ev_code',
+        title: 'Debounce implementation',
+        kind: 'code',
+        excerpt: 'export function debounce(fn, wait) { let t; return (...args) => { … } }',
+        status: 'unreviewed',
+      },
+      {
+        id: 'ev_sheet',
+        title: 'Capacity model',
+        kind: 'sheet',
+        excerpt: 'Peak RPS = concurrent_users × requests_per_min ÷ 60 …',
+        status: 'unreviewed',
+      },
+    ],
+    criteria: [
+      {
+        id: 'cri_correctness',
+        label: 'Correctness',
+        descriptor: 'Solution meets the stated requirements and handles edge cases.',
+        maxScore: 5,
+        score: null,
+        rationale: '',
+        state: 'draft',
+      },
+      {
+        id: 'cri_design',
+        label: 'Design quality',
+        descriptor: 'Structure, naming and separation of concerns are sound.',
+        maxScore: 5,
+        score: null,
+        rationale: '',
+        state: 'draft',
+      },
+      {
+        id: 'cri_communication',
+        label: 'Communication',
+        descriptor: 'Reasoning and trade-offs are explained clearly.',
+        maxScore: 5,
+        score: null,
+        rationale: '',
+        state: 'draft',
+      },
+    ],
+    observations: [
+      {
+        id: 'obs_1',
+        criterionId: 'cri_correctness',
+        body: 'The submission includes tests covering the leading-edge debounce case.',
+        provenanceRef: 'AI-OBS-7F3A-01',
+      },
+      {
+        id: 'obs_2',
+        criterionId: 'cri_communication',
+        body: 'The design write-up references tenant isolation but does not quantify overhead.',
+        provenanceRef: 'AI-OBS-7F3A-02',
+      },
+    ],
+    observationsRevealed: false,
+    integrity: [
+      {
+        id: 'int_1',
+        summary: 'Idle gap of 22 minutes recorded mid-attempt.',
+        status: 'open',
+        resolution: '',
+      },
+    ],
+    clarifications: [],
+    submittedAt: null,
+    receiptRef: null,
+  };
+}
+
+let review: ReviewState = freshReview();
+
+function allCriteriaScored(): boolean {
+  return review.criteria.every((c) => c.score !== null && c.state !== 'draft');
+}
+
+export const reviewStore = {
+  assignmentId: REVIEW_ASSIGNMENT_ID,
+  getAssignments(): Collection<AssignmentView> {
+    return { items: review.assignments, total: review.assignments.length };
+  },
+  getAssignment(id: string): AssignmentView | null {
+    return review.assignments.find((a) => a.id === id) ?? null;
+  },
+  respond(id: string, kind: ReviewResponseKind): AssignmentView | null {
+    const index = review.assignments.findIndex((a) => a.id === id);
+    if (index === -1) return null;
+    const current = review.assignments[index];
+    if (current === undefined) return null;
+    const status =
+      kind === 'accept' ? 'accepted' : kind === 'decline' ? 'declined' : current.status;
+    const next: AssignmentView = { ...current, status };
+    review.assignments[index] = next;
+    return next;
+  },
+  getProfile(): ReviewerProfileView {
+    return review.profile;
+  },
+  updateProfile(patch: Partial<ReviewerProfileView>): ReviewerProfileView {
+    review.profile = { ...review.profile, ...patch };
+    return review.profile;
+  },
+  getAvailability(): ReviewerAvailabilityView {
+    return review.availability;
+  },
+  updateAvailability(patch: Partial<ReviewerAvailabilityView>): ReviewerAvailabilityView {
+    review.availability = { ...review.availability, ...patch };
+    return review.availability;
+  },
+  getTraining(): Collection<TrainingModuleView> {
+    return { items: review.training, total: review.training.length };
+  },
+  getEvidence(): Collection<EvidenceItemView> {
+    return { items: review.evidence, total: review.evidence.length };
+  },
+  markEvidenceReviewed(evidenceId: string): EvidenceItemView | null {
+    const index = review.evidence.findIndex((e) => e.id === evidenceId);
+    if (index === -1) return null;
+    const current = review.evidence[index];
+    if (current === undefined) return null;
+    const next: EvidenceItemView = { ...current, status: 'reviewed' };
+    review.evidence[index] = next;
+    return next;
+  },
+  getScorecard(): Collection<CriterionView> {
+    return { items: review.criteria, total: review.criteria.length };
+  },
+  saveCriterion(criterionId: string, score: number, rationale: string): CriterionView | null {
+    const index = review.criteria.findIndex((c) => c.id === criterionId);
+    if (index === -1) return null;
+    const current = review.criteria[index];
+    if (current === undefined) return null;
+    const next: CriterionView = { ...current, score, rationale, state: 'saved' };
+    review.criteria[index] = next;
+    return next;
+  },
+  getObservations(): ObservationsView {
+    // The reveal gate is server-enforced: even if items exist, they are concealed until scoring is
+    // complete AND the reviewer has explicitly revealed them.
+    const scoringComplete = allCriteriaScored();
+    const revealed = review.observationsRevealed && scoringComplete;
+    return {
+      revealState: revealed ? 'revealed' : 'concealed',
+      scoringComplete,
+      items: revealed ? review.observations : [],
+    };
+  },
+  revealObservations(): ObservationsView {
+    if (allCriteriaScored()) review.observationsRevealed = true;
+    return this.getObservations();
+  },
+  getIntegrity(): Collection<IntegrityFlagView> {
+    return { items: review.integrity, total: review.integrity.length };
+  },
+  resolveIntegrity(
+    flagId: string,
+    status: 'dismissed' | 'upheld',
+    resolution: string,
+  ): IntegrityFlagView | null {
+    const index = review.integrity.findIndex((f) => f.id === flagId);
+    if (index === -1) return null;
+    const current = review.integrity[index];
+    if (current === undefined) return null;
+    const next: IntegrityFlagView = { ...current, status, resolution };
+    review.integrity[index] = next;
+    return next;
+  },
+  getClarifications(): Collection<ClarificationView> {
+    return { items: review.clarifications, total: review.clarifications.length };
+  },
+  sendClarification(topic: string, body: string, escalate: boolean): ClarificationView {
+    const item: ClarificationView = {
+      id: randomId('clr'),
+      topic,
+      body,
+      status: escalate ? 'escalated' : 'sent',
+      at: new Date().toISOString(),
+    };
+    review.clarifications.unshift(item);
+    return item;
+  },
+  getSubmission(): ReviewSubmissionView {
+    return {
+      assignmentId: REVIEW_ASSIGNMENT_ID,
+      allCriteriaScored: allCriteriaScored(),
+      evidenceAllReviewed: review.evidence.every((e) => e.status === 'reviewed'),
+      openIntegrityFlags: review.integrity.filter((f) => f.status === 'open').length,
+      submittedAt: review.submittedAt,
+      receiptRef: review.receiptRef,
+    };
+  },
+  submit(): ReviewSubmissionView {
+    // Idempotent, and blocked unless scoring is complete and no integrity flag is left open.
+    const s = this.getSubmission();
+    if (s.submittedAt === null && s.allCriteriaScored && s.openIntegrityFlags === 0) {
+      review.submittedAt = new Date().toISOString();
+      review.receiptRef = randomId('rrct').toUpperCase();
+    }
+    return this.getSubmission();
+  },
+  amend(): ReviewSubmissionView {
+    // Re-open for amendment: mint a fresh receipt on the next submit.
+    review.submittedAt = null;
+    review.receiptRef = null;
+    return this.getSubmission();
+  },
+  reset(): void {
+    review = freshReview();
   },
 };

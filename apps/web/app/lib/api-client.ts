@@ -19,6 +19,19 @@ import type {
   AttemptView,
   PluginRunView,
 } from './types';
+import type {
+  AssignmentView,
+  ClarificationView,
+  CriterionView,
+  EvidenceItemView,
+  IntegrityFlagView,
+  ObservationsView,
+  ReviewSubmissionView,
+  ReviewResponseKind,
+  ReviewerAvailabilityView,
+  ReviewerProfileView,
+  TrainingModuleView,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -171,5 +184,106 @@ export const apiClient = {
     request<AttemptControlsView>(`/api/candidate/attempt/${encodeURIComponent(id)}/controls`, {
       method: 'POST',
       body: JSON.stringify({ action, taskId }),
+    }),
+
+  // ── Reviewer journey ──
+  getAssignments: (): Promise<Collection<AssignmentView>> =>
+    request<Collection<AssignmentView>>('/api/review/assignments'),
+  getAssignment: (id: string): Promise<AssignmentView> =>
+    request<AssignmentView>(`/api/review/assignments/${encodeURIComponent(id)}`),
+  respondToAssignment: (
+    id: string,
+    kind: ReviewResponseKind,
+    note: string,
+  ): Promise<AssignmentView> =>
+    request<AssignmentView>(`/api/review/assignments/${encodeURIComponent(id)}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ kind, note }),
+    }),
+  getReviewerProfile: (): Promise<ReviewerProfileView> =>
+    request<ReviewerProfileView>('/api/review/profile'),
+  updateReviewerProfile: (patch: Partial<ReviewerProfileView>): Promise<ReviewerProfileView> =>
+    request<ReviewerProfileView>('/api/review/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  getAvailability: (): Promise<ReviewerAvailabilityView> =>
+    request<ReviewerAvailabilityView>('/api/review/availability'),
+  updateAvailability: (
+    patch: Partial<ReviewerAvailabilityView>,
+  ): Promise<ReviewerAvailabilityView> =>
+    request<ReviewerAvailabilityView>('/api/review/availability', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  getTraining: (): Promise<Collection<TrainingModuleView>> =>
+    request<Collection<TrainingModuleView>>('/api/review/training'),
+  getEvidence: (id: string): Promise<Collection<EvidenceItemView>> =>
+    request<Collection<EvidenceItemView>>(
+      `/api/review/assignments/${encodeURIComponent(id)}/evidence`,
+    ),
+  markEvidenceReviewed: (id: string, evidenceId: string): Promise<EvidenceItemView> =>
+    request<EvidenceItemView>(`/api/review/assignments/${encodeURIComponent(id)}/evidence`, {
+      method: 'POST',
+      body: JSON.stringify({ evidenceId }),
+    }),
+  getScorecard: (id: string): Promise<Collection<CriterionView>> =>
+    request<Collection<CriterionView>>(
+      `/api/review/assignments/${encodeURIComponent(id)}/scorecard`,
+    ),
+  saveCriterion: (
+    id: string,
+    criterionId: string,
+    score: number,
+    rationale: string,
+  ): Promise<CriterionView> =>
+    request<CriterionView>(`/api/review/assignments/${encodeURIComponent(id)}/scorecard`, {
+      method: 'POST',
+      body: JSON.stringify({ criterionId, score, rationale }),
+    }),
+  getObservations: (id: string): Promise<ObservationsView> =>
+    request<ObservationsView>(`/api/review/assignments/${encodeURIComponent(id)}/observations`),
+  revealObservations: (id: string): Promise<ObservationsView> =>
+    request<ObservationsView>(`/api/review/assignments/${encodeURIComponent(id)}/observations`, {
+      method: 'POST',
+    }),
+  getIntegrityFlags: (id: string): Promise<Collection<IntegrityFlagView>> =>
+    request<Collection<IntegrityFlagView>>(
+      `/api/review/assignments/${encodeURIComponent(id)}/integrity`,
+    ),
+  resolveIntegrityFlag: (
+    id: string,
+    flagId: string,
+    status: 'dismissed' | 'upheld',
+    resolution: string,
+  ): Promise<IntegrityFlagView> =>
+    request<IntegrityFlagView>(`/api/review/assignments/${encodeURIComponent(id)}/integrity`, {
+      method: 'POST',
+      body: JSON.stringify({ flagId, status, resolution }),
+    }),
+  getClarifications: (id: string): Promise<Collection<ClarificationView>> =>
+    request<Collection<ClarificationView>>(
+      `/api/review/assignments/${encodeURIComponent(id)}/clarification`,
+    ),
+  sendClarification: (
+    id: string,
+    topic: string,
+    body: string,
+    escalate: boolean,
+  ): Promise<ClarificationView> =>
+    request<ClarificationView>(`/api/review/assignments/${encodeURIComponent(id)}/clarification`, {
+      method: 'POST',
+      body: JSON.stringify({ topic, body, escalate }),
+    }),
+  getReviewSubmission: (id: string): Promise<ReviewSubmissionView> =>
+    request<ReviewSubmissionView>(`/api/review/assignments/${encodeURIComponent(id)}/submit`),
+  submitReview: (id: string): Promise<ReviewSubmissionView> =>
+    request<ReviewSubmissionView>(`/api/review/assignments/${encodeURIComponent(id)}/submit`, {
+      method: 'POST',
+    }),
+  amendReview: (id: string, reason: string): Promise<ReviewSubmissionView> =>
+    request<ReviewSubmissionView>(`/api/review/assignments/${encodeURIComponent(id)}/amend`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
     }),
 };

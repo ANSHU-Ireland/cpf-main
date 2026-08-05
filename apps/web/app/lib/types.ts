@@ -220,3 +220,120 @@ export interface AttemptControlsView {
   readonly breakStatus: BreakStatus;
   readonly breaksRemaining: number;
 }
+
+// ── Reviewer journey ──
+// Governing invariant: scoring is HUMAN-ONLY and EVIDENCE-FIRST. AI produces observations that are
+// hidden until the reviewer has independently scored, and no AI score/rank/band is ever surfaced.
+
+export type AssignmentStatus =
+  'offered' | 'accepted' | 'declined' | 'in_review' | 'submitted' | 'amending';
+
+export type ReviewResponseKind = 'accept' | 'decline' | 'conflict';
+
+/** A reviewer's queue item / assignment. No score is present; reviewers author scores themselves. */
+export interface AssignmentView {
+  readonly id: string;
+  readonly assessmentTitle: string;
+  readonly candidateRef: string; // pseudonymous — reviewers never see identifying detail
+  readonly status: AssignmentStatus;
+  readonly dueAt: string;
+  readonly criterionCount: number;
+  readonly evidenceCount: number;
+  readonly assignedAt: string;
+}
+
+export interface ReviewerProfileView {
+  readonly displayName: string;
+  readonly disciplines: readonly string[];
+  readonly biography: string;
+}
+
+export type AvailabilityState = 'available' | 'limited' | 'unavailable';
+
+export interface ReviewerAvailabilityView {
+  readonly state: AvailabilityState;
+  readonly weeklyCapacity: number;
+  readonly note: string;
+}
+
+export type TrainingStatus = 'not_started' | 'in_progress' | 'complete' | 'expired';
+
+export interface TrainingModuleView {
+  readonly id: string;
+  readonly title: string;
+  readonly status: TrainingStatus;
+  readonly required: boolean;
+  readonly completedAt: string | null;
+}
+
+export type EvidenceItemStatus = 'unreviewed' | 'reviewed';
+
+/** A single piece of candidate evidence. This is candidate work only — never AI-authored content. */
+export interface EvidenceItemView {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: TaskKind;
+  readonly excerpt: string;
+  readonly status: EvidenceItemStatus;
+}
+
+export type CriterionState = 'draft' | 'saved' | 'submitted';
+
+/**
+ * A scoring criterion. `score`/`rationale` are authored by the reviewer. `aiObservation` is withheld
+ * (`revealed=false`) until the reviewer reveals observations after independent scoring.
+ */
+export interface CriterionView {
+  readonly id: string;
+  readonly label: string;
+  readonly descriptor: string;
+  readonly maxScore: number;
+  readonly score: number | null;
+  readonly rationale: string;
+  readonly state: CriterionState;
+}
+
+export type ObservationsRevealState = 'concealed' | 'revealed';
+
+/** AI observations for an assignment. Concealed until the reviewer reveals them post-scoring. */
+export interface ObservationsView {
+  readonly revealState: ObservationsRevealState;
+  readonly scoringComplete: boolean; // gate: reveal only permitted once independent scoring is done
+  readonly items: readonly ObservationItemView[];
+}
+
+export interface ObservationItemView {
+  readonly id: string;
+  readonly criterionId: string;
+  readonly body: string; // descriptive only — never a score, rank or recommendation
+  readonly provenanceRef: string;
+}
+
+export type IntegrityFlagStatus = 'open' | 'dismissed' | 'upheld';
+
+export interface IntegrityFlagView {
+  readonly id: string;
+  readonly summary: string;
+  readonly status: IntegrityFlagStatus;
+  readonly resolution: string;
+}
+
+export type ClarificationStatus = 'sent' | 'answered' | 'escalated';
+
+export interface ClarificationView {
+  readonly id: string;
+  readonly topic: string;
+  readonly body: string;
+  readonly status: ClarificationStatus;
+  readonly at: string;
+}
+
+/** Aggregated submission readiness for an assignment. Used by the submit + receipt screens. */
+export interface ReviewSubmissionView {
+  readonly assignmentId: string;
+  readonly allCriteriaScored: boolean;
+  readonly evidenceAllReviewed: boolean;
+  readonly openIntegrityFlags: number;
+  readonly submittedAt: string | null;
+  readonly receiptRef: string | null;
+}

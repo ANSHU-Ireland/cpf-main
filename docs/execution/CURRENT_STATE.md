@@ -1,6 +1,6 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) + assessment-runtime frontend runnable_
+_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) + assessment-runtime + reviewer frontend runnable_
 
 ## Where we are
 
@@ -84,6 +84,30 @@ Two things are now true and both are **green** (format + typecheck + lint + 1,39
   routes smoke-tested 200 on `next dev`; mutating routes verified — save/ai/plugin/controls happy
   paths 200, missing-taskId and 1-char AI message return 422, plugin/artifacts create 201,
   double-submit is idempotent (same receipt), reset 200; full repo suite still 1,399/153 green.
+
+### Reviewer frontend — evidence
+
+- **Screens** under `apps/web/app/review/**` (14 total, REV-01…REV-14): **queue** (assignment list),
+  **profile**, **availability**, **training & eligibility**, and a tabbed **assignment workspace**
+  (`review/assignment/[id]/**`): **detail/accept**, **respond** (accept/decline/conflict),
+  **evidence review**, **criterion scorecard**, **AI observations** (reveal-gated), **integrity
+  review**, **clarification & escalation**, **submit**, **receipt**, and **amend**.
+- **Invariants honoured** (evidence-first, human-only scoring): the reviewer authors every score and
+  rationale — no AI number is ever suggested. **AI observations stay concealed until the reviewer has
+  independently scored every criterion** (`revealObservations` is server-gated and returns 409 if
+  scoring is incomplete); observations are descriptive only (no score/rank/recommendation) and carry
+  a provenance reference. **Submission is blocked** until every criterion is scored, all evidence is
+  reviewed and no integrity flag is open; submit is idempotent (receipt minted once); amend reopens
+  and re-mints on resubmission. Candidates are shown pseudonymously (`Candidate 7F3A`).
+- **Data seam**: reviewer view-models + `apiClient` methods + synthetic Next route handlers under
+  `app/api/review/**` (assignments, respond, evidence, scorecard, observations, integrity,
+  clarification, submit, amend, profile, availability, training). A single in-memory `reviewStore`
+  (`REVIEW_ASSIGNMENT_ID`) models the whole review lifecycle with server-enforced gates.
+- **Verification**: web typecheck + repo typecheck + lint clean; all 14 reviewer pages smoke-tested
+  200 on `next dev`; API invariants verified — observations reveal 409 before scoring / 200 after,
+  submit 409 before scoring, 409 with open flag, 200 after resolution, 200 idempotent; scorecard
+  422 without a score, respond 422 declining without a note, clarification 201; full repo suite still
+  1,399/153 green.
 
 ## Historical Wave 0 record (unchanged)
 
