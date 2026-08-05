@@ -32,6 +32,33 @@ import type {
   ReviewerProfileView,
   TrainingModuleView,
 } from './types';
+import type {
+  AccommodationRequestView,
+  AssignmentBoardItemView,
+  CampaignOpsView,
+  CampaignView,
+  CandidateRecordView,
+  ComparisonRowView,
+  DecisionApprovalView,
+  DecisionDraftView,
+  DecisionOutcome,
+  DepartmentView,
+  EmployerCandidateView,
+  EmployerDashboardView,
+  EmployerOrgProfileView,
+  ImportResultView,
+  IntegrationView,
+  InvitationView,
+  MemberView,
+  PreflightCheckView,
+  ReadinessItemView,
+  ReportView,
+  ReviewerAdminView,
+  ScheduleWindowView,
+  StructureView,
+  TeamView,
+  TemplateView,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -285,5 +312,179 @@ export const apiClient = {
     request<ReviewSubmissionView>(`/api/review/assignments/${encodeURIComponent(id)}/amend`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+
+  // ── Employer admin journey ──
+  getEmployerDashboard: (): Promise<EmployerDashboardView> =>
+    request<EmployerDashboardView>('/api/employer/dashboard'),
+  getEmployerOrg: (): Promise<EmployerOrgProfileView> =>
+    request<EmployerOrgProfileView>('/api/employer/organization'),
+  updateEmployerOrg: (patch: Partial<EmployerOrgProfileView>): Promise<EmployerOrgProfileView> =>
+    request<EmployerOrgProfileView>('/api/employer/organization', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  getMembers: (): Promise<Collection<MemberView>> =>
+    request<Collection<MemberView>>('/api/employer/members'),
+  inviteMember: (email: string, role: string): Promise<MemberView> =>
+    request<MemberView>('/api/employer/members', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+  getStructure: (): Promise<StructureView> => request<StructureView>('/api/employer/structure'),
+  addDepartment: (name: string): Promise<DepartmentView> =>
+    request<DepartmentView>('/api/employer/structure', {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'department', name }),
+    }),
+  addTeam: (name: string, departmentId: string): Promise<TeamView> =>
+    request<TeamView>('/api/employer/structure', {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'team', name, departmentId }),
+    }),
+  getCampaigns: (): Promise<Collection<CampaignView>> =>
+    request<Collection<CampaignView>>('/api/employer/campaigns'),
+  createCampaign: (name: string, roleTitle: string): Promise<CampaignView> =>
+    request<CampaignView>('/api/employer/campaigns', {
+      method: 'POST',
+      body: JSON.stringify({ name, roleTitle }),
+    }),
+  getCampaign: (id: string): Promise<CampaignView> =>
+    request<CampaignView>(`/api/employer/campaigns/${encodeURIComponent(id)}`),
+  setCampaignStatus: (id: string, status: CampaignView['status']): Promise<CampaignView> =>
+    request<CampaignView>(`/api/employer/campaigns/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
+  getPreflight: (id: string): Promise<Collection<PreflightCheckView>> =>
+    request<Collection<PreflightCheckView>>(
+      `/api/employer/campaigns/${encodeURIComponent(id)}/preflight`,
+    ),
+  resolvePreflight: (id: string, checkId: string): Promise<PreflightCheckView> =>
+    request<PreflightCheckView>(`/api/employer/campaigns/${encodeURIComponent(id)}/preflight`, {
+      method: 'POST',
+      body: JSON.stringify({ checkId }),
+    }),
+  getCampaignOps: (id: string): Promise<CampaignOpsView> =>
+    request<CampaignOpsView>(`/api/employer/campaigns/${encodeURIComponent(id)}/dashboard`),
+  getComparison: (id: string): Promise<Collection<ComparisonRowView>> =>
+    request<Collection<ComparisonRowView>>(
+      `/api/employer/campaigns/${encodeURIComponent(id)}/comparison`,
+    ),
+  getEmployerCandidates: (): Promise<Collection<EmployerCandidateView>> =>
+    request<Collection<EmployerCandidateView>>('/api/employer/candidates'),
+  addEmployerCandidate: (
+    displayName: string,
+    campaignName: string,
+  ): Promise<EmployerCandidateView> =>
+    request<EmployerCandidateView>('/api/employer/candidates', {
+      method: 'POST',
+      body: JSON.stringify({ displayName, campaignName }),
+    }),
+  getEmployerCandidate: (id: string): Promise<CandidateRecordView> =>
+    request<CandidateRecordView>(`/api/employer/candidates/${encodeURIComponent(id)}`),
+  mergeCandidate: (id: string, duplicateId: string): Promise<CandidateRecordView> =>
+    request<CandidateRecordView>(`/api/employer/candidates/${encodeURIComponent(id)}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({ duplicateId }),
+    }),
+  validateImport: (rowText: string): Promise<ImportResultView> =>
+    request<ImportResultView>('/api/employer/candidates/import', {
+      method: 'POST',
+      body: JSON.stringify({ stage: 'validate', rowText }),
+    }),
+  commitImport: (rowText: string): Promise<ImportResultView> =>
+    request<ImportResultView>('/api/employer/candidates/import', {
+      method: 'POST',
+      body: JSON.stringify({ stage: 'commit', rowText }),
+    }),
+  getInvitations: (): Promise<Collection<InvitationView>> =>
+    request<Collection<InvitationView>>('/api/employer/invitations'),
+  sendInvitation: (email: string, campaignName: string): Promise<InvitationView> =>
+    request<InvitationView>('/api/employer/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email, campaignName }),
+    }),
+  getScheduleWindows: (): Promise<Collection<ScheduleWindowView>> =>
+    request<Collection<ScheduleWindowView>>('/api/employer/scheduling'),
+  addScheduleWindow: (label: string, capacity: number): Promise<ScheduleWindowView> =>
+    request<ScheduleWindowView>('/api/employer/scheduling', {
+      method: 'POST',
+      body: JSON.stringify({ label, capacity }),
+    }),
+  getEmployerAccommodations: (): Promise<Collection<AccommodationRequestView>> =>
+    request<Collection<AccommodationRequestView>>('/api/employer/accommodations'),
+  decideAccommodation: (
+    id: string,
+    status: 'approved' | 'declined' | 'more_info',
+  ): Promise<AccommodationRequestView> =>
+    request<AccommodationRequestView>('/api/employer/accommodations', {
+      method: 'POST',
+      body: JSON.stringify({ id, status }),
+    }),
+  getEmployerReviewers: (): Promise<Collection<ReviewerAdminView>> =>
+    request<Collection<ReviewerAdminView>>('/api/employer/reviewers'),
+  inviteReviewer: (name: string, discipline: string): Promise<ReviewerAdminView> =>
+    request<ReviewerAdminView>('/api/employer/reviewers', {
+      method: 'POST',
+      body: JSON.stringify({ name, discipline }),
+    }),
+  getAssignmentBoard: (): Promise<Collection<AssignmentBoardItemView>> =>
+    request<Collection<AssignmentBoardItemView>>('/api/employer/assignments'),
+  assignReviewer: (id: string, reviewerName: string): Promise<AssignmentBoardItemView> =>
+    request<AssignmentBoardItemView>('/api/employer/assignments', {
+      method: 'POST',
+      body: JSON.stringify({ id, reviewerName }),
+    }),
+  getDecision: (id: string): Promise<DecisionDraftView> =>
+    request<DecisionDraftView>(`/api/employer/applications/${encodeURIComponent(id)}/decision`),
+  saveDecision: (
+    id: string,
+    outcome: DecisionOutcome,
+    rationale: string,
+  ): Promise<DecisionDraftView> =>
+    request<DecisionDraftView>(`/api/employer/applications/${encodeURIComponent(id)}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome, rationale }),
+    }),
+  getApproval: (id: string): Promise<DecisionApprovalView> =>
+    request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`),
+  approveDecision: (id: string): Promise<DecisionApprovalView> =>
+    request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'approve' }),
+    }),
+  returnDecision: (id: string): Promise<DecisionApprovalView> =>
+    request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'return' }),
+    }),
+  getReports: (): Promise<Collection<ReportView>> =>
+    request<Collection<ReportView>>('/api/employer/reports'),
+  generateReport: (name: string, kind: string): Promise<ReportView> =>
+    request<ReportView>('/api/employer/reports', {
+      method: 'POST',
+      body: JSON.stringify({ name, kind }),
+    }),
+  getIntegrations: (): Promise<Collection<IntegrationView>> =>
+    request<Collection<IntegrationView>>('/api/employer/integrations'),
+  addIntegration: (name: string, kind: string, endpoint: string): Promise<IntegrationView> =>
+    request<IntegrationView>('/api/employer/integrations', {
+      method: 'POST',
+      body: JSON.stringify({ name, kind, endpoint }),
+    }),
+  getTemplates: (): Promise<Collection<TemplateView>> =>
+    request<Collection<TemplateView>>('/api/employer/templates'),
+  createTemplate: (name: string, subject: string): Promise<TemplateView> =>
+    request<TemplateView>('/api/employer/templates', {
+      method: 'POST',
+      body: JSON.stringify({ name, subject }),
+    }),
+  getReadiness: (): Promise<Collection<ReadinessItemView>> =>
+    request<Collection<ReadinessItemView>>('/api/employer/readiness'),
+  resolveReadiness: (itemId: string): Promise<ReadinessItemView> =>
+    request<ReadinessItemView>('/api/employer/readiness', {
+      method: 'POST',
+      body: JSON.stringify({ itemId }),
     }),
 };

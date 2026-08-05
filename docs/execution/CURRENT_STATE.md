@@ -1,6 +1,6 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) + assessment-runtime + reviewer frontend runnable_
+_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) + assessment-runtime + reviewer + employer-admin frontend runnable_
 
 ## Where we are
 
@@ -108,6 +108,32 @@ Two things are now true and both are **green** (format + typecheck + lint + 1,39
   submit 409 before scoring, 409 with open flag, 200 after resolution, 200 idempotent; scorecard
   422 without a score, respond 422 declining without a note, clarification 201; full repo suite still
   1,399/153 green.
+
+### Employer-admin frontend — evidence
+
+- **Screens** under `apps/web/app/employer/**` (25 total, EMP-01…EMP-25): **dashboard**,
+  **organisation profile**, **members**, **structure** (departments/teams), **campaigns** (list,
+  new-campaign wizard, detail with gated lifecycle, **preflight** governance, **operations**,
+  **comparison**), **candidates** (list, **import** wizard with validate→commit, detail, **merge**
+  wizard), **invitations**, **scheduling**, **accommodations** (governance), **reviewers**,
+  **assignment board**, **decision** draft and **approval** (segregation of duties), **reports**,
+  **integrations**, **templates**, and **deployment readiness** (governance gate).
+- **Invariants honoured**: **decisions are human-only** — a drafter authors an outcome + required
+  written rationale (EMP-20) and a **separate approver** issues it (EMP-21); server enforces
+  awaiting-approval before issue. **No AI score/rank/band is ever shown** — the comparison surfaces
+  only `criteriaScored/criteriaTotal`, never an aggregate. **Campaign activation is gated** by
+  preflight blockers (activating with open blockers → 409). **Accommodation clinical detail is
+  segregated** — only the operational `adjustmentSummary` is surfaced. **Deployment readiness** is a
+  governance gate (DPIA + human-oversight blockers). Candidates are shown by pseudonymous reference.
+- **Data seam**: employer view-models + `apiClient` methods + 24 synthetic Next route handlers under
+  `app/api/employer/**`. A single in-memory `employerStore` (`EMPLOYER_CAMPAIGN_ID` /
+  `EMPLOYER_CANDIDATE_ID` / `EMPLOYER_APPLICATION_ID`) models all 25 screens with server-enforced
+  gates. **EMP-11 (candidates) and EMP-15 (scheduling)** are known baseline API gaps — built on the
+  synthetic seam with an explicit UI note that the real contract is unresolved.
+- **Verification**: web typecheck + repo typecheck + lint clean; all 22 employer GET routes
+  smoke-tested 200 on `next dev`; validation verified — member-invite/campaign-create/decision-
+  rationale/integration-https all 422, campaign activation gate 409; full repo suite still
+  1,399/153 green (no backend changes).
 
 ## Historical Wave 0 record (unchanged)
 

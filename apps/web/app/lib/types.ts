@@ -337,3 +337,235 @@ export interface ReviewSubmissionView {
   readonly submittedAt: string | null;
   readonly receiptRef: string | null;
 }
+
+// ── Employer admin journey ──
+// Governing invariants: decisions are human-only (draft + separate approval = segregation of duties);
+// no AI score/rank/band is ever shown; accommodation clinical detail is segregated from operations;
+// campaign activation and deployment are gated by explicit blocker/readiness checks.
+
+export interface EmployerDashboardView {
+  readonly orgName: string;
+  readonly activeCampaigns: number;
+  readonly openApplications: number;
+  readonly pendingDecisions: number;
+  readonly pendingAccommodations: number;
+  readonly unassignedReviews: number;
+  readonly readinessBlockers: number;
+}
+
+export interface EmployerOrgProfileView {
+  readonly displayName: string;
+  readonly legalName: string;
+  readonly defaultTimezone: string;
+  readonly supportEmail: string;
+}
+
+export type MemberStatus = 'active' | 'invited' | 'suspended';
+export interface MemberView {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly roles: readonly string[];
+  readonly status: MemberStatus;
+}
+
+export interface DepartmentView {
+  readonly id: string;
+  readonly name: string;
+  readonly teamCount: number;
+}
+export interface TeamView {
+  readonly id: string;
+  readonly name: string;
+  readonly departmentId: string;
+  readonly departmentName: string;
+}
+export interface StructureView {
+  readonly departments: readonly DepartmentView[];
+  readonly teams: readonly TeamView[];
+}
+
+export type CampaignStatus = 'draft' | 'blocked' | 'active' | 'paused' | 'closed' | 'archived';
+export interface CampaignView {
+  readonly id: string;
+  readonly name: string;
+  readonly roleTitle: string;
+  readonly status: CampaignStatus;
+  readonly candidateCount: number;
+  readonly openBlockers: number;
+  readonly createdAt: string;
+}
+
+export type PreflightSeverity = 'blocker' | 'warning' | 'ok';
+export interface PreflightCheckView {
+  readonly id: string;
+  readonly label: string;
+  readonly severity: PreflightSeverity;
+  readonly detail: string;
+  readonly resolved: boolean;
+}
+
+export interface CampaignExceptionView {
+  readonly id: string;
+  readonly summary: string;
+  readonly kind: string;
+}
+export interface CampaignOpsView {
+  readonly campaignId: string;
+  readonly invited: number;
+  readonly inProgress: number;
+  readonly submitted: number;
+  readonly underReview: number;
+  readonly decided: number;
+  readonly exceptions: readonly CampaignExceptionView[];
+}
+
+export type CandidateDirStatus = 'active' | 'invited' | 'withdrawn' | 'merged';
+export interface EmployerCandidateView {
+  readonly id: string;
+  readonly reference: string;
+  readonly displayName: string;
+  readonly status: CandidateDirStatus;
+  readonly campaignName: string;
+  readonly applicationCount: number;
+}
+
+export interface CandidateApplicationRefView {
+  readonly id: string;
+  readonly campaignName: string;
+  readonly status: string;
+}
+export interface CandidateRecordView {
+  readonly id: string;
+  readonly reference: string;
+  readonly displayName: string;
+  readonly status: CandidateDirStatus;
+  readonly email: string;
+  readonly applications: readonly CandidateApplicationRefView[];
+  readonly accommodationsNote: string;
+}
+
+export interface ImportRowError {
+  readonly row: number;
+  readonly message: string;
+}
+export interface ImportResultView {
+  readonly stage: 'validated' | 'committed';
+  readonly totalRows: number;
+  readonly validRows: number;
+  readonly errors: readonly ImportRowError[];
+}
+
+export type InvitationStatus = 'draft' | 'sent' | 'accepted' | 'expired' | 'revoked';
+export interface InvitationView {
+  readonly id: string;
+  readonly email: string;
+  readonly campaignName: string;
+  readonly status: InvitationStatus;
+  readonly sentAt: string | null;
+}
+
+export type ScheduleWindowStatus = 'open' | 'full' | 'closed';
+export interface ScheduleWindowView {
+  readonly id: string;
+  readonly label: string;
+  readonly startsAt: string;
+  readonly capacity: number;
+  readonly booked: number;
+  readonly status: ScheduleWindowStatus;
+}
+
+export type AccommodationDecisionStatus = 'pending' | 'approved' | 'declined' | 'more_info';
+export interface AccommodationRequestView {
+  readonly id: string;
+  readonly candidateRef: string;
+  readonly category: string;
+  readonly adjustmentSummary: string;
+  readonly status: AccommodationDecisionStatus;
+  readonly decidedBy: string | null;
+}
+
+export type ReviewerAdminStatus = 'active' | 'invited' | 'training' | 'suspended';
+export interface ReviewerAdminView {
+  readonly id: string;
+  readonly name: string;
+  readonly disciplines: readonly string[];
+  readonly status: ReviewerAdminStatus;
+  readonly activeAssignments: number;
+}
+
+export type AssignmentBoardStatus = 'unassigned' | 'assigned' | 'in_review' | 'submitted';
+export interface AssignmentBoardItemView {
+  readonly id: string;
+  readonly candidateRef: string;
+  readonly campaignName: string;
+  readonly reviewerName: string | null;
+  readonly status: AssignmentBoardStatus;
+}
+
+export interface ComparisonRowView {
+  readonly applicationId: string;
+  readonly candidateRef: string;
+  readonly reviewStatus: string;
+  readonly criteriaScored: number;
+  readonly criteriaTotal: number;
+}
+
+export type DecisionOutcome = 'advance' | 'hold' | 'reject';
+export interface DecisionDraftView {
+  readonly applicationId: string;
+  readonly candidateRef: string;
+  readonly campaignName: string;
+  readonly outcome: DecisionOutcome | null;
+  readonly rationale: string;
+  readonly reviewComplete: boolean;
+  readonly status: 'draft' | 'submitted';
+}
+
+export type ApprovalStatus =
+  'awaiting_review' | 'awaiting_approval' | 'approved' | 'issued' | 'returned';
+export interface DecisionApprovalView {
+  readonly applicationId: string;
+  readonly candidateRef: string;
+  readonly outcome: DecisionOutcome | null;
+  readonly rationale: string;
+  readonly draftedBy: string;
+  readonly status: ApprovalStatus;
+  readonly approver: string | null;
+  readonly issuedAt: string | null;
+}
+
+export type ReportStatus = 'queued' | 'running' | 'ready' | 'failed';
+export interface ReportView {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly status: ReportStatus;
+  readonly generatedAt: string | null;
+}
+
+export type IntegrationStatus = 'connected' | 'disabled' | 'error';
+export interface IntegrationView {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly status: IntegrationStatus;
+  readonly endpoint: string;
+}
+
+export interface TemplateView {
+  readonly id: string;
+  readonly name: string;
+  readonly channel: 'email' | 'sms';
+  readonly subject: string;
+  readonly updatedAt: string;
+}
+
+export type ReadinessSeverity = 'blocker' | 'warning' | 'ready';
+export interface ReadinessItemView {
+  readonly id: string;
+  readonly label: string;
+  readonly severity: ReadinessSeverity;
+  readonly detail: string;
+  readonly resolved: boolean;
+}

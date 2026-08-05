@@ -34,6 +34,35 @@ import type {
   ReviewerProfileView,
   TrainingModuleView,
 } from './types';
+import type {
+  AccommodationRequestView,
+  AssignmentBoardItemView,
+  CampaignExceptionView,
+  CampaignOpsView,
+  CampaignStatus,
+  CampaignView,
+  CandidateRecordView,
+  ComparisonRowView,
+  DecisionApprovalView,
+  DecisionDraftView,
+  DecisionOutcome,
+  DepartmentView,
+  EmployerCandidateView,
+  EmployerDashboardView,
+  EmployerOrgProfileView,
+  ImportResultView,
+  IntegrationView,
+  InvitationView,
+  MemberView,
+  PreflightCheckView,
+  ReadinessItemView,
+  ReportView,
+  ReviewerAdminView,
+  ScheduleWindowView,
+  StructureView,
+  TeamView,
+  TemplateView,
+} from './types';
 
 /**
  * Process-local synthetic data source for the demo web app. This is intentionally in-memory and
@@ -841,5 +870,693 @@ export const reviewStore = {
   },
   reset(): void {
     review = freshReview();
+  },
+};
+
+// ── Employer admin store ───────────────────────────────────────────────────────────────────────
+// Invariants: decisions are human-only (draft authored, then a separate approver issues — segregation
+// of duties); no AI score/rank is ever stored or surfaced; accommodation clinical detail is kept out
+// of the operational record; campaign activation and deployment are gated by explicit checks.
+
+export const EMPLOYER_CAMPAIGN_ID = 'cmp_frontend_demo';
+export const EMPLOYER_CANDIDATE_ID = 'cnd_frontend_demo';
+export const EMPLOYER_APPLICATION_ID = 'app_frontend_demo';
+
+interface EmployerState {
+  org: EmployerOrgProfileView;
+  members: MemberView[];
+  departments: DepartmentView[];
+  teams: TeamView[];
+  campaigns: CampaignView[];
+  preflight: PreflightCheckView[];
+  exceptions: CampaignExceptionView[];
+  candidates: EmployerCandidateView[];
+  invitations: InvitationView[];
+  windows: ScheduleWindowView[];
+  accommodations: AccommodationRequestView[];
+  reviewers: ReviewerAdminView[];
+  assignments: AssignmentBoardItemView[];
+  comparison: ComparisonRowView[];
+  decision: DecisionDraftView;
+  approval: DecisionApprovalView;
+  reports: ReportView[];
+  integrations: IntegrationView[];
+  templates: TemplateView[];
+  readiness: ReadinessItemView[];
+}
+
+function freshEmployer(): EmployerState {
+  return {
+    org: {
+      displayName: 'Acme Talent',
+      legalName: 'Acme Talent Ltd',
+      defaultTimezone: 'Europe/London',
+      supportEmail: 'talent@acme.example',
+    },
+    members: [
+      {
+        id: 'mbr_1',
+        name: 'Dana Owner',
+        email: 'dana@acme.example',
+        roles: ['employer_admin'],
+        status: 'active',
+      },
+      {
+        id: 'mbr_2',
+        name: 'Sam Recruiter',
+        email: 'sam@acme.example',
+        roles: ['recruiter'],
+        status: 'active',
+      },
+      {
+        id: 'mbr_3',
+        name: 'Pat Pending',
+        email: 'pat@acme.example',
+        roles: ['recruiter'],
+        status: 'invited',
+      },
+    ],
+    departments: [
+      { id: 'dep_eng', name: 'Engineering', teamCount: 2 },
+      { id: 'dep_data', name: 'Data', teamCount: 1 },
+    ],
+    teams: [
+      { id: 'tm_be', name: 'Backend', departmentId: 'dep_eng', departmentName: 'Engineering' },
+      { id: 'tm_fe', name: 'Frontend', departmentId: 'dep_eng', departmentName: 'Engineering' },
+      { id: 'tm_ml', name: 'ML', departmentId: 'dep_data', departmentName: 'Data' },
+    ],
+    campaigns: [
+      {
+        id: EMPLOYER_CAMPAIGN_ID,
+        name: 'Backend engineers — Q3',
+        roleTitle: 'Backend Engineer',
+        status: 'draft',
+        candidateCount: 12,
+        openBlockers: 2,
+        createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+      },
+      {
+        id: 'cmp_active_demo',
+        name: 'Data analysts — rolling',
+        roleTitle: 'Data Analyst',
+        status: 'active',
+        candidateCount: 34,
+        openBlockers: 0,
+        createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+      },
+    ],
+    preflight: [
+      {
+        id: 'pf_rubric',
+        label: 'Rubric approved',
+        severity: 'ok',
+        detail: 'A published rubric version is bound to this campaign.',
+        resolved: true,
+      },
+      {
+        id: 'pf_reviewers',
+        label: 'Reviewer coverage',
+        severity: 'blocker',
+        detail: 'At least two eligible reviewers must be assigned before activation.',
+        resolved: false,
+      },
+      {
+        id: 'pf_dpia',
+        label: 'DPIA acknowledgement',
+        severity: 'blocker',
+        detail: 'The data protection impact assessment must be acknowledged for this role.',
+        resolved: false,
+      },
+      {
+        id: 'pf_notice',
+        label: 'Candidate notice',
+        severity: 'warning',
+        detail: 'A candidate transparency notice is recommended but not yet attached.',
+        resolved: false,
+      },
+    ],
+    exceptions: [
+      {
+        id: 'exc_1',
+        summary: 'Two candidates paused mid-attempt (connection loss).',
+        kind: 'runtime',
+      },
+      {
+        id: 'exc_2',
+        summary: 'One accommodation request awaiting a decision.',
+        kind: 'accommodation',
+      },
+    ],
+    candidates: [
+      {
+        id: EMPLOYER_CANDIDATE_ID,
+        reference: 'CND-7F3A',
+        displayName: 'Alex Candidate',
+        status: 'active',
+        campaignName: 'Backend engineers — Q3',
+        applicationCount: 1,
+      },
+      {
+        id: 'cnd_2',
+        reference: 'CND-2B91',
+        displayName: 'Jordan Candidate',
+        status: 'invited',
+        campaignName: 'Data analysts — rolling',
+        applicationCount: 1,
+      },
+    ],
+    invitations: [
+      {
+        id: 'inv_1',
+        email: 'alex@example.test',
+        campaignName: 'Backend engineers — Q3',
+        status: 'accepted',
+        sentAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+      },
+      {
+        id: 'inv_2',
+        email: 'jordan@example.test',
+        campaignName: 'Data analysts — rolling',
+        status: 'sent',
+        sentAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      },
+    ],
+    windows: [
+      {
+        id: 'win_1',
+        label: 'Morning cohort',
+        startsAt: new Date(Date.now() + 2 * 86400000).toISOString(),
+        capacity: 20,
+        booked: 12,
+        status: 'open',
+      },
+      {
+        id: 'win_2',
+        label: 'Afternoon cohort',
+        startsAt: new Date(Date.now() + 2 * 86400000 + 6 * 3600000).toISOString(),
+        capacity: 20,
+        booked: 20,
+        status: 'full',
+      },
+    ],
+    accommodations: [
+      {
+        id: 'acc_1',
+        candidateRef: 'CND-7F3A',
+        category: 'Extra time',
+        adjustmentSummary: '+25% time on all timed sections.',
+        status: 'pending',
+        decidedBy: null,
+      },
+    ],
+    reviewers: [
+      {
+        id: 'rvw_1',
+        name: 'Rivka Reviewer',
+        disciplines: ['Backend'],
+        status: 'active',
+        activeAssignments: 3,
+      },
+      {
+        id: 'rvw_2',
+        name: 'Kofi Reviewer',
+        disciplines: ['Data'],
+        status: 'training',
+        activeAssignments: 0,
+      },
+    ],
+    assignments: [
+      {
+        id: 'asn_1',
+        candidateRef: 'CND-7F3A',
+        campaignName: 'Backend engineers — Q3',
+        reviewerName: null,
+        status: 'unassigned',
+      },
+      {
+        id: 'asn_2',
+        candidateRef: 'CND-2B91',
+        campaignName: 'Data analysts — rolling',
+        reviewerName: 'Kofi Reviewer',
+        status: 'in_review',
+      },
+    ],
+    comparison: [
+      {
+        applicationId: EMPLOYER_APPLICATION_ID,
+        candidateRef: 'CND-7F3A',
+        reviewStatus: 'submitted',
+        criteriaScored: 3,
+        criteriaTotal: 3,
+      },
+      {
+        applicationId: 'app_2',
+        candidateRef: 'CND-2B91',
+        reviewStatus: 'in_review',
+        criteriaScored: 1,
+        criteriaTotal: 3,
+      },
+    ],
+    decision: {
+      applicationId: EMPLOYER_APPLICATION_ID,
+      candidateRef: 'CND-7F3A',
+      campaignName: 'Backend engineers — Q3',
+      outcome: null,
+      rationale: '',
+      reviewComplete: true,
+      status: 'draft',
+    },
+    approval: {
+      applicationId: EMPLOYER_APPLICATION_ID,
+      candidateRef: 'CND-7F3A',
+      outcome: null,
+      rationale: '',
+      draftedBy: 'Sam Recruiter',
+      status: 'awaiting_review',
+      approver: null,
+      issuedAt: null,
+    },
+    reports: [
+      {
+        id: 'rpt_1',
+        name: 'Campaign funnel — Q3',
+        kind: 'funnel',
+        status: 'ready',
+        generatedAt: new Date(Date.now() - 86400000).toISOString(),
+      },
+    ],
+    integrations: [
+      {
+        id: 'int_ats',
+        name: 'Greenhouse',
+        kind: 'ats',
+        status: 'connected',
+        endpoint: 'https://api.greenhouse.example/hooks',
+      },
+      {
+        id: 'int_hook',
+        name: 'Decision webhook',
+        kind: 'webhook',
+        status: 'error',
+        endpoint: 'https://acme.example/webhooks/decisions',
+      },
+    ],
+    templates: [
+      {
+        id: 'tpl_invite',
+        name: 'Assessment invitation',
+        channel: 'email',
+        subject: 'You have been invited to an assessment',
+        updatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+      },
+    ],
+    readiness: [
+      {
+        id: 'rd_dpia',
+        label: 'DPIA sign-off',
+        severity: 'blocker',
+        detail: 'Legal/DPO must approve the data protection impact assessment.',
+        resolved: false,
+      },
+      {
+        id: 'rd_oversight',
+        label: 'Human oversight plan',
+        severity: 'blocker',
+        detail: 'A documented human oversight plan must be attached to this deployment.',
+        resolved: false,
+      },
+      {
+        id: 'rd_access',
+        label: 'Access review',
+        severity: 'warning',
+        detail: 'Confirm member roles follow least-privilege before go-live.',
+        resolved: false,
+      },
+    ],
+  };
+}
+
+let employer: EmployerState = freshEmployer();
+
+function campaign(id: string): CampaignView | undefined {
+  return employer.campaigns.find((c) => c.id === id);
+}
+
+export const employerStore = {
+  campaignId: EMPLOYER_CAMPAIGN_ID,
+  candidateId: EMPLOYER_CANDIDATE_ID,
+  applicationId: EMPLOYER_APPLICATION_ID,
+
+  getDashboard(): EmployerDashboardView {
+    return {
+      orgName: employer.org.displayName,
+      activeCampaigns: employer.campaigns.filter((c) => c.status === 'active').length,
+      openApplications: employer.candidates.reduce((n, c) => n + c.applicationCount, 0),
+      pendingDecisions: employer.approval.status === 'issued' ? 0 : 1,
+      pendingAccommodations: employer.accommodations.filter((a) => a.status === 'pending').length,
+      unassignedReviews: employer.assignments.filter((a) => a.status === 'unassigned').length,
+      readinessBlockers: employer.readiness.filter((r) => r.severity === 'blocker' && !r.resolved)
+        .length,
+    };
+  },
+
+  getOrg(): EmployerOrgProfileView {
+    return employer.org;
+  },
+  updateOrg(patch: Partial<EmployerOrgProfileView>): EmployerOrgProfileView {
+    employer.org = { ...employer.org, ...patch };
+    return employer.org;
+  },
+
+  getMembers(): Collection<MemberView> {
+    return { items: employer.members, total: employer.members.length };
+  },
+  inviteMember(email: string, role: string): MemberView {
+    const member: MemberView = {
+      id: randomId('mbr'),
+      name: email.split('@')[0] ?? email,
+      email,
+      roles: [role],
+      status: 'invited',
+    };
+    employer.members.push(member);
+    return member;
+  },
+
+  getStructure(): StructureView {
+    return { departments: employer.departments, teams: employer.teams };
+  },
+  addDepartment(name: string): DepartmentView {
+    const dep: DepartmentView = { id: randomId('dep'), name, teamCount: 0 };
+    employer.departments.push(dep);
+    return dep;
+  },
+  addTeam(name: string, departmentId: string): TeamView | null {
+    const dep = employer.departments.find((d) => d.id === departmentId);
+    if (dep === undefined) return null;
+    const team: TeamView = { id: randomId('tm'), name, departmentId, departmentName: dep.name };
+    employer.teams.push(team);
+    const index = employer.departments.findIndex((d) => d.id === departmentId);
+    employer.departments[index] = { ...dep, teamCount: dep.teamCount + 1 };
+    return team;
+  },
+
+  getCampaigns(): Collection<CampaignView> {
+    return { items: employer.campaigns, total: employer.campaigns.length };
+  },
+  getCampaign(id: string): CampaignView | null {
+    return campaign(id) ?? null;
+  },
+  createCampaign(name: string, roleTitle: string): CampaignView {
+    const c: CampaignView = {
+      id: randomId('cmp'),
+      name,
+      roleTitle,
+      status: 'draft',
+      candidateCount: 0,
+      openBlockers: 2,
+      createdAt: new Date().toISOString(),
+    };
+    employer.campaigns.unshift(c);
+    return c;
+  },
+  setCampaignStatus(id: string, status: CampaignStatus): CampaignView | null {
+    const index = employer.campaigns.findIndex((c) => c.id === id);
+    if (index === -1) return null;
+    const current = employer.campaigns[index];
+    if (current === undefined) return null;
+    // Activation is gated: cannot activate while blockers remain open.
+    if (status === 'active' && current.openBlockers > 0) return current;
+    const next: CampaignView = { ...current, status };
+    employer.campaigns[index] = next;
+    return next;
+  },
+
+  getPreflight(): Collection<PreflightCheckView> {
+    return { items: employer.preflight, total: employer.preflight.length };
+  },
+  resolvePreflight(checkId: string): PreflightCheckView | null {
+    const index = employer.preflight.findIndex((p) => p.id === checkId);
+    if (index === -1) return null;
+    const current = employer.preflight[index];
+    if (current === undefined) return null;
+    const next: PreflightCheckView = { ...current, resolved: true, severity: 'ok' };
+    employer.preflight[index] = next;
+    // Recompute the demo campaign's open blockers from unresolved blocker checks.
+    const openBlockers = employer.preflight.filter(
+      (p) => p.severity === 'blocker' && !p.resolved,
+    ).length;
+    const ci = employer.campaigns.findIndex((c) => c.id === EMPLOYER_CAMPAIGN_ID);
+    const cc = employer.campaigns[ci];
+    if (cc !== undefined) employer.campaigns[ci] = { ...cc, openBlockers };
+    return next;
+  },
+
+  getCampaignOps(id: string): CampaignOpsView {
+    return {
+      campaignId: id,
+      invited: 12,
+      inProgress: 4,
+      submitted: 5,
+      underReview: 2,
+      decided: 1,
+      exceptions: employer.exceptions,
+    };
+  },
+  getComparison(): Collection<ComparisonRowView> {
+    return { items: employer.comparison, total: employer.comparison.length };
+  },
+
+  getCandidates(): Collection<EmployerCandidateView> {
+    return { items: employer.candidates, total: employer.candidates.length };
+  },
+  addCandidate(displayName: string, campaignName: string): EmployerCandidateView {
+    const c: EmployerCandidateView = {
+      id: randomId('cnd'),
+      reference: `CND-${randomId('').slice(0, 4).toUpperCase()}`,
+      displayName,
+      status: 'invited',
+      campaignName,
+      applicationCount: 0,
+    };
+    employer.candidates.push(c);
+    return c;
+  },
+  getCandidate(id: string): CandidateRecordView | null {
+    const c = employer.candidates.find((x) => x.id === id);
+    if (c === undefined) return null;
+    return {
+      id: c.id,
+      reference: c.reference,
+      displayName: c.displayName,
+      status: c.status,
+      email: `${c.displayName.split(' ')[0]?.toLowerCase() ?? 'candidate'}@example.test`,
+      applications: [
+        { id: EMPLOYER_APPLICATION_ID, campaignName: c.campaignName, status: 'under_review' },
+      ],
+      accommodationsNote:
+        'One approved operational adjustment on file. Clinical detail is segregated.',
+    };
+  },
+  mergeCandidate(id: string, duplicateId: string): CandidateRecordView | null {
+    const dupIndex = employer.candidates.findIndex((c) => c.id === duplicateId);
+    if (dupIndex !== -1) {
+      const dup = employer.candidates[dupIndex];
+      if (dup !== undefined) employer.candidates[dupIndex] = { ...dup, status: 'merged' };
+    }
+    return this.getCandidate(id);
+  },
+
+  validateImport(rowText: string): ImportResultView {
+    const rows = rowText.split('\n').filter((r) => r.trim().length > 0);
+    const errors = rows
+      .map((r, i) => ({ row: i + 1, value: r }))
+      .filter((r) => !r.value.includes('@'))
+      .map((r) => ({ row: r.row, message: 'Missing a valid email address.' }));
+    return {
+      stage: 'validated',
+      totalRows: rows.length,
+      validRows: rows.length - errors.length,
+      errors,
+    };
+  },
+  commitImport(rowText: string): ImportResultView {
+    const validated = this.validateImport(rowText);
+    return { ...validated, stage: 'committed' };
+  },
+
+  getInvitations(): Collection<InvitationView> {
+    return { items: employer.invitations, total: employer.invitations.length };
+  },
+  sendInvitation(email: string, campaignName: string): InvitationView {
+    const inv: InvitationView = {
+      id: randomId('inv'),
+      email,
+      campaignName,
+      status: 'sent',
+      sentAt: new Date().toISOString(),
+    };
+    employer.invitations.unshift(inv);
+    return inv;
+  },
+
+  getWindows(): Collection<ScheduleWindowView> {
+    return { items: employer.windows, total: employer.windows.length };
+  },
+  addWindow(label: string, capacity: number): ScheduleWindowView {
+    const w: ScheduleWindowView = {
+      id: randomId('win'),
+      label,
+      startsAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+      capacity,
+      booked: 0,
+      status: 'open',
+    };
+    employer.windows.push(w);
+    return w;
+  },
+
+  getAccommodations(): Collection<AccommodationRequestView> {
+    return { items: employer.accommodations, total: employer.accommodations.length };
+  },
+  decideAccommodation(
+    id: string,
+    status: 'approved' | 'declined' | 'more_info',
+  ): AccommodationRequestView | null {
+    const index = employer.accommodations.findIndex((a) => a.id === id);
+    if (index === -1) return null;
+    const current = employer.accommodations[index];
+    if (current === undefined) return null;
+    const next: AccommodationRequestView = { ...current, status, decidedBy: 'Dana Owner' };
+    employer.accommodations[index] = next;
+    return next;
+  },
+
+  getReviewers(): Collection<ReviewerAdminView> {
+    return { items: employer.reviewers, total: employer.reviewers.length };
+  },
+  inviteReviewer(name: string, discipline: string): ReviewerAdminView {
+    const r: ReviewerAdminView = {
+      id: randomId('rvw'),
+      name,
+      disciplines: [discipline],
+      status: 'invited',
+      activeAssignments: 0,
+    };
+    employer.reviewers.push(r);
+    return r;
+  },
+
+  getAssignments(): Collection<AssignmentBoardItemView> {
+    return { items: employer.assignments, total: employer.assignments.length };
+  },
+  assignReviewer(id: string, reviewerName: string): AssignmentBoardItemView | null {
+    const index = employer.assignments.findIndex((a) => a.id === id);
+    if (index === -1) return null;
+    const current = employer.assignments[index];
+    if (current === undefined) return null;
+    const next: AssignmentBoardItemView = { ...current, reviewerName, status: 'assigned' };
+    employer.assignments[index] = next;
+    return next;
+  },
+
+  getDecision(): DecisionDraftView {
+    return employer.decision;
+  },
+  saveDecision(outcome: DecisionOutcome, rationale: string): DecisionDraftView {
+    // A human decision requires completed review and a written rationale (enforced at the boundary).
+    employer.decision = { ...employer.decision, outcome, rationale, status: 'submitted' };
+    employer.approval = {
+      ...employer.approval,
+      outcome,
+      rationale,
+      status: 'awaiting_approval',
+    };
+    return employer.decision;
+  },
+
+  getApproval(): DecisionApprovalView {
+    return employer.approval;
+  },
+  approveDecision(): DecisionApprovalView {
+    // Segregation of duties: only a submitted draft awaiting approval can be issued.
+    if (employer.approval.status === 'awaiting_approval') {
+      employer.approval = {
+        ...employer.approval,
+        status: 'issued',
+        approver: 'Dana Owner',
+        issuedAt: new Date().toISOString(),
+      };
+    }
+    return employer.approval;
+  },
+  returnDecision(): DecisionApprovalView {
+    if (employer.approval.status === 'awaiting_approval') {
+      employer.approval = { ...employer.approval, status: 'returned' };
+      employer.decision = { ...employer.decision, status: 'draft' };
+    }
+    return employer.approval;
+  },
+
+  getReports(): Collection<ReportView> {
+    return { items: employer.reports, total: employer.reports.length };
+  },
+  generateReport(name: string, kind: string): ReportView {
+    const r: ReportView = {
+      id: randomId('rpt'),
+      name,
+      kind,
+      status: 'ready',
+      generatedAt: new Date().toISOString(),
+    };
+    employer.reports.unshift(r);
+    return r;
+  },
+
+  getIntegrations(): Collection<IntegrationView> {
+    return { items: employer.integrations, total: employer.integrations.length };
+  },
+  addIntegration(name: string, kind: string, endpoint: string): IntegrationView {
+    const i: IntegrationView = {
+      id: randomId('int'),
+      name,
+      kind,
+      status: 'connected',
+      endpoint,
+    };
+    employer.integrations.push(i);
+    return i;
+  },
+
+  getTemplates(): Collection<TemplateView> {
+    return { items: employer.templates, total: employer.templates.length };
+  },
+  createTemplate(name: string, subject: string): TemplateView {
+    const t: TemplateView = {
+      id: randomId('tpl'),
+      name,
+      channel: 'email',
+      subject,
+      updatedAt: new Date().toISOString(),
+    };
+    employer.templates.unshift(t);
+    return t;
+  },
+
+  getReadiness(): Collection<ReadinessItemView> {
+    return { items: employer.readiness, total: employer.readiness.length };
+  },
+  resolveReadiness(itemId: string): ReadinessItemView | null {
+    const index = employer.readiness.findIndex((r) => r.id === itemId);
+    if (index === -1) return null;
+    const current = employer.readiness[index];
+    if (current === undefined) return null;
+    const next: ReadinessItemView = { ...current, resolved: true, severity: 'ready' };
+    employer.readiness[index] = next;
+    return next;
+  },
+
+  reset(): void {
+    employer = freshEmployer();
   },
 };
