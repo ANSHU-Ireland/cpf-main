@@ -4,6 +4,10 @@ import {
   handleGetReviewAssignment,
   handlePostReviewAssignment,
   handlePostAcceptAssignment,
+  handlePostStopAssignmentAi,
+  handlePostDeclineAssignment,
+  handlePostAssignmentAnnotation,
+  handlePostAssignmentClarification,
   type ReviewAssignmentService,
 } from './review-assignments.handler.js';
 import type { Actor } from '@cpf/org';
@@ -32,6 +36,31 @@ function service(overrides: Partial<ReviewAssignmentService> = {}): ReviewAssign
     createAssignment: () => Promise.resolve({ ok: true as const, assignment: dto }),
     acceptAssignment: () =>
       Promise.resolve({ ok: true as const, assignment: { ...dto, status: 'accepted' as const } }),
+    stopAi: () => Promise.resolve({ ok: true as const, assignment: dto }),
+    decline: () =>
+      Promise.resolve({ ok: true as const, assignment: { ...dto, status: 'cancelled' as const } }),
+    addAnnotation: () =>
+      Promise.resolve({
+        ok: true as const,
+        annotation: {
+          id: 'an',
+          assignmentId: VALID_ID,
+          itemId: VALID_ID,
+          body: 'b',
+          createdAt: '',
+        },
+      }),
+    addClarification: () =>
+      Promise.resolve({
+        ok: true as const,
+        clarification: {
+          id: 'cl',
+          assignmentId: VALID_ID,
+          question: 'q',
+          status: 'open',
+          createdAt: '',
+        },
+      }),
     ...overrides,
   };
 }
@@ -81,5 +110,49 @@ describe('handlePostAcceptAssignment', () => {
       { actor, assignmentId: VALID_ID },
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe('handlePostStopAssignmentAi', () => {
+  it('returns 200', async () => {
+    const res = await handlePostStopAssignmentAi(service(), { actor, assignmentId: VALID_ID });
+    expect(res.status).toBe(200);
+  });
+  it('returns 422 for bad id', async () => {
+    const res = await handlePostStopAssignmentAi(service(), { actor, assignmentId: 'bad' });
+    expect(res.status).toBe(422);
+  });
+});
+
+describe('handlePostDeclineAssignment', () => {
+  it('returns 200', async () => {
+    const res = await handlePostDeclineAssignment(service(), {
+      actor,
+      assignmentId: VALID_ID,
+      body: { reason: 'x' },
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('handlePostAssignmentAnnotation', () => {
+  it('returns 201', async () => {
+    const res = await handlePostAssignmentAnnotation(service(), {
+      actor,
+      assignmentId: VALID_ID,
+      body: { itemId: VALID_ID, body: 'b' },
+    });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('handlePostAssignmentClarification', () => {
+  it('returns 201', async () => {
+    const res = await handlePostAssignmentClarification(service(), {
+      actor,
+      assignmentId: VALID_ID,
+      body: { question: 'q' },
+    });
+    expect(res.status).toBe(201);
   });
 });

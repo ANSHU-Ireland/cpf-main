@@ -4,13 +4,22 @@ import {
   getReviewAssignment,
   createReviewAssignment,
   acceptReviewAssignment,
+  stopReviewAssignmentAi,
+  declineReviewAssignment,
+  addReviewAssignmentAnnotation,
+  addReviewAssignmentClarification,
   parseReviewAssignmentListQuery,
   parseReviewAssignmentCreate,
+  parseAssignmentDecline,
+  parseAssignmentAnnotation,
+  parseAssignmentClarification,
   parseAssignmentId,
 } from './review-assignments.js';
 import type {
   ReviewAssignmentRepository,
   ReviewAssignmentListResult,
+  AssignmentAnnotationRecord,
+  AssignmentClarificationRecord,
 } from './review-assignments.js';
 import type { ReviewAssignmentCreate, ReviewAssignmentRecord } from './review-assignment-types.js';
 import type { Actor } from './types.js';
@@ -53,9 +62,28 @@ function repo(overrides: Partial<ReviewAssignmentRepository> = {}): ReviewAssign
     createAssignment: (_a: Actor, input: ReviewAssignmentCreate) =>
       Promise.resolve(assignment({ assignmentType: input.assignmentType })),
     acceptAssignment: () => Promise.resolve(assignment({ status: 'accepted' })),
+    stopAssignmentAi: () => Promise.resolve(assignment({ status: 'in_progress' })),
+    declineAssignment: () => Promise.resolve(assignment({ status: 'cancelled' })),
+    addAnnotation: () => Promise.resolve(annotation),
+    addClarification: () => Promise.resolve(clarification),
     ...overrides,
   };
 }
+
+const annotation: AssignmentAnnotationRecord = {
+  id: 'an-1',
+  assignmentId: 'ra-1',
+  itemId: SUB_ID,
+  body: 'note',
+  createdAt: '2024-01-01T00:00:00.000Z',
+};
+const clarification: AssignmentClarificationRecord = {
+  id: 'cl-1',
+  assignmentId: 'ra-1',
+  question: 'why?',
+  status: 'open',
+  createdAt: '2024-01-01T00:00:00.000Z',
+};
 
 describe('parseReviewAssignmentListQuery', () => {
   it('defaults', () => expect(parseReviewAssignmentListQuery({}).ok).toBe(true));
@@ -160,5 +188,91 @@ describe('acceptReviewAssignment', () => {
       'x',
     );
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('parseAssignmentDecline / Annotation / Clarification', () => {
+  it('decline', () => {
+    expect(parseAssignmentDecline({ reason: 'busy' }).ok).toBe(true);
+    expect(parseAssignmentDecline({}).ok).toBe(false);
+  });
+  it('annotation', () => {
+    expect(parseAssignmentAnnotation({ itemId: SUB_ID, body: 'x' }).ok).toBe(true);
+    expect(parseAssignmentAnnotation({ itemId: 'bad', body: 'x' }).ok).toBe(false);
+  });
+  it('clarification', () => {
+    expect(parseAssignmentClarification({ question: 'q' }).ok).toBe(true);
+    expect(parseAssignmentClarification({}).ok).toBe(false);
+  });
+});
+
+describe('stopReviewAssignmentAi', () => {
+  it('stops', async () =>
+    expect((await stopReviewAssignmentAi({ repository: repo() }, admin, 'ra-1')).ok).toBe(true));
+  it('denies a viewer', async () => {
+    const r = await stopReviewAssignmentAi({ repository: repo() }, noRole, 'ra-1');
+    expect(r.ok === false && r.status).toBe(403);
+  });
+  it('404', async () => {
+    const r = await stopReviewAssignmentAi(
+      { repository: repo({ stopAssignmentAi: () => Promise.resolve(null) }) },
+      admin,
+      'x',
+    );
+    expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('declineReviewAssignment', () => {
+  it('declines', async () =>
+    expect(
+      (await declineReviewAssignment({ repository: repo() }, admin, 'ra-1', { reason: 'busy' })).ok,
+    ).toBe(true));
+  it('404', async () => {
+    const r = await declineReviewAssignment(
+      { repository: repo({ declineAssignment: () => Promise.resolve(null) }) },
+      admin,
+      'x',
+      { reason: 'busy' },
+    );
+    expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('addReviewAssignmentAnnotation', () => {
+  it('adds', async () =>
+    expect(
+      (
+        await addReviewAssignmentAnnotation({ repository: repo() }, admin, 'ra-1', {
+          itemId: SUB_ID,
+          body: 'x',
+        })
+      ).ok,
+    ).toBe(true));
+  it('404', async () => {
+    const r = await addReviewAssignmentAnnotation(
+      { repository: repo({ addAnnotation: () => Promise.resolve(null) }) },
+      admin,
+      'x',
+      { itemId: SUB_ID, body: 'x' },
+    );
+    expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('addReviewAssignmentClarification', () => {
+  it('adds', async () =>
+    expect(
+      (
+        await addReviewAssignmentClarification({ repository: repo() }, admin, 'ra-1', {
+          question: 'q',
+        })
+      ).ok,
+    ).toBe(true));
+  it('denies a viewer', async () => {
+    const r = await addReviewAssignmentClarification({ repository: repo() }, noRole, 'ra-1', {
+      question: 'q',
+    });
+    expect(r.ok === false && r.status).toBe(403);
   });
 });

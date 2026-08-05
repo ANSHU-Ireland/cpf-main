@@ -2,12 +2,19 @@ import { describe, it, expect } from 'vitest';
 import {
   createAssessmentValidation,
   activateAssessmentVersion,
+  previewAssessmentVersion,
+  createAssessmentDefect,
+  duplicateAssessmentVersion,
+  suspendAssessmentVersion,
   parseValidationCreate,
+  parseAssessmentDefectCreate,
   parseVersionId,
 } from './assessment-versions.js';
 import type {
   AssessmentValidationRepository,
   AssessmentVersionRepository,
+  AssessmentVersionPreview,
+  AssessmentDefectRecord,
 } from './assessment-versions.js';
 import type {
   AssessmentValidationRecord,
@@ -53,10 +60,32 @@ function valRepo(
   return { createValidation: () => Promise.resolve(validation), ...overrides };
 }
 
+const preview: AssessmentVersionPreview = {
+  versionId: VER_ID,
+  itemCount: 2,
+  durationSeconds: 3600,
+  items: [{ id: 'q1', prompt: 'p' }],
+};
+
+const defect: AssessmentDefectRecord = {
+  id: 'd1',
+  assessmentVersionId: VER_ID,
+  severity: 'high',
+  summary: 'broken',
+  createdAt: '2024-01-01T00:00:00.000Z',
+};
+
 function verRepo(
   overrides: Partial<AssessmentVersionRepository> = {},
 ): AssessmentVersionRepository {
-  return { activateVersion: () => Promise.resolve(version), ...overrides };
+  return {
+    activateVersion: () => Promise.resolve(version),
+    previewVersion: () => Promise.resolve(preview),
+    duplicateVersion: () => Promise.resolve({ ...version, id: 'new-ver', status: 'draft' }),
+    suspendVersion: () => Promise.resolve({ ...version, status: 'suspended' }),
+    createDefect: () => Promise.resolve(defect),
+    ...overrides,
+  };
 }
 
 describe('parseValidationCreate', () => {
@@ -103,5 +132,78 @@ describe('activateAssessmentVersion', () => {
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe(404);
+  });
+});
+
+describe('parseAssessmentDefectCreate', () => {
+  it('accepts valid', () =>
+    expect(parseAssessmentDefectCreate({ severity: 'high', summary: 'x' }).ok).toBe(true));
+  it('rejects a bad severity', () =>
+    expect(parseAssessmentDefectCreate({ severity: 'nope', summary: 'x' }).ok).toBe(false));
+});
+
+describe('previewAssessmentVersion', () => {
+  it('previews for admin', async () =>
+    expect((await previewAssessmentVersion({ repository: verRepo() }, admin, VER_ID)).ok).toBe(
+      true,
+    ));
+  it('denies a viewer', async () => {
+    const r = await previewAssessmentVersion({ repository: verRepo() }, noRole, VER_ID);
+    expect(r.ok === false && r.status).toBe(403);
+  });
+  it('404 when missing', async () => {
+    const r = await previewAssessmentVersion(
+      { repository: verRepo({ previewVersion: () => Promise.resolve(null) }) },
+      admin,
+      VER_ID,
+    );
+    expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('createAssessmentDefect', () => {
+  it('creates for admin', async () =>
+    expect(
+      (
+        await createAssessmentDefect({ repository: verRepo() }, admin, VER_ID, {
+          severity: 'high',
+          summary: 'x',
+        })
+      ).ok,
+    ).toBe(true));
+  it('404 when missing', async () => {
+    const r = await createAssessmentDefect(
+      { repository: verRepo({ createDefect: () => Promise.resolve(null) }) },
+      admin,
+      VER_ID,
+      { severity: 'high', summary: 'x' },
+    );
+    expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('duplicateAssessmentVersion', () => {
+  it('duplicates for admin', async () =>
+    expect((await duplicateAssessmentVersion({ repository: verRepo() }, admin, VER_ID)).ok).toBe(
+      true,
+    ));
+  it('denies a viewer', async () => {
+    const r = await duplicateAssessmentVersion({ repository: verRepo() }, noRole, VER_ID);
+    expect(r.ok === false && r.status).toBe(403);
+  });
+});
+
+describe('suspendAssessmentVersion', () => {
+  it('suspends for admin', async () =>
+    expect((await suspendAssessmentVersion({ repository: verRepo() }, admin, VER_ID)).ok).toBe(
+      true,
+    ));
+  it('404 when missing', async () => {
+    const r = await suspendAssessmentVersion(
+      { repository: verRepo({ suspendVersion: () => Promise.resolve(null) }) },
+      admin,
+      VER_ID,
+    );
+    expect(r.ok === false && r.status).toBe(404);
   });
 });

@@ -44,6 +44,7 @@ export * from './assessment-repository.js';
 export * from './assessments.js';
 export * from './assessment-version-types.js';
 export * from './assessment-versions.js';
+export * from './attempts.js';
 export * from './ai-model-types.js';
 export * from './ai-models.js';
 export * from './review-assignment-types.js';

@@ -60,11 +60,124 @@ export interface AssessmentValidationRepository {
 
 export interface AssessmentVersionRepository {
   activateVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null>;
+  previewVersion(actor: Actor, versionId: string): Promise<AssessmentVersionPreview | null>;
+  duplicateVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null>;
+  suspendVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null>;
+  createDefect(
+    actor: Actor,
+    versionId: string,
+    input: AssessmentDefectCreate,
+  ): Promise<AssessmentDefectRecord | null>;
+}
+
+export const ASSESSMENT_DEFECT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type AssessmentDefectSeverity = (typeof ASSESSMENT_DEFECT_SEVERITIES)[number];
+
+export interface AssessmentVersionPreview {
+  readonly versionId: string;
+  readonly itemCount: number;
+  readonly durationSeconds: number;
+  readonly items: readonly { id: string; prompt: string }[];
+}
+
+export interface AssessmentDefectRecord {
+  readonly id: string;
+  readonly assessmentVersionId: string;
+  readonly severity: AssessmentDefectSeverity;
+  readonly summary: string;
+  readonly createdAt: string;
+}
+
+export interface AssessmentDefectCreate {
+  readonly severity: AssessmentDefectSeverity;
+  readonly summary: string;
+}
+
+const VALID_SEVERITIES: ReadonlySet<string> = new Set(ASSESSMENT_DEFECT_SEVERITIES);
+
+export function parseAssessmentDefectCreate(
+  raw: unknown,
+): { ok: true; value: AssessmentDefectCreate } | { ok: false; errors: string[] } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
+  const obj = raw as Record<string, unknown>;
+  const errors: string[] = [];
+  if (typeof obj['severity'] !== 'string' || !VALID_SEVERITIES.has(obj['severity']))
+    errors.push('severity must be low|medium|high|critical');
+  if (typeof obj['summary'] !== 'string' || obj['summary'].length === 0)
+    errors.push('summary required');
+  if (errors.length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      severity: obj['severity'] as AssessmentDefectSeverity,
+      summary: obj['summary'] as string,
+    },
+  };
 }
 
 // --- domain ops ---
 
 type Result<T> = ({ ok: true } & T) | { ok: false; status: number; reason: string };
+
+function canWriteAssessment(actor: Actor): boolean {
+  return can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'assessment', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  ).allowed;
+}
+
+export async function previewAssessmentVersion(
+  deps: { repository: AssessmentVersionRepository },
+  actor: Actor,
+  versionId: string,
+): Promise<Result<{ preview: AssessmentVersionPreview }>> {
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'read',
+    { type: 'assessment', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+  const record = await deps.repository.previewVersion(actor, versionId);
+  if (record === null) return { ok: false, status: 404, reason: 'Version not found.' };
+  return { ok: true, preview: record };
+}
+
+export async function createAssessmentDefect(
+  deps: { repository: AssessmentVersionRepository },
+  actor: Actor,
+  versionId: string,
+  input: AssessmentDefectCreate,
+): Promise<Result<{ defect: AssessmentDefectRecord }>> {
+  if (!canWriteAssessment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.createDefect(actor, versionId, input);
+  if (record === null) return { ok: false, status: 404, reason: 'Version not found.' };
+  return { ok: true, defect: record };
+}
+
+export async function duplicateAssessmentVersion(
+  deps: { repository: AssessmentVersionRepository },
+  actor: Actor,
+  versionId: string,
+): Promise<Result<{ version: AssessmentVersionRecord }>> {
+  if (!canWriteAssessment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.duplicateVersion(actor, versionId);
+  if (record === null) return { ok: false, status: 404, reason: 'Version not found.' };
+  return { ok: true, version: record };
+}
+
+export async function suspendAssessmentVersion(
+  deps: { repository: AssessmentVersionRepository },
+  actor: Actor,
+  versionId: string,
+): Promise<Result<{ version: AssessmentVersionRecord }>> {
+  if (!canWriteAssessment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.suspendVersion(actor, versionId);
+  if (record === null) return { ok: false, status: 404, reason: 'Version not found.' };
+  return { ok: true, version: record };
+}
 
 export async function createAssessmentValidation(
   deps: { repository: AssessmentValidationRepository },

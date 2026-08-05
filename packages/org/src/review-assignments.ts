@@ -83,6 +83,84 @@ export interface ReviewAssignmentRepository {
   getAssignment(actor: Actor, id: string): Promise<ReviewAssignmentRecord | null>;
   createAssignment(actor: Actor, input: ReviewAssignmentCreate): Promise<ReviewAssignmentRecord>;
   acceptAssignment(actor: Actor, id: string): Promise<ReviewAssignmentRecord | null>;
+  stopAssignmentAi(actor: Actor, id: string): Promise<ReviewAssignmentRecord | null>;
+  declineAssignment(
+    actor: Actor,
+    id: string,
+    input: AssignmentDeclineInput,
+  ): Promise<ReviewAssignmentRecord | null>;
+  addAnnotation(
+    actor: Actor,
+    id: string,
+    input: AssignmentAnnotationInput,
+  ): Promise<AssignmentAnnotationRecord | null>;
+  addClarification(
+    actor: Actor,
+    id: string,
+    input: AssignmentClarificationInput,
+  ): Promise<AssignmentClarificationRecord | null>;
+}
+
+export interface AssignmentDeclineInput {
+  readonly reason: string;
+}
+
+export interface AssignmentAnnotationInput {
+  readonly itemId: string;
+  readonly body: string;
+}
+
+export interface AssignmentAnnotationRecord {
+  readonly id: string;
+  readonly assignmentId: string;
+  readonly itemId: string;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+export interface AssignmentClarificationInput {
+  readonly question: string;
+}
+
+export interface AssignmentClarificationRecord {
+  readonly id: string;
+  readonly assignmentId: string;
+  readonly question: string;
+  readonly status: string;
+  readonly createdAt: string;
+}
+
+export function parseAssignmentDecline(
+  raw: unknown,
+): { ok: true; value: AssignmentDeclineInput } | { ok: false; errors: string[] } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj['reason'] !== 'string' || obj['reason'].length === 0)
+    return { ok: false, errors: ['reason required'] };
+  return { ok: true, value: { reason: obj['reason'] } };
+}
+
+export function parseAssignmentAnnotation(
+  raw: unknown,
+): { ok: true; value: AssignmentAnnotationInput } | { ok: false; errors: string[] } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
+  const obj = raw as Record<string, unknown>;
+  const errors: string[] = [];
+  if (typeof obj['itemId'] !== 'string' || !UUID_RE.test(obj['itemId']))
+    errors.push('itemId must be UUID');
+  if (typeof obj['body'] !== 'string' || obj['body'].length === 0) errors.push('body required');
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, value: { itemId: obj['itemId'] as string, body: obj['body'] as string } };
+}
+
+export function parseAssignmentClarification(
+  raw: unknown,
+): { ok: true; value: AssignmentClarificationInput } | { ok: false; errors: string[] } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj['question'] !== 'string' || obj['question'].length === 0)
+    return { ok: false, errors: ['question required'] };
+  return { ok: true, value: { question: obj['question'] } };
 }
 
 // --- domain ---
@@ -183,4 +261,60 @@ export async function acceptReviewAssignment(
   const record = await deps.repository.acceptAssignment(actor, id);
   if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
   return { ok: true, assignment: record };
+}
+
+function canWriteAssignment(actor: Actor): boolean {
+  return can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'review_assignment', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  ).allowed;
+}
+
+export async function stopReviewAssignmentAi(
+  deps: ReviewAssignmentDeps,
+  actor: Actor,
+  id: string,
+): Promise<AcceptAssignmentResult> {
+  if (!canWriteAssignment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.stopAssignmentAi(actor, id);
+  if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
+  return { ok: true, assignment: record };
+}
+
+export async function declineReviewAssignment(
+  deps: ReviewAssignmentDeps,
+  actor: Actor,
+  id: string,
+  input: AssignmentDeclineInput,
+): Promise<AcceptAssignmentResult> {
+  if (!canWriteAssignment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.declineAssignment(actor, id, input);
+  if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
+  return { ok: true, assignment: record };
+}
+
+export async function addReviewAssignmentAnnotation(
+  deps: ReviewAssignmentDeps,
+  actor: Actor,
+  id: string,
+  input: AssignmentAnnotationInput,
+): Promise<Result<{ annotation: AssignmentAnnotationRecord }>> {
+  if (!canWriteAssignment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.addAnnotation(actor, id, input);
+  if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
+  return { ok: true, annotation: record };
+}
+
+export async function addReviewAssignmentClarification(
+  deps: ReviewAssignmentDeps,
+  actor: Actor,
+  id: string,
+  input: AssignmentClarificationInput,
+): Promise<Result<{ clarification: AssignmentClarificationRecord }>> {
+  if (!canWriteAssignment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.addClarification(actor, id, input);
+  if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
+  return { ok: true, clarification: record };
 }

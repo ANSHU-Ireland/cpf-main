@@ -16,6 +16,7 @@ export * from './campaign/campaign-lifecycle.handler.js';
 export * from './campaign/campaign-reviewers.handler.js';
 export * from './campaign/applications.handler.js';
 export * from './campaign/reviewer-profiles.handler.js';
+export * from './campaign/attempts.handler.js';
 export * from './admin/tenants.handler.js';
 export * from './admin/staff.handler.js';
 export * from './admin/plans.handler.js';
