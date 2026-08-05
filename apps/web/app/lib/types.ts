@@ -804,3 +804,245 @@ export interface PluginView {
   readonly dataScope: string;
   readonly status: PluginStatus;
 }
+
+// ── Governance & Audit types (GOV-01..18, AUD-01..02) ──────────────────────────────────────
+// Invariants: governance decisions require human authority checkpoints with outcome+rationale;
+// versioned artifacts are immutable; chain of custody is maintained for evidence collections.
+
+// Common statuses for governance records
+type GovernanceRecordStatus = 'draft' | 'ready' | 'attention' | 'complete' | 'archived';
+
+// AI System (GOV-01)
+export interface AiSystemView {
+  readonly id: string;
+  readonly name: string;
+  readonly purpose: string;
+  readonly classification: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly updatedAt: string;
+}
+
+// Classification Decision (GOV-02)
+export interface ClassificationView {
+  readonly systemId: string;
+  readonly role: string;
+  readonly intendedPurpose: string;
+  readonly classification: string | null;
+  readonly reasoning: string | null;
+  readonly resolved: boolean;
+}
+
+// Risk and Control (GOV-03)
+export interface RiskView {
+  readonly id: string;
+  readonly title: string;
+  readonly riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  readonly controls: string;
+  readonly residual: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+}
+
+// Dataset (GOV-04)
+export interface DatasetView {
+  readonly id: string;
+  readonly name: string;
+  readonly provenance: string;
+  readonly lawfulBasis: string;
+  readonly representativeness: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly updatedAt: string;
+}
+
+// Technical Documentation (GOV-05)
+export interface TechnicalDocView {
+  readonly id: string;
+  readonly systemId: string;
+  readonly version: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly reference: string;
+  readonly updatedAt: string;
+}
+
+// QMS Procedure (GOV-06)
+export interface QmsProcedureView {
+  readonly id: string;
+  readonly title: string;
+  readonly policy: string;
+  readonly approvedBy: string | null;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly updatedAt: string;
+}
+
+// Data Use Purpose (GOV-07)
+export interface DataUseView {
+  readonly id: string;
+  readonly purpose: string;
+  readonly lawfulBasis: string;
+  readonly categories: string;
+  readonly recipients: string;
+  readonly retention: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+}
+
+// Impact Assessment (GOV-08)
+export interface ImpactAssessmentView {
+  readonly systemId: string;
+  readonly assessmentType: 'DPIA' | 'FundamentalRights';
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+  readonly resolved: boolean;
+}
+
+// Oversight Plan (GOV-09)
+export interface OversightPlanView {
+  readonly systemId: string;
+  readonly authority: string | null;
+  readonly competency: string | null;
+  readonly stoppingRules: string | null;
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+  readonly resolved: boolean;
+}
+
+// Deployer Instructions (GOV-10)
+export interface DeployerInstructionsView {
+  readonly id: string;
+  readonly systemId: string;
+  readonly version: string;
+  readonly limitations: string;
+  readonly oversight: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly reference: string;
+}
+
+// AI Literacy Training (GOV-11)
+export interface AiLiteracyView {
+  readonly id: string;
+  readonly role: string;
+  readonly trainingModule: string;
+  readonly assignee: string;
+  readonly completedAt: string | null;
+  readonly expiresAt: string | null;
+  readonly status: GovernanceRecordStatus;
+}
+
+// Conformity Assessment (GOV-12)
+export interface ConformityAssessmentView {
+  readonly systemId: string;
+  readonly requirements: string;
+  readonly tests: string;
+  readonly gaps: string;
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+  readonly resolved: boolean;
+}
+
+// Market Access (GOV-13)
+export type MarketAccessType = 'declaration' | 'registration' | 'ce_marking';
+export interface MarketAccessView {
+  readonly id: string;
+  readonly systemId: string;
+  readonly accessType: MarketAccessType;
+  readonly completedAt: string | null;
+  readonly evidence: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+}
+
+// Post-Market Plan (GOV-14)
+export interface PostMarketPlanView {
+  readonly systemId: string;
+  readonly metrics: string;
+  readonly thresholds: string;
+  readonly reviewCadence: string;
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+  readonly resolved: boolean;
+}
+
+// Signal (GOV-15)
+export type SignalType = 'safety' | 'performance' | 'bias' | 'drift';
+export type SignalPriority = 'low' | 'medium' | 'high' | 'critical';
+export interface SignalView {
+  readonly id: string;
+  readonly type: SignalType;
+  readonly priority: SignalPriority;
+  readonly description: string;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly detectedAt: string;
+}
+
+export interface SignalDashboardView {
+  readonly readyNow: number;
+  readonly needsAttention: number;
+  readonly inProgress: number;
+  readonly signals: readonly SignalView[];
+  readonly recentActivity: readonly { event: string; timestamp: string }[];
+}
+
+// Serious Incident (GOV-16)
+export type IncidentSeverity = 'minor' | 'moderate' | 'serious' | 'critical';
+export interface SeriousIncidentView {
+  readonly id: string;
+  readonly title: string;
+  readonly severity: IncidentSeverity;
+  readonly contained: boolean;
+  readonly notified: boolean;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+  readonly occurredAt: string;
+}
+
+// Vendor Evidence (GOV-17)
+export interface VendorEvidenceView {
+  readonly id: string;
+  readonly vendor: string;
+  readonly obligation: string;
+  readonly evidence: string | null;
+  readonly expiresAt: string | null;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+}
+
+// Change Request (GOV-18)
+export interface ChangeRequestView {
+  readonly id: string;
+  readonly title: string;
+  readonly significance: 'minor' | 'major' | 'substantial';
+  readonly affectedControls: string;
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+  readonly resolved: boolean;
+  readonly status: GovernanceRecordStatus;
+  readonly owner: string;
+}
+
+// Evidence Collection (AUD-01)
+export interface EvidenceCollectionView {
+  readonly id: string;
+  readonly title: string;
+  readonly purpose: string;
+  readonly custodian: string;
+  readonly sealed: boolean;
+  readonly chainOfCustody: readonly { actor: string; action: string; timestamp: string }[];
+  readonly status: GovernanceRecordStatus;
+  readonly createdAt: string;
+}
+
+// Traceability (AUD-02)
+export interface TraceabilityView {
+  readonly requirementId: string;
+  readonly description: string;
+  readonly controls: readonly string[];
+  readonly surfaces: readonly string[];
+  readonly endpoints: readonly string[];
+  readonly evidence: readonly string[];
+}

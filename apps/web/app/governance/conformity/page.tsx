@@ -1,0 +1,187 @@
+'use client';
+import { useCallback, useId, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { AsyncBoundary, Badge, Button, Card, PageHeader, useAsync } from '@cpf/ui';
+import type { ConformityAssessmentView } from '../../../lib/types';
+import { api } from '../../../lib/api-client';
+import { governanceStore } from '../../../lib/synthetic.server';
+
+export default function GovernanceConformityPage() {
+  const headingId = useId();
+  const params = useParams<{ systemId?: string }>();
+  const systemId = params?.systemId || governanceStore.aiSystemId;
+  const [data, setData] = useState<ConformityAssessmentView | null>(null);
+
+  const loader = useCallback(async () => {
+    const assessment = await api.getConformityAssessment(systemId);
+    setData(assessment);
+    return assessment;
+  }, [systemId]);
+
+  const state = useAsync<ConformityAssessmentView>(loader);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const requirements = (formData.get('requirements') as string) || '';
+    const tests = (formData.get('tests') as string) || '';
+    const gaps = (formData.get('gaps') as string) || '';
+    const outcome = (formData.get('outcome') as string) || '';
+    const rationale = (formData.get('rationale') as string) || '';
+    if (
+      !requirements.trim() ||
+      !tests.trim() ||
+      !gaps.trim() ||
+      !outcome.trim() ||
+      !rationale.trim()
+    )
+      return;
+    await api.submitConformityAssessment(
+      systemId,
+      requirements.trim(),
+      tests.trim(),
+      gaps.trim(),
+      outcome.trim(),
+      rationale.trim(),
+    );
+    const updated = await api.getConformityAssessment(systemId);
+    setData(updated);
+  };
+
+  const fieldStyle =
+    'block w-full min-w-0 rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink focus:border-blue focus:ring-1 focus:ring-blue';
+  const labelStyle = 'block text-sm font-medium text-ink mb-1';
+
+  return (
+    <>
+      <PageHeader
+        title="Conformity assessment"
+        description="Assemble requirements, tests, gaps, approvals and evidence. No AI output on this surface."
+        headingId={headingId}
+      />
+
+      <AsyncBoundary state={state} onRetry={loader} label="Conformity assessment">
+        {() => (
+          <Card
+            aria-label="Human authority checkpoint"
+            style={{ borderLeft: '3px solid var(--color-amber)' }}
+          >
+            <div className="mb-4">
+              <Badge tone="amber">Human authority checkpoint</Badge>
+              <p className="text-sm text-muted mt-2">
+                Human initiates and confirms consequential actions.
+              </p>
+            </div>
+
+            {data?.resolved ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Outcome</h3>
+                  <Badge tone="sage">{data.outcome}</Badge>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Requirements</h3>
+                  <p className="text-sm text-muted">{data.requirements}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Tests</h3>
+                  <p className="text-sm text-muted">{data.tests}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Gaps</h3>
+                  <p className="text-sm text-muted">{data.gaps}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Rationale</h3>
+                  <p className="text-sm text-muted">{data.rationale}</p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="requirements" className={labelStyle}>
+                    Requirements
+                  </label>
+                  <input
+                    type="text"
+                    id="requirements"
+                    name="requirements"
+                    required
+                    minLength={4}
+                    placeholder="e.g. EU AI Act, ISO 42001"
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tests" className={labelStyle}>
+                    Tests
+                  </label>
+                  <input
+                    type="text"
+                    id="tests"
+                    name="tests"
+                    required
+                    minLength={4}
+                    placeholder="e.g. Validation suite, bias testing"
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="gaps" className={labelStyle}>
+                    Gaps
+                  </label>
+                  <input
+                    type="text"
+                    id="gaps"
+                    name="gaps"
+                    required
+                    minLength={2}
+                    placeholder="Document any identified gaps"
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="outcome" className={labelStyle}>
+                    Outcome
+                  </label>
+                  <input
+                    type="text"
+                    id="outcome"
+                    name="outcome"
+                    required
+                    minLength={2}
+                    placeholder="e.g. Approved"
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="rationale" className={labelStyle}>
+                    Rationale and cited evidence
+                  </label>
+                  <textarea
+                    id="rationale"
+                    name="rationale"
+                    required
+                    minLength={12}
+                    rows={4}
+                    placeholder="Explain the decision in plain language and link only the evidence needed for this purpose."
+                    className={fieldStyle}
+                  />
+                </div>
+                <div className="pt-2">
+                  <p className="text-sm text-muted mb-4">
+                    <strong>AI boundary:</strong> No AI output on this surface.
+                  </p>
+                  <Button type="submit" variant="primary">
+                    Submit for approval
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Card>
+        )}
+      </AsyncBoundary>
+    </>
+  );
+}

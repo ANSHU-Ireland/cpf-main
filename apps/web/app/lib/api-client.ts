@@ -91,6 +91,33 @@ import type {
   PromptVersionView,
   RiskTier,
 } from './types';
+import type {
+  AiLiteracyView,
+  AiSystemView,
+  ChangeRequestView,
+  ClassificationView,
+  ConformityAssessmentView,
+  DatasetView,
+  DataUseView,
+  DeployerInstructionsView,
+  EvidenceCollectionView,
+  ImpactAssessmentView,
+  IncidentSeverity,
+  MarketAccessType,
+  MarketAccessView,
+  OversightPlanView,
+  PostMarketPlanView,
+  QmsProcedureView,
+  RiskView,
+  SeriousIncidentView,
+  SignalDashboardView,
+  SignalPriority,
+  SignalType,
+  SignalView,
+  TechnicalDocView,
+  TraceabilityView,
+  VendorEvidenceView,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -716,4 +743,268 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ name, capabilities, dataScope }),
     }),
+
+  // ── Governance & Audit methods (GOV-01..18, AUD-01..02) ─────────────────────────────────────
+
+  // GOV-01: AI Systems
+  getAiSystems: (): Promise<Collection<AiSystemView>> =>
+    request<Collection<AiSystemView>>('/api/governance/ai-systems'),
+  registerAiSystem: (
+    name: string,
+    purpose: string,
+    classification: string,
+  ): Promise<AiSystemView> =>
+    request<AiSystemView>('/api/governance/ai-systems', {
+      method: 'POST',
+      body: JSON.stringify({ name, purpose, classification }),
+    }),
+
+  // GOV-02: AI Act Classification
+  getClassification: (systemId: string): Promise<ClassificationView> =>
+    request<ClassificationView>(`/api/governance/classifications/${systemId}`),
+  recordClassification: (
+    systemId: string,
+    role: string,
+    intendedPurpose: string,
+    classification: string,
+    reasoning: string,
+  ): Promise<ClassificationView> =>
+    request<ClassificationView>('/api/governance/classifications', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, role, intendedPurpose, classification, reasoning }),
+    }),
+
+  // GOV-03: Risks
+  getRisks: (): Promise<Collection<RiskView>> =>
+    request<Collection<RiskView>>('/api/governance/risks'),
+  updateRisk: (
+    title: string,
+    riskLevel: 'low' | 'medium' | 'high' | 'critical',
+    controls: string,
+    residual: string,
+  ): Promise<RiskView> =>
+    request<RiskView>('/api/governance/risks', {
+      method: 'POST',
+      body: JSON.stringify({ title, riskLevel, controls, residual }),
+    }),
+
+  // GOV-04: Datasets
+  getDatasets: (): Promise<Collection<DatasetView>> =>
+    request<Collection<DatasetView>>('/api/governance/datasets'),
+  registerDataset: (
+    name: string,
+    provenance: string,
+    lawfulBasis: string,
+    representativeness: string,
+  ): Promise<DatasetView> =>
+    request<DatasetView>('/api/governance/datasets', {
+      method: 'POST',
+      body: JSON.stringify({ name, provenance, lawfulBasis, representativeness }),
+    }),
+
+  // GOV-05: Technical Documentation
+  getTechnicalDocs: (): Promise<Collection<TechnicalDocView>> =>
+    request<Collection<TechnicalDocView>>('/api/governance/technical-docs'),
+  createTechnicalDocVersion: (systemId: string, version: string): Promise<TechnicalDocView> =>
+    request<TechnicalDocView>('/api/governance/technical-docs', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, version }),
+    }),
+
+  // GOV-06: QMS Procedures
+  getQmsProcedures: (): Promise<Collection<QmsProcedureView>> =>
+    request<Collection<QmsProcedureView>>('/api/governance/qms'),
+  addQmsProcedure: (title: string, policy: string): Promise<QmsProcedureView> =>
+    request<QmsProcedureView>('/api/governance/qms', {
+      method: 'POST',
+      body: JSON.stringify({ title, policy }),
+    }),
+
+  // GOV-07: Data Use
+  getDataUse: (): Promise<Collection<DataUseView>> =>
+    request<Collection<DataUseView>>('/api/governance/data-use'),
+  addDataUsePurpose: (
+    purpose: string,
+    lawfulBasis: string,
+    categories: string,
+    recipients: string,
+    retention: string,
+  ): Promise<DataUseView> =>
+    request<DataUseView>('/api/governance/data-use', {
+      method: 'POST',
+      body: JSON.stringify({ purpose, lawfulBasis, categories, recipients, retention }),
+    }),
+
+  // GOV-08: Impact Assessment
+  getImpactAssessment: (systemId: string): Promise<ImpactAssessmentView> =>
+    request<ImpactAssessmentView>(`/api/governance/impact-assessments/${systemId}`),
+  recordImpactAssessment: (
+    systemId: string,
+    assessmentType: 'DPIA' | 'FundamentalRights',
+    outcome: string,
+    rationale: string,
+  ): Promise<ImpactAssessmentView> =>
+    request<ImpactAssessmentView>('/api/governance/impact-assessments', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, assessmentType, outcome, rationale }),
+    }),
+
+  // GOV-09: Oversight Plan
+  getOversightPlan: (systemId: string): Promise<OversightPlanView> =>
+    request<OversightPlanView>(`/api/governance/oversight/${systemId}`),
+  approveOversightPlan: (
+    systemId: string,
+    authority: string,
+    competency: string,
+    stoppingRules: string,
+    outcome: string,
+    rationale: string,
+  ): Promise<OversightPlanView> =>
+    request<OversightPlanView>('/api/governance/oversight', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, authority, competency, stoppingRules, outcome, rationale }),
+    }),
+
+  // GOV-10: Deployer Instructions
+  getDeployerInstructions: (): Promise<Collection<DeployerInstructionsView>> =>
+    request<Collection<DeployerInstructionsView>>('/api/governance/deployer-instructions'),
+  publishDeployerInstructions: (
+    systemId: string,
+    version: string,
+    limitations: string,
+    oversight: string,
+  ): Promise<DeployerInstructionsView> =>
+    request<DeployerInstructionsView>('/api/governance/deployer-instructions', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, version, limitations, oversight }),
+    }),
+
+  // GOV-11: AI Literacy
+  getAiLiteracy: (): Promise<Collection<AiLiteracyView>> =>
+    request<Collection<AiLiteracyView>>('/api/governance/ai-literacy'),
+  assignTraining: (
+    role: string,
+    trainingModule: string,
+    assignee: string,
+  ): Promise<AiLiteracyView> =>
+    request<AiLiteracyView>('/api/governance/ai-literacy', {
+      method: 'POST',
+      body: JSON.stringify({ role, trainingModule, assignee }),
+    }),
+
+  // GOV-12: Conformity Assessment
+  getConformityAssessment: (systemId: string): Promise<ConformityAssessmentView> =>
+    request<ConformityAssessmentView>(`/api/governance/conformity/${systemId}`),
+  submitConformityAssessment: (
+    systemId: string,
+    requirements: string,
+    tests: string,
+    gaps: string,
+    outcome: string,
+    rationale: string,
+  ): Promise<ConformityAssessmentView> =>
+    request<ConformityAssessmentView>('/api/governance/conformity', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, requirements, tests, gaps, outcome, rationale }),
+    }),
+
+  // GOV-13: Market Access
+  getMarketAccess: (): Promise<Collection<MarketAccessView>> =>
+    request<Collection<MarketAccessView>>('/api/governance/market-access'),
+  recordMarketAccess: (
+    systemId: string,
+    accessType: MarketAccessType,
+    evidence: string,
+  ): Promise<MarketAccessView> =>
+    request<MarketAccessView>('/api/governance/market-access', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, accessType, evidence }),
+    }),
+
+  // GOV-14: Post-Market Plan
+  getPostMarketPlan: (systemId: string): Promise<PostMarketPlanView> =>
+    request<PostMarketPlanView>(`/api/governance/post-market/${systemId}`),
+  approvePostMarketPlan: (
+    systemId: string,
+    metrics: string,
+    thresholds: string,
+    reviewCadence: string,
+    outcome: string,
+    rationale: string,
+  ): Promise<PostMarketPlanView> =>
+    request<PostMarketPlanView>('/api/governance/post-market', {
+      method: 'POST',
+      body: JSON.stringify({ systemId, metrics, thresholds, reviewCadence, outcome, rationale }),
+    }),
+
+  // GOV-15: Signals Dashboard
+  getSignalsDashboard: (): Promise<SignalDashboardView> =>
+    request<SignalDashboardView>('/api/governance/signals'),
+  createSignal: (
+    type: SignalType,
+    priority: SignalPriority,
+    description: string,
+  ): Promise<SignalView> =>
+    request<SignalView>('/api/governance/signals', {
+      method: 'POST',
+      body: JSON.stringify({ type, priority, description }),
+    }),
+
+  // GOV-16: Serious Incidents
+  getIncidents: (): Promise<Collection<SeriousIncidentView>> =>
+    request<Collection<SeriousIncidentView>>('/api/governance/incidents'),
+  escalateIncident: (
+    title: string,
+    severity: IncidentSeverity,
+    contained: boolean,
+    notified: boolean,
+  ): Promise<SeriousIncidentView> =>
+    request<SeriousIncidentView>('/api/governance/incidents', {
+      method: 'POST',
+      body: JSON.stringify({ title, severity, contained, notified }),
+    }),
+
+  // GOV-17: Vendor Evidence
+  getVendorEvidence: (): Promise<Collection<VendorEvidenceView>> =>
+    request<Collection<VendorEvidenceView>>('/api/governance/vendors'),
+  requestVendorEvidence: (vendor: string, obligation: string): Promise<VendorEvidenceView> =>
+    request<VendorEvidenceView>('/api/governance/vendors', {
+      method: 'POST',
+      body: JSON.stringify({ vendor, obligation }),
+    }),
+
+  // GOV-18: Change Requests
+  getChangeRequests: (): Promise<Collection<ChangeRequestView>> =>
+    request<Collection<ChangeRequestView>>('/api/governance/changes'),
+  submitChangeRequest: (
+    title: string,
+    significance: 'minor' | 'major' | 'substantial',
+    affectedControls: string,
+  ): Promise<ChangeRequestView> =>
+    request<ChangeRequestView>('/api/governance/changes', {
+      method: 'POST',
+      body: JSON.stringify({ title, significance, affectedControls }),
+    }),
+  recordChangeDecision: (
+    id: string,
+    outcome: string,
+    rationale: string,
+  ): Promise<ChangeRequestView> =>
+    request<ChangeRequestView>(`/api/governance/changes/${id}`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome, rationale }),
+    }),
+
+  // AUD-01: Evidence Collections
+  getEvidenceCollections: (): Promise<Collection<EvidenceCollectionView>> =>
+    request<Collection<EvidenceCollectionView>>('/api/audit/evidence'),
+  createEvidenceCollection: (title: string, purpose: string): Promise<EvidenceCollectionView> =>
+    request<EvidenceCollectionView>('/api/audit/evidence', {
+      method: 'POST',
+      body: JSON.stringify({ title, purpose }),
+    }),
+
+  // AUD-02: Traceability
+  getTraceability: (): Promise<Collection<TraceabilityView>> =>
+    request<Collection<TraceabilityView>>('/api/audit/traceability'),
 };

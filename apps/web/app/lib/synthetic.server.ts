@@ -96,6 +96,33 @@ import type {
   PromptVersionView,
   RiskTier,
 } from './types';
+import type {
+  AiLiteracyView,
+  AiSystemView,
+  ChangeRequestView,
+  ClassificationView,
+  ConformityAssessmentView,
+  DatasetView,
+  DataUseView,
+  DeployerInstructionsView,
+  EvidenceCollectionView,
+  ImpactAssessmentView,
+  IncidentSeverity,
+  MarketAccessType,
+  MarketAccessView,
+  OversightPlanView,
+  PostMarketPlanView,
+  QmsProcedureView,
+  RiskView,
+  SeriousIncidentView,
+  SignalDashboardView,
+  SignalPriority,
+  SignalType,
+  SignalView,
+  TechnicalDocView,
+  TraceabilityView,
+  VendorEvidenceView,
+} from './types';
 
 /**
  * Process-local synthetic data source for the demo web app. This is intentionally in-memory and
@@ -2333,5 +2360,773 @@ export const assessmentStore = {
 
   reset(): void {
     assessment = freshAssessment();
+  },
+};
+
+// ── Governance & Audit store (GOV-01..18, AUD-01..02) ──────────────────────────────────────────
+// Invariants: governance decisions require human authority checkpoints with outcome+rationale;
+// versioned artifacts are immutable; chain of custody is maintained for evidence collections.
+
+export const AI_SYSTEM_ID = 'ais_frontend_demo';
+export const EVIDENCE_COLLECTION_ID = 'evc_frontend_demo';
+
+interface GovernanceState {
+  aiSystems: AiSystemView[];
+  classifications: Map<string, ClassificationView>;
+  risks: RiskView[];
+  datasets: DatasetView[];
+  technicalDocs: TechnicalDocView[];
+  qmsProcedures: QmsProcedureView[];
+  dataUse: DataUseView[];
+  impactAssessments: Map<string, ImpactAssessmentView>;
+  oversightPlans: Map<string, OversightPlanView>;
+  deployerInstructions: DeployerInstructionsView[];
+  aiLiteracy: AiLiteracyView[];
+  conformityAssessments: Map<string, ConformityAssessmentView>;
+  marketAccess: MarketAccessView[];
+  postMarketPlans: Map<string, PostMarketPlanView>;
+  signals: SignalView[];
+  incidents: SeriousIncidentView[];
+  vendors: VendorEvidenceView[];
+  changes: ChangeRequestView[];
+  evidenceCollections: EvidenceCollectionView[];
+  traceability: TraceabilityView[];
+}
+
+function freshGovernance(): GovernanceState {
+  const classification: ClassificationView = {
+    systemId: AI_SYSTEM_ID,
+    role: 'Provider',
+    intendedPurpose: 'Employment candidate assessment',
+    classification: null,
+    reasoning: null,
+    resolved: false,
+  };
+  const impactAssessment: ImpactAssessmentView = {
+    systemId: AI_SYSTEM_ID,
+    assessmentType: 'DPIA',
+    outcome: null,
+    rationale: null,
+    resolved: false,
+  };
+  const oversightPlan: OversightPlanView = {
+    systemId: AI_SYSTEM_ID,
+    authority: null,
+    competency: null,
+    stoppingRules: null,
+    outcome: null,
+    rationale: null,
+    resolved: false,
+  };
+  const conformityAssessment: ConformityAssessmentView = {
+    systemId: AI_SYSTEM_ID,
+    requirements: 'EU AI Act, ISO 42001',
+    tests: 'Validation suite, bias testing',
+    gaps: 'Pending final oversight approval',
+    outcome: null,
+    rationale: null,
+    resolved: false,
+  };
+  const postMarketPlan: PostMarketPlanView = {
+    systemId: AI_SYSTEM_ID,
+    metrics: 'Accuracy, bias metrics, user feedback',
+    thresholds: '95% accuracy, <5% bias',
+    reviewCadence: 'Quarterly',
+    outcome: null,
+    rationale: null,
+    resolved: false,
+  };
+  return {
+    aiSystems: [
+      {
+        id: AI_SYSTEM_ID,
+        name: 'CPF Assessment Platform',
+        purpose: 'Employment candidate assessment',
+        classification: 'High-risk (AI Act Article 6)',
+        status: 'ready',
+        owner: 'AI Governance',
+        updatedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+      },
+      {
+        id: 'ais_secondary',
+        name: 'Reviewer Note Summarizer',
+        purpose: 'Advisory summarization only',
+        classification: 'Limited-risk',
+        status: 'complete',
+        owner: 'AI Governance',
+        updatedAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+      },
+    ],
+    classifications: new Map([[AI_SYSTEM_ID, classification]]),
+    risks: [
+      {
+        id: randomId('rsk'),
+        title: 'Bias in candidate scoring',
+        riskLevel: 'high',
+        controls: 'Diverse training data, bias testing, human oversight',
+        residual: 'Medium',
+        status: 'ready',
+        owner: 'Risk Owner',
+      },
+      {
+        id: randomId('rsk'),
+        title: 'Data breach',
+        riskLevel: 'critical',
+        controls: 'Encryption, access controls, audit logging',
+        residual: 'Low',
+        status: 'complete',
+        owner: 'CISO',
+      },
+    ],
+    datasets: [
+      {
+        id: randomId('dst'),
+        name: 'Training Corpus 2026-Q1',
+        provenance: 'Synthetically generated, validated',
+        lawfulBasis: 'Legitimate interest (employment)',
+        representativeness: 'Age, gender, region balanced',
+        status: 'complete',
+        owner: 'Data Steward',
+        updatedAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+      },
+    ],
+    technicalDocs: [
+      {
+        id: randomId('tdc'),
+        systemId: AI_SYSTEM_ID,
+        version: 'v2.0',
+        status: 'ready',
+        owner: 'Compliance',
+        reference: `TDC-${randomId('ref').slice(-4).toUpperCase()}`,
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+    qmsProcedures: [
+      {
+        id: randomId('qms'),
+        title: 'Assessment Version Approval',
+        policy: 'All versions require human validation before activation',
+        approvedBy: 'Compliance',
+        status: 'complete',
+        owner: 'Compliance',
+        updatedAt: new Date(Date.now() - 15 * 86400000).toISOString(),
+      },
+    ],
+    dataUse: [
+      {
+        id: randomId('dup'),
+        purpose: 'Employment candidate assessment',
+        lawfulBasis: 'Legitimate interest',
+        categories: 'Candidate responses, metadata',
+        recipients: 'Employer, assessment reviewers',
+        retention: '3 years post-decision',
+        status: 'ready',
+        owner: 'DPO',
+      },
+    ],
+    impactAssessments: new Map([[AI_SYSTEM_ID, impactAssessment]]),
+    oversightPlans: new Map([[AI_SYSTEM_ID, oversightPlan]]),
+    deployerInstructions: [
+      {
+        id: randomId('dpi'),
+        systemId: AI_SYSTEM_ID,
+        version: 'v1.2',
+        limitations: 'No automated decisions; human oversight required',
+        oversight: 'Authorised reviewer must approve all outcomes',
+        status: 'ready',
+        owner: 'Compliance',
+        reference: `DPI-${randomId('ref').slice(-4).toUpperCase()}`,
+      },
+    ],
+    aiLiteracy: [
+      {
+        id: randomId('lit'),
+        role: 'Reviewer',
+        trainingModule: 'AI Governance Essentials',
+        assignee: 'A. Murphy',
+        completedAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+        expiresAt: new Date(Date.now() + 335 * 86400000).toISOString(),
+        status: 'complete',
+      },
+      {
+        id: randomId('lit'),
+        role: 'Employer Admin',
+        trainingModule: 'AI Governance Essentials',
+        assignee: 'J. Patel',
+        completedAt: null,
+        expiresAt: null,
+        status: 'attention',
+      },
+    ],
+    conformityAssessments: new Map([[AI_SYSTEM_ID, conformityAssessment]]),
+    marketAccess: [
+      {
+        id: randomId('mka'),
+        systemId: AI_SYSTEM_ID,
+        accessType: 'declaration',
+        completedAt: null,
+        evidence: 'Pending final conformity approval',
+        status: 'draft',
+        owner: 'Compliance',
+      },
+    ],
+    postMarketPlans: new Map([[AI_SYSTEM_ID, postMarketPlan]]),
+    signals: [
+      {
+        id: randomId('sig'),
+        type: 'bias',
+        priority: 'high',
+        description: 'Adverse impact detected in age cohort',
+        status: 'attention',
+        owner: 'AI Governance',
+        detectedAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+      },
+      {
+        id: randomId('sig'),
+        type: 'drift',
+        priority: 'medium',
+        description: 'Model accuracy degradation',
+        status: 'ready',
+        owner: 'Operations',
+        detectedAt: new Date(Date.now() - 8 * 3600000).toISOString(),
+      },
+    ],
+    incidents: [
+      {
+        id: randomId('inc'),
+        title: 'Incorrect decision issued',
+        severity: 'serious',
+        contained: true,
+        notified: true,
+        status: 'complete',
+        owner: 'Incident Manager',
+        occurredAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+      },
+    ],
+    vendors: [
+      {
+        id: randomId('vnd'),
+        vendor: 'AI Model Provider',
+        obligation: 'Annual safety certification',
+        evidence: 'Certificate valid through 2027-03-01',
+        expiresAt: new Date(Date.now() + 180 * 86400000).toISOString(),
+        status: 'ready',
+        owner: 'Vendor Manager',
+      },
+    ],
+    changes: [
+      {
+        id: randomId('chg'),
+        title: 'Update assessment rubric',
+        significance: 'major',
+        affectedControls: 'Bias testing, reviewer training',
+        outcome: null,
+        rationale: null,
+        resolved: false,
+        status: 'draft',
+        owner: 'Change Authority',
+      },
+    ],
+    evidenceCollections: [
+      {
+        id: EVIDENCE_COLLECTION_ID,
+        title: 'Q1 2026 Conformity Evidence',
+        purpose: 'EU AI Act conformity assessment',
+        custodian: 'Compliance',
+        sealed: false,
+        chainOfCustody: [
+          {
+            actor: 'Compliance',
+            action: 'Created collection',
+            timestamp: new Date(Date.now() - 15 * 86400000).toISOString(),
+          },
+          {
+            actor: 'Auditor',
+            action: 'Added evidence',
+            timestamp: new Date(Date.now() - 10 * 86400000).toISOString(),
+          },
+        ],
+        status: 'ready',
+        createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
+      },
+    ],
+    traceability: [
+      {
+        requirementId: 'FR-GOV-08',
+        description: 'Deployer instructions',
+        controls: ['Human oversight plan', 'Training requirements'],
+        surfaces: ['GOV-10', 'GOV-09', 'GOV-11'],
+        endpoints: ['/governance/deployer-instructions', '/governance/oversight'],
+        evidence: ['Technical documentation v2.0', 'Training records'],
+      },
+      {
+        requirementId: 'FR-AUD-01',
+        description: 'Evidence retention',
+        controls: ['Chain of custody', 'Immutable collections'],
+        surfaces: ['AUD-01'],
+        endpoints: ['/audit/evidence-collections'],
+        evidence: ['Q1 2026 Conformity Evidence'],
+      },
+    ],
+  };
+}
+
+let governance: GovernanceState = freshGovernance();
+
+export const governanceStore = {
+  aiSystemId: AI_SYSTEM_ID,
+  evidenceCollectionId: EVIDENCE_COLLECTION_ID,
+
+  // GOV-01: AI Systems
+  getAiSystems(): Collection<AiSystemView> {
+    return { items: governance.aiSystems, total: governance.aiSystems.length };
+  },
+  registerAiSystem(name: string, purpose: string, classification: string): AiSystemView {
+    const sys: AiSystemView = {
+      id: randomId('ais'),
+      name,
+      purpose,
+      classification,
+      status: 'draft',
+      owner: 'You',
+      updatedAt: new Date().toISOString(),
+    };
+    governance.aiSystems.unshift(sys);
+    return sys;
+  },
+
+  // GOV-02: AI Act Classification
+  getClassification(systemId: string): ClassificationView | null {
+    return governance.classifications.get(systemId) ?? null;
+  },
+  recordClassification(
+    systemId: string,
+    role: string,
+    intendedPurpose: string,
+    classification: string,
+    reasoning: string,
+  ): ClassificationView {
+    const c: ClassificationView = {
+      systemId,
+      role,
+      intendedPurpose,
+      classification,
+      reasoning,
+      resolved: true,
+    };
+    governance.classifications.set(systemId, c);
+    return c;
+  },
+
+  // GOV-03: Risks
+  getRisks(): Collection<RiskView> {
+    return { items: governance.risks, total: governance.risks.length };
+  },
+  updateRisk(
+    title: string,
+    riskLevel: 'low' | 'medium' | 'high' | 'critical',
+    controls: string,
+    residual: string,
+  ): RiskView {
+    const r: RiskView = {
+      id: randomId('rsk'),
+      title,
+      riskLevel,
+      controls,
+      residual,
+      status: 'draft',
+      owner: 'You',
+    };
+    governance.risks.unshift(r);
+    return r;
+  },
+
+  // GOV-04: Datasets
+  getDatasets(): Collection<DatasetView> {
+    return { items: governance.datasets, total: governance.datasets.length };
+  },
+  registerDataset(
+    name: string,
+    provenance: string,
+    lawfulBasis: string,
+    representativeness: string,
+  ): DatasetView {
+    const d: DatasetView = {
+      id: randomId('dst'),
+      name,
+      provenance,
+      lawfulBasis,
+      representativeness,
+      status: 'draft',
+      owner: 'You',
+      updatedAt: new Date().toISOString(),
+    };
+    governance.datasets.unshift(d);
+    return d;
+  },
+
+  // GOV-05: Technical Documentation
+  getTechnicalDocs(): Collection<TechnicalDocView> {
+    return { items: governance.technicalDocs, total: governance.technicalDocs.length };
+  },
+  createTechnicalDocVersion(systemId: string, version: string): TechnicalDocView {
+    const doc: TechnicalDocView = {
+      id: randomId('tdc'),
+      systemId,
+      version,
+      status: 'draft',
+      owner: 'You',
+      reference: `TDC-${randomId('ref').slice(-4).toUpperCase()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    governance.technicalDocs.unshift(doc);
+    return doc;
+  },
+
+  // GOV-06: QMS Procedures
+  getQmsProcedures(): Collection<QmsProcedureView> {
+    return { items: governance.qmsProcedures, total: governance.qmsProcedures.length };
+  },
+  addQmsProcedure(title: string, policy: string): QmsProcedureView {
+    const proc: QmsProcedureView = {
+      id: randomId('qms'),
+      title,
+      policy,
+      approvedBy: null,
+      status: 'draft',
+      owner: 'You',
+      updatedAt: new Date().toISOString(),
+    };
+    governance.qmsProcedures.unshift(proc);
+    return proc;
+  },
+
+  // GOV-07: Data Use
+  getDataUse(): Collection<DataUseView> {
+    return { items: governance.dataUse, total: governance.dataUse.length };
+  },
+  addDataUsePurpose(
+    purpose: string,
+    lawfulBasis: string,
+    categories: string,
+    recipients: string,
+    retention: string,
+  ): DataUseView {
+    const du: DataUseView = {
+      id: randomId('dup'),
+      purpose,
+      lawfulBasis,
+      categories,
+      recipients,
+      retention,
+      status: 'draft',
+      owner: 'You',
+    };
+    governance.dataUse.unshift(du);
+    return du;
+  },
+
+  // GOV-08: Impact Assessment
+  getImpactAssessment(systemId: string): ImpactAssessmentView | null {
+    return governance.impactAssessments.get(systemId) ?? null;
+  },
+  recordImpactAssessment(
+    systemId: string,
+    assessmentType: 'DPIA' | 'FundamentalRights',
+    outcome: string,
+    rationale: string,
+  ): ImpactAssessmentView {
+    const ia: ImpactAssessmentView = {
+      systemId,
+      assessmentType,
+      outcome,
+      rationale,
+      resolved: true,
+    };
+    governance.impactAssessments.set(systemId, ia);
+    return ia;
+  },
+
+  // GOV-09: Oversight Plan
+  getOversightPlan(systemId: string): OversightPlanView | null {
+    return governance.oversightPlans.get(systemId) ?? null;
+  },
+  approveOversightPlan(
+    systemId: string,
+    authority: string,
+    competency: string,
+    stoppingRules: string,
+    outcome: string,
+    rationale: string,
+  ): OversightPlanView {
+    const op: OversightPlanView = {
+      systemId,
+      authority,
+      competency,
+      stoppingRules,
+      outcome,
+      rationale,
+      resolved: true,
+    };
+    governance.oversightPlans.set(systemId, op);
+    return op;
+  },
+
+  // GOV-10: Deployer Instructions
+  getDeployerInstructions(): Collection<DeployerInstructionsView> {
+    return {
+      items: governance.deployerInstructions,
+      total: governance.deployerInstructions.length,
+    };
+  },
+  publishDeployerInstructions(
+    systemId: string,
+    version: string,
+    limitations: string,
+    oversight: string,
+  ): DeployerInstructionsView {
+    const dpi: DeployerInstructionsView = {
+      id: randomId('dpi'),
+      systemId,
+      version,
+      limitations,
+      oversight,
+      status: 'draft',
+      owner: 'You',
+      reference: `DPI-${randomId('ref').slice(-4).toUpperCase()}`,
+    };
+    governance.deployerInstructions.unshift(dpi);
+    return dpi;
+  },
+
+  // GOV-11: AI Literacy
+  getAiLiteracy(): Collection<AiLiteracyView> {
+    return { items: governance.aiLiteracy, total: governance.aiLiteracy.length };
+  },
+  assignTraining(role: string, trainingModule: string, assignee: string): AiLiteracyView {
+    const lit: AiLiteracyView = {
+      id: randomId('lit'),
+      role,
+      trainingModule,
+      assignee,
+      completedAt: null,
+      expiresAt: null,
+      status: 'attention',
+    };
+    governance.aiLiteracy.unshift(lit);
+    return lit;
+  },
+
+  // GOV-12: Conformity Assessment
+  getConformityAssessment(systemId: string): ConformityAssessmentView | null {
+    return governance.conformityAssessments.get(systemId) ?? null;
+  },
+  submitConformityAssessment(
+    systemId: string,
+    requirements: string,
+    tests: string,
+    gaps: string,
+    outcome: string,
+    rationale: string,
+  ): ConformityAssessmentView {
+    const ca: ConformityAssessmentView = {
+      systemId,
+      requirements,
+      tests,
+      gaps,
+      outcome,
+      rationale,
+      resolved: true,
+    };
+    governance.conformityAssessments.set(systemId, ca);
+    return ca;
+  },
+
+  // GOV-13: Market Access
+  getMarketAccess(): Collection<MarketAccessView> {
+    return { items: governance.marketAccess, total: governance.marketAccess.length };
+  },
+  recordMarketAccess(
+    systemId: string,
+    accessType: MarketAccessType,
+    evidence: string,
+  ): MarketAccessView {
+    const ma: MarketAccessView = {
+      id: randomId('mka'),
+      systemId,
+      accessType,
+      completedAt: new Date().toISOString(),
+      evidence,
+      status: 'complete',
+      owner: 'You',
+    };
+    governance.marketAccess.unshift(ma);
+    return ma;
+  },
+
+  // GOV-14: Post-Market Plan
+  getPostMarketPlan(systemId: string): PostMarketPlanView | null {
+    return governance.postMarketPlans.get(systemId) ?? null;
+  },
+  approvePostMarketPlan(
+    systemId: string,
+    metrics: string,
+    thresholds: string,
+    reviewCadence: string,
+    outcome: string,
+    rationale: string,
+  ): PostMarketPlanView {
+    const pmp: PostMarketPlanView = {
+      systemId,
+      metrics,
+      thresholds,
+      reviewCadence,
+      outcome,
+      rationale,
+      resolved: true,
+    };
+    governance.postMarketPlans.set(systemId, pmp);
+    return pmp;
+  },
+
+  // GOV-15: Signals Dashboard
+  getSignalsDashboard(): SignalDashboardView {
+    const ready = governance.signals.filter((s) => s.status === 'ready').length;
+    const attention = governance.signals.filter((s) => s.status === 'attention').length;
+    const inProgress = governance.signals.filter((s) => s.status === 'draft').length;
+    return {
+      readyNow: ready,
+      needsAttention: attention,
+      inProgress,
+      signals: governance.signals,
+      recentActivity: [
+        { event: 'Evidence version recorded', timestamp: '1h ago' },
+        { event: 'Human review submitted', timestamp: '2h ago' },
+      ],
+    };
+  },
+  createSignal(type: SignalType, priority: SignalPriority, description: string): SignalView {
+    const sig: SignalView = {
+      id: randomId('sig'),
+      type,
+      priority,
+      description,
+      status: 'attention',
+      owner: 'You',
+      detectedAt: new Date().toISOString(),
+    };
+    governance.signals.unshift(sig);
+    return sig;
+  },
+
+  // GOV-16: Serious Incidents
+  getIncidents(): Collection<SeriousIncidentView> {
+    return { items: governance.incidents, total: governance.incidents.length };
+  },
+  escalateIncident(
+    title: string,
+    severity: IncidentSeverity,
+    contained: boolean,
+    notified: boolean,
+  ): SeriousIncidentView {
+    const inc: SeriousIncidentView = {
+      id: randomId('inc'),
+      title,
+      severity,
+      contained,
+      notified,
+      status: 'draft',
+      owner: 'You',
+      occurredAt: new Date().toISOString(),
+    };
+    governance.incidents.unshift(inc);
+    return inc;
+  },
+
+  // GOV-17: Vendor Evidence
+  getVendorEvidence(): Collection<VendorEvidenceView> {
+    return { items: governance.vendors, total: governance.vendors.length };
+  },
+  requestVendorEvidence(vendor: string, obligation: string): VendorEvidenceView {
+    const ve: VendorEvidenceView = {
+      id: randomId('vnd'),
+      vendor,
+      obligation,
+      evidence: null,
+      expiresAt: null,
+      status: 'attention',
+      owner: 'You',
+    };
+    governance.vendors.unshift(ve);
+    return ve;
+  },
+
+  // GOV-18: Change Requests
+  getChangeRequests(): Collection<ChangeRequestView> {
+    return { items: governance.changes, total: governance.changes.length };
+  },
+  submitChangeRequest(
+    title: string,
+    significance: 'minor' | 'major' | 'substantial',
+    affectedControls: string,
+  ): ChangeRequestView {
+    const cr: ChangeRequestView = {
+      id: randomId('chg'),
+      title,
+      significance,
+      affectedControls,
+      outcome: null,
+      rationale: null,
+      resolved: false,
+      status: 'draft',
+      owner: 'You',
+    };
+    governance.changes.unshift(cr);
+    return cr;
+  },
+  recordChangeDecision(id: string, outcome: string, rationale: string): ChangeRequestView | null {
+    const index = governance.changes.findIndex((c) => c.id === id);
+    if (index === -1) return null;
+    const current = governance.changes[index];
+    if (current === undefined) return null;
+    governance.changes[index] = { ...current, outcome, rationale, resolved: true };
+    return governance.changes[index] ?? null;
+  },
+
+  // AUD-01: Evidence Collections
+  getEvidenceCollections(): Collection<EvidenceCollectionView> {
+    return {
+      items: governance.evidenceCollections,
+      total: governance.evidenceCollections.length,
+    };
+  },
+  createEvidenceCollection(title: string, purpose: string): EvidenceCollectionView {
+    const ec: EvidenceCollectionView = {
+      id: randomId('evc'),
+      title,
+      purpose,
+      custodian: 'You',
+      sealed: false,
+      chainOfCustody: [
+        {
+          actor: 'You',
+          action: 'Created collection',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+    };
+    governance.evidenceCollections.unshift(ec);
+    return ec;
+  },
+
+  // AUD-02: Traceability
+  getTraceability(): Collection<TraceabilityView> {
+    return { items: governance.traceability, total: governance.traceability.length };
+  },
+
+  reset(): void {
+    governance = freshGovernance();
   },
 };

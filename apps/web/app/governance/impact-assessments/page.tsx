@@ -1,0 +1,136 @@
+'use client';
+import { useCallback, useId, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { AsyncBoundary, Badge, Button, Card, PageHeader, useAsync } from '@cpf/ui';
+import type { ImpactAssessmentView } from '../../../lib/types';
+import { api } from '../../../lib/api-client';
+import { governanceStore } from '../../../lib/synthetic.server';
+
+export default function GovernanceImpactAssessmentsPage() {
+  const headingId = useId();
+  const params = useParams<{ systemId?: string }>();
+  const systemId = params?.systemId || governanceStore.aiSystemId;
+  const [data, setData] = useState<ImpactAssessmentView | null>(null);
+
+  const loader = useCallback(async () => {
+    const assessment = await api.getImpactAssessment(systemId);
+    setData(assessment);
+    return assessment;
+  }, [systemId]);
+
+  const state = useAsync<ImpactAssessmentView>(loader);
+
+  const handleRecord = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const assessmentType = (formData.get('assessmentType') as string) || '';
+    const outcome = (formData.get('outcome') as string) || '';
+    const rationale = (formData.get('rationale') as string) || '';
+    if (!assessmentType.trim() || !outcome.trim() || !rationale.trim()) return;
+    await api.recordImpactAssessment(
+      systemId,
+      assessmentType as 'DPIA' | 'FundamentalRights',
+      outcome.trim(),
+      rationale.trim(),
+    );
+    const updated = await api.getImpactAssessment(systemId);
+    setData(updated);
+  };
+
+  const fieldStyle =
+    'block w-full min-w-0 rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink focus:border-blue focus:ring-1 focus:ring-blue';
+  const labelStyle = 'block text-sm font-medium text-ink mb-1';
+
+  return (
+    <>
+      <PageHeader
+        title="Impact assessments"
+        description="Record DPIA and fundamental-rights impact evidence. No AI output on this surface."
+        headingId={headingId}
+      />
+
+      <AsyncBoundary state={state} onRetry={loader} label="Impact assessment">
+        {() => (
+          <Card
+            aria-label="Human authority checkpoint"
+            style={{ borderLeft: '3px solid var(--color-amber)' }}
+          >
+            <div className="mb-4">
+              <Badge tone="amber">Human authority checkpoint</Badge>
+              <p className="text-sm text-muted mt-2">
+                Human initiates and confirms consequential actions.
+              </p>
+            </div>
+
+            {data?.resolved ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Assessment type</h3>
+                  <Badge tone="blue">{data.assessmentType}</Badge>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Outcome</h3>
+                  <p className="text-sm text-muted">{data.outcome}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-ink mb-1">Rationale</h3>
+                  <p className="text-sm text-muted">{data.rationale}</p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleRecord} className="space-y-4">
+                <div>
+                  <label htmlFor="assessmentType" className={labelStyle}>
+                    Assessment type
+                  </label>
+                  <select id="assessmentType" name="assessmentType" required className={fieldStyle}>
+                    <option value="">No selection — choose deliberately</option>
+                    <option value="DPIA">DPIA (Data Protection Impact Assessment)</option>
+                    <option value="FundamentalRights">Fundamental Rights Impact</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="outcome" className={labelStyle}>
+                    Outcome
+                  </label>
+                  <input
+                    type="text"
+                    id="outcome"
+                    name="outcome"
+                    required
+                    minLength={2}
+                    placeholder="e.g. Approved with conditions"
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="rationale" className={labelStyle}>
+                    Rationale and cited evidence
+                  </label>
+                  <textarea
+                    id="rationale"
+                    name="rationale"
+                    required
+                    minLength={12}
+                    rows={4}
+                    placeholder="Explain the decision in plain language and link only the evidence needed for this purpose."
+                    className={fieldStyle}
+                  />
+                </div>
+                <div className="pt-2">
+                  <p className="text-sm text-muted mb-4">
+                    <strong>AI boundary:</strong> No AI output on this surface.
+                  </p>
+                  <Button type="submit" variant="primary">
+                    Record assessment
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Card>
+        )}
+      </AsyncBoundary>
+    </>
+  );
+}
