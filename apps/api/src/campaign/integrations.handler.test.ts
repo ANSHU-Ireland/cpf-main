@@ -4,6 +4,7 @@ import {
   handleGetIntegration,
   handleCreateIntegration,
   handleUpdateIntegration,
+  handleRotateIntegration,
   type IntegrationService,
 } from './integrations.handler.js';
 import type { Actor } from '@cpf/org';
@@ -28,6 +29,7 @@ function svc(ov: Partial<IntegrationService> = {}): IntegrationService {
       }),
     create: () => Promise.resolve({ status: 201, headers: {}, body: '{}' }),
     update: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
+    rotate: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
     ...ov,
   };
 }
@@ -61,4 +63,8 @@ describe('handleUpdateIntegration', () => {
     expect(
       (await handleUpdateIntegration(svc(), { actor, integrationId: ID, body: {} })).status,
     ).toBe(200));
+});
+describe('handleRotateIntegration', () => {
+  it('200', async () =>
+    expect((await handleRotateIntegration(svc(), { actor, integrationId: ID })).status).toBe(200));
 });

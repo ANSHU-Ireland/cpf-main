@@ -4,6 +4,7 @@ import {
   getIntegration,
   createIntegration,
   updateIntegration,
+  rotateIntegration,
   parseIntegrationCreate,
   parseIntegrationUpdate,
   parseIntegrationId,
@@ -30,6 +31,7 @@ function repo(ov: Partial<IntegrationRepository> = {}): IntegrationRepository {
     getIntegration: () => Promise.resolve(rec),
     createIntegration: () => Promise.resolve(rec),
     updateIntegration: () => Promise.resolve(rec),
+    rotateIntegration: () => Promise.resolve(rec),
     ...ov,
   };
 }
@@ -90,6 +92,22 @@ describe('updateIntegration', () => {
           admin,
           'x',
           { status: 'suspended' },
+        )
+      ).ok,
+    ).toBe(false));
+});
+describe('rotateIntegration', () => {
+  it('ok', async () =>
+    expect((await rotateIntegration({ repository: repo() }, admin, 'i1')).ok).toBe(true));
+  it('403', async () =>
+    expect((await rotateIntegration({ repository: repo() }, noRole, 'i1')).ok).toBe(false));
+  it('404', async () =>
+    expect(
+      (
+        await rotateIntegration(
+          { repository: repo({ rotateIntegration: () => Promise.resolve(null) }) },
+          admin,
+          'x',
         )
       ).ok,
     ).toBe(false));

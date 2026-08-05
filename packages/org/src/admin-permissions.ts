@@ -18,4 +18,13 @@ export const ADMIN_PERMISSIONS: readonly Permission[] = [
   { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_feature_flag' },
   { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_feature_flag' },
   { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_release' },
+  { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_audit' },
+  { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_audit' },
+  { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_job' },
+  { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_job' },
+  { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_maintenance' },
+  { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_maintenance' },
+  { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_support_case' },
+  { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_support_case' },
+  { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_privileged_access' },
 ];

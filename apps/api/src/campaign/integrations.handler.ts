@@ -3,6 +3,7 @@ import {
   getIntegration,
   createIntegration,
   updateIntegration,
+  rotateIntegration,
   parseIntegrationCreate,
   parseIntegrationUpdate,
   parseIntegrationId,
@@ -16,6 +17,7 @@ export interface IntegrationService {
   get(actor: Actor, id: string): ReturnType<typeof getIntegration>;
   create(actor: Actor, body: unknown): Promise<HttpResponse>;
   update(actor: Actor, id: string, body: unknown): Promise<HttpResponse>;
+  rotate(actor: Actor, id: string): Promise<HttpResponse>;
 }
 
 export function createIntegrationService(deps: {
@@ -52,6 +54,15 @@ export function createIntegrationService(deps: {
           errors: parsed.errors.map((message) => ({ detail: message })),
         });
       const r = await updateIntegration(deps, actor, validId, parsed.value);
+      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
+      return jsonResponse(200, r.integration, correlationId);
+    },
+    rotate: async (actor, id) => {
+      const correlationId = ensureCorrelationId();
+      const validId = parseIntegrationId(id);
+      if (validId === null)
+        return problemResponse({ status: 422, title: 'Invalid ID', correlationId });
+      const r = await rotateIntegration(deps, actor, validId);
       if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
       return jsonResponse(200, r.integration, correlationId);
     },
@@ -92,4 +103,11 @@ export async function handleUpdateIntegration(
   req: { actor: Actor; integrationId: string; body: unknown },
 ): Promise<HttpResponse> {
   return svc.update(req.actor, req.integrationId, req.body);
+}
+
+export async function handleRotateIntegration(
+  svc: IntegrationService,
+  req: { actor: Actor; integrationId: string },
+): Promise<HttpResponse> {
+  return svc.rotate(req.actor, req.integrationId);
 }

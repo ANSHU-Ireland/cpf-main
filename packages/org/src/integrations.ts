@@ -42,6 +42,7 @@ export interface IntegrationRepository {
     id: string,
     input: IntegrationUpdate,
   ): Promise<IntegrationRecord | null>;
+  rotateIntegration(actor: Actor, id: string): Promise<IntegrationRecord | null>;
 }
 
 const VALID_STATUSES: ReadonlySet<string> = new Set(INTEGRATION_STATUSES);
@@ -145,6 +146,23 @@ export async function updateIntegration(
   );
   if (!d.allowed) return { ok: false, status: 403, reason: d.reason };
   const r = await deps.repository.updateIntegration(actor, id, input);
+  if (r === null) return { ok: false, status: 404, reason: 'not_found' };
+  return { ok: true, integration: r };
+}
+
+export async function rotateIntegration(
+  deps: { repository: IntegrationRepository },
+  actor: Actor,
+  id: string,
+): Promise<Result<{ integration: IntegrationRecord }>> {
+  const d = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'integration', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!d.allowed) return { ok: false, status: 403, reason: d.reason };
+  const r = await deps.repository.rotateIntegration(actor, id);
   if (r === null) return { ok: false, status: 404, reason: 'not_found' };
   return { ok: true, integration: r };
 }
