@@ -18,4 +18,8 @@ export const ACCOUNT_PERMISSIONS: readonly Permission[] = [
   { role: AUTHENTICATED_ROLE, action: 'write', resourceType: 'self_onboarding' },
   { role: AUTHENTICATED_ROLE, action: 'read', resourceType: 'self_support_case' },
   { role: AUTHENTICATED_ROLE, action: 'write', resourceType: 'self_support_case' },
+  { role: AUTHENTICATED_ROLE, action: 'read', resourceType: 'self_auth' },
+  { role: AUTHENTICATED_ROLE, action: 'write', resourceType: 'self_auth' },
+  { role: AUTHENTICATED_ROLE, action: 'read', resourceType: 'self_reviewer' },
+  { role: AUTHENTICATED_ROLE, action: 'write', resourceType: 'self_reviewer' },
 ];

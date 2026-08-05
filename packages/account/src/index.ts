@@ -27,3 +27,5 @@ export * from './support-cases.js';
 export * from './support-message-types.js';
 export * from './support-case-detail-repository.js';
 export * from './support-case-detail.js';
+export * from './auth.js';
+export * from './reviewer.js';
