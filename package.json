@@ -15,6 +15,8 @@
     "format:write": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "serve": "pnpm --filter @cpf/server start",
+    "serve:dev": "pnpm --filter @cpf/server dev",
     "verify": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm run test"
   },
   "devDependencies": {

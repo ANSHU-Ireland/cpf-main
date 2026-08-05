@@ -2,6 +2,8 @@ node_modules
 dist
 build
 coverage
+.next
+next-env.d.ts
 docs/source-of-truth/originals
 cpf_openapi_baseline_v2.0.yaml
 *.csv

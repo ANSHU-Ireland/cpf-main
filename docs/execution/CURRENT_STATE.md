@@ -1,11 +1,44 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-04 · Wave 0 (Source & repository integrity)_
+_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 frontend (web app shell + account/auth journey) runnable_
 
 ## Where we are
 
-Wave 0 foundation established and **green**. Read this file, then `NEXT_ACTION.md`, before
-resuming. Do not re-plan the whole project or redo completed work.
+Two things are now true and both are **green** (format + typecheck + lint + 1,399 tests passing):
+
+1. **Backend contract layer is complete.** All **244** OpenAPI operations have domain use-cases,
+   deny-by-default authorization, HTTP handlers and tests across `@cpf/account`, `@cpf/org` and
+   `apps/api`. This is the vertical-slice **backend** for every operation.
+2. **Frontend was previously ~1% and is now bootstrapped.** A runnable **Next.js (App Router)** web
+   app exists in `apps/web` with a role-aware shell and the full **account + auth journey**
+   (sign-in, MFA, password recovery, activation, profile, preferences, sessions, security activity,
+   notices, support). Every page and API route returns 200 under `next dev`.
+
+> Honest scope note: reaching "244/244 operations" satisfied only the *operation-count* bullet of
+> the §20 completion definition — it is **backend-only**. The §20 requirement that **all 125
+> wireframe interfaces** be coded with state/responsive/a11y coverage is still largely open: this
+> checkpoint moves that from **1/125** to a runnable foundation plus **~11 account/auth screens**.
+> Remaining: candidate, assessment-runtime, reviewer, employer-admin, platform/assessment-admin,
+> governance, support/ops boards; the 4 known UI/API gaps; workers/ai-gateway/companion; and
+> Vercel/AWS deployment.
+
+### Wave 1 frontend — evidence
+
+- **App**: `apps/web` converted from a component library into a Next.js 14 App Router app.
+  `next.config.mjs` transpiles `@cpf/tokens`/`@cpf/ui` and adds a webpack `extensionAlias` so the
+  packages' NodeNext `.js` specifiers resolve. Token values flow into CSS via a `:root` custom-property
+  block generated from `@cpf/tokens` (`app/theme.ts`) — single source of truth, no drift.
+- **Shell & primitives**: `SyntheticBanner` (persistent synthetic-demo marker per data-integrity
+  invariant), responsive `AppShell` (sidebar collapses below 768px), `SidebarNav` (`aria-current`),
+  `Card`, `PageHeader`, `StatusBadge`, `AsyncBoundary` (explicit loading / error / 401-403-denied /
+  empty / ready states), `AuthCard`. Reuses `@cpf/ui` `Button`/`Input`/`Field`.
+- **Data**: typed `apiClient` + `useAsync` hook; Next route handlers under `app/api/**` serve
+  **synthetic** account data (no real personal data) — the single seam a real `@cpf/*` adapter will
+  replace. `Field` prop types relaxed to `string | undefined` for `exactOptionalPropertyTypes`.
+- **Verification**: `pnpm --filter @cpf/web typecheck` clean; all routes smoke-tested 200 on
+  `next dev` (pages + GET/PATCH/POST/DELETE handlers); full repo suite still 1,399/153 green.
+
+## Historical Wave 0 record (unchanged)
 
 ## Done (with evidence)
 

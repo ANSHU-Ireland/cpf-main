@@ -10,8 +10,8 @@ export interface FieldRenderProps {
 export interface FieldProps {
   label: string;
   required?: boolean;
-  error?: string;
-  hint?: string;
+  error?: string | undefined;
+  hint?: string | undefined;
   children: (props: FieldRenderProps) => ReactNode;
 }
 

@@ -9,6 +9,8 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       '**/node_modules/**',
+      '**/.next/**',
+      '**/next-env.d.ts',
       '**/src/generated/**',
       'docs/source-of-truth/originals/**',
     ],
