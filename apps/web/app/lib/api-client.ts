@@ -73,6 +73,24 @@ import type {
   TenantStatus,
   TenantView,
 } from './types';
+import type {
+  AiEvaluationView,
+  AiModelDetailView,
+  AiModelStatus,
+  AiModelView,
+  AssessmentDetailView,
+  AssessmentPreviewView,
+  AssessmentStatus,
+  AssessmentValidationView,
+  AssessmentVersionStatus,
+  AssessmentVersionView,
+  AssessmentView,
+  DefectSeverity,
+  DefectView,
+  PluginView,
+  PromptVersionView,
+  RiskTier,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -587,5 +605,115 @@ export const apiClient = {
     request<AccessGrantView>('/api/admin/privileged-access', {
       method: 'PATCH',
       body: JSON.stringify({ id, action }),
+    }),
+
+  // ── Assessment governance journey ──
+  getAssessments: (): Promise<Collection<AssessmentView>> =>
+    request<Collection<AssessmentView>>('/api/admin/assessments'),
+  createAssessment: (
+    name: string,
+    roleFamily: string,
+    riskTier: RiskTier,
+  ): Promise<AssessmentView> =>
+    request<AssessmentView>('/api/admin/assessments', {
+      method: 'POST',
+      body: JSON.stringify({ name, roleFamily, riskTier }),
+    }),
+  getAssessment: (id: string): Promise<AssessmentDetailView> =>
+    request<AssessmentDetailView>(`/api/admin/assessments/${id}`),
+  setAssessmentStatus: (id: string, status: AssessmentStatus): Promise<AssessmentDetailView> =>
+    request<AssessmentDetailView>(`/api/admin/assessments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  saveAssessmentVersion: (
+    id: string,
+    label: string,
+    rationale: string,
+  ): Promise<AssessmentVersionView> =>
+    request<AssessmentVersionView>(`/api/admin/assessments/${id}/version`, {
+      method: 'POST',
+      body: JSON.stringify({ label, rationale }),
+    }),
+  setVersionStatus: (
+    id: string,
+    versionId: string,
+    status: AssessmentVersionStatus,
+  ): Promise<AssessmentVersionView> =>
+    request<AssessmentVersionView>(`/api/admin/assessments/${id}/version`, {
+      method: 'PATCH',
+      body: JSON.stringify({ versionId, status }),
+    }),
+
+  getAssessmentPreview: (id: string): Promise<AssessmentPreviewView> =>
+    request<AssessmentPreviewView>(`/api/admin/assessments/${id}/preview`),
+
+  getAssessmentValidation: (id: string): Promise<AssessmentValidationView> =>
+    request<AssessmentValidationView>(`/api/admin/assessments/${id}/validation`),
+  resolveValidation: (
+    id: string,
+    outcome: string,
+    rationale: string,
+  ): Promise<AssessmentValidationView> =>
+    request<AssessmentValidationView>(`/api/admin/assessments/${id}/validation`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome, rationale }),
+    }),
+
+  getDefects: (): Promise<Collection<DefectView>> =>
+    request<Collection<DefectView>>('/api/admin/assessments/defects'),
+  logDefect: (title: string, severity: DefectSeverity, scope: string): Promise<DefectView> =>
+    request<DefectView>('/api/admin/assessments/defects', {
+      method: 'POST',
+      body: JSON.stringify({ title, severity, scope }),
+    }),
+
+  getAiModels: (): Promise<Collection<AiModelView>> =>
+    request<Collection<AiModelView>>('/api/admin/ai-models'),
+  registerAiModel: (
+    name: string,
+    provider: string,
+    useCase: string,
+    limitations: string,
+  ): Promise<AiModelView> =>
+    request<AiModelView>('/api/admin/ai-models', {
+      method: 'POST',
+      body: JSON.stringify({ name, provider, useCase, limitations }),
+    }),
+  getAiModel: (id: string): Promise<AiModelDetailView> =>
+    request<AiModelDetailView>(`/api/admin/ai-models/${id}`),
+  setAiModelStatus: (id: string, status: AiModelStatus): Promise<AiModelDetailView> =>
+    request<AiModelDetailView>(`/api/admin/ai-models/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  getAiEvaluation: (id: string): Promise<AiEvaluationView> =>
+    request<AiEvaluationView>(`/api/admin/ai-models/${id}/evaluation`),
+  recordEvaluation: (id: string, outcome: string, rationale: string): Promise<AiEvaluationView> =>
+    request<AiEvaluationView>(`/api/admin/ai-models/${id}/evaluation`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome, rationale }),
+    }),
+
+  getPromptVersions: (): Promise<Collection<PromptVersionView>> =>
+    request<Collection<PromptVersionView>>('/api/admin/prompts'),
+  createPromptVersion: (name: string): Promise<PromptVersionView> =>
+    request<PromptVersionView>('/api/admin/prompts', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  getPlugins: (): Promise<Collection<PluginView>> =>
+    request<Collection<PluginView>>('/api/admin/plugins'),
+  registerPlugin: (
+    name: string,
+    capabilities: readonly string[],
+    dataScope: string,
+  ): Promise<PluginView> =>
+    request<PluginView>('/api/admin/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ name, capabilities, dataScope }),
     }),
 };

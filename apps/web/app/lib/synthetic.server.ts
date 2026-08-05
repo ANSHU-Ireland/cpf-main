@@ -78,6 +78,24 @@ import type {
   TenantStatus,
   TenantView,
 } from './types';
+import type {
+  AiEvaluationView,
+  AiModelDetailView,
+  AiModelStatus,
+  AiModelView,
+  AssessmentDetailView,
+  AssessmentPreviewView,
+  AssessmentStatus,
+  AssessmentValidationView,
+  AssessmentVersionStatus,
+  AssessmentVersionView,
+  AssessmentView,
+  DefectSeverity,
+  DefectView,
+  PluginView,
+  PromptVersionView,
+  RiskTier,
+} from './types';
 
 /**
  * Process-local synthetic data source for the demo web app. This is intentionally in-memory and
@@ -1918,5 +1936,402 @@ export const adminStore = {
 
   reset(): void {
     admin = freshAdmin();
+  },
+};
+
+// ── Assessment governance store (Assessment Admin / AI Governance / Plugin Admin) ──────────────
+// Invariants: versions are immutable; activation requires resolved validation / recorded evaluation
+// and human approvals; no AI output is produced on these governance surfaces.
+
+export const ASSESSMENT_ID = 'asm_frontend_demo';
+export const AI_MODEL_ID = 'aim_frontend_demo';
+
+interface AssessmentState {
+  assessments: AssessmentView[];
+  versions: AssessmentVersionView[];
+  validations: Map<string, AssessmentValidationView>;
+  defects: DefectView[];
+  models: AiModelView[];
+  evaluations: Map<string, AiEvaluationView>;
+  modelApprovals: Map<string, number>;
+  prompts: PromptVersionView[];
+  plugins: PluginView[];
+}
+
+function freshAssessment(): AssessmentState {
+  const validation: AssessmentValidationView = {
+    versionId: 'ver_frontend_demo',
+    checks: [
+      { id: 'chk_rubric', label: 'Rubric completeness', status: 'pass' },
+      { id: 'chk_bias', label: 'Adverse-impact review', status: 'pending' },
+      { id: 'chk_access', label: 'Accessibility conformance', status: 'pass' },
+    ],
+    resolved: false,
+    outcome: null,
+    rationale: null,
+  };
+  const evaluation: AiEvaluationView = {
+    modelId: AI_MODEL_ID,
+    dimensions: [
+      { id: 'dim_safety', label: 'Safety', status: 'pass' },
+      { id: 'dim_bias', label: 'Bias', status: 'pending' },
+      { id: 'dim_drift', label: 'Drift', status: 'pass' },
+      { id: 'dim_human', label: 'Human impact', status: 'pass' },
+    ],
+    recorded: false,
+    outcome: null,
+    rationale: null,
+  };
+  return {
+    assessments: [
+      {
+        id: ASSESSMENT_ID,
+        name: 'Backend Engineer — Applied',
+        roleFamily: 'Engineering',
+        riskTier: 'high',
+        status: 'active',
+        owner: 'Assessment Admin',
+        updatedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      },
+      {
+        id: 'asm_analyst',
+        name: 'Data Analyst — Screening',
+        roleFamily: 'Analytics',
+        riskTier: 'limited',
+        status: 'draft',
+        owner: 'A. Murphy',
+        updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+      },
+    ],
+    versions: [
+      {
+        id: 'ver_frontend_demo',
+        assessmentId: ASSESSMENT_ID,
+        label: 'v3',
+        status: 'draft',
+        effectiveDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+        rationale: 'Refresh applied tasks and rubric anchors.',
+        validationResolved: false,
+      },
+      {
+        id: 'ver_v2',
+        assessmentId: ASSESSMENT_ID,
+        label: 'v2',
+        status: 'active',
+        effectiveDate: new Date(Date.now() - 60 * 86400000).toISOString(),
+        rationale: 'Current live version.',
+        validationResolved: true,
+      },
+    ],
+    validations: new Map([['ver_frontend_demo', validation]]),
+    defects: [
+      {
+        id: 'dfct_1',
+        title: 'Task 3 rubric anchor ambiguous',
+        severity: 'medium',
+        status: 'open',
+        scope: 'ver_frontend_demo · Task 3',
+        owner: 'Assessment Admin',
+      },
+    ],
+    models: [
+      {
+        id: AI_MODEL_ID,
+        name: 'assist-summariser-1',
+        provider: 'Internal',
+        useCase: 'Reviewer note summarisation (advisory only)',
+        status: 'in_evaluation',
+        limitations: 'No scoring authority; outputs are advisory and human-reviewed.',
+      },
+    ],
+    evaluations: new Map([[AI_MODEL_ID, evaluation]]),
+    modelApprovals: new Map([[AI_MODEL_ID, 1]]),
+    prompts: [
+      {
+        id: 'prm_1',
+        name: 'reviewer-summary',
+        version: 2,
+        status: 'active',
+        immutable: true,
+        createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+      },
+      {
+        id: 'prm_1_v1',
+        name: 'reviewer-summary',
+        version: 1,
+        status: 'rolled_back',
+        immutable: true,
+        createdAt: new Date(Date.now() - 50 * 86400000).toISOString(),
+      },
+    ],
+    plugins: [
+      {
+        id: 'plg_code',
+        name: 'code-runner',
+        capabilities: ['execute-sandbox', 'read-artifact'],
+        dataScope: 'attempt artifacts only',
+        status: 'approved',
+      },
+      {
+        id: 'plg_sheet',
+        name: 'spreadsheet',
+        capabilities: ['read-artifact'],
+        dataScope: 'attempt artifacts only',
+        status: 'registered',
+      },
+    ],
+  };
+}
+
+let assessment: AssessmentState = freshAssessment();
+
+const MODEL_APPROVALS_REQUIRED = 2;
+
+export const assessmentStore = {
+  assessmentId: ASSESSMENT_ID,
+  modelId: AI_MODEL_ID,
+
+  getAssessments(): Collection<AssessmentView> {
+    return { items: assessment.assessments, total: assessment.assessments.length };
+  },
+  createAssessment(name: string, roleFamily: string, riskTier: RiskTier): AssessmentView {
+    const a: AssessmentView = {
+      id: randomId('asm'),
+      name,
+      roleFamily,
+      riskTier,
+      status: 'draft',
+      owner: 'You',
+      updatedAt: new Date().toISOString(),
+    };
+    assessment.assessments.unshift(a);
+    return a;
+  },
+  getAssessment(id: string): AssessmentDetailView | null {
+    const a = assessment.assessments.find((x) => x.id === id);
+    if (a === undefined) return null;
+    return {
+      id: a.id,
+      name: a.name,
+      status: a.status,
+      owner: a.owner,
+      reference: `AST-${a.id.slice(-4).toUpperCase()}`,
+      riskTier: a.riskTier,
+      versions: assessment.versions.filter((v) => v.assessmentId === id),
+    };
+  },
+  setAssessmentStatus(id: string, status: AssessmentStatus): AssessmentDetailView | null {
+    const index = assessment.assessments.findIndex((a) => a.id === id);
+    if (index === -1) return null;
+    const current = assessment.assessments[index];
+    if (current === undefined) return null;
+    assessment.assessments[index] = { ...current, status };
+    return this.getAssessment(id);
+  },
+
+  saveVersion(assessmentId: string, label: string, rationale: string): AssessmentVersionView {
+    const v: AssessmentVersionView = {
+      id: randomId('ver'),
+      assessmentId,
+      label,
+      status: 'draft',
+      effectiveDate: new Date(Date.now() + 14 * 86400000).toISOString(),
+      rationale,
+      validationResolved: false,
+    };
+    assessment.versions.unshift(v);
+    return v;
+  },
+  setVersionStatus(
+    versionId: string,
+    status: AssessmentVersionStatus,
+  ): AssessmentVersionView | null {
+    const index = assessment.versions.findIndex((v) => v.id === versionId);
+    if (index === -1) return null;
+    const current = assessment.versions[index];
+    if (current === undefined) return null;
+    // Activation requires that validation has been resolved for this immutable version.
+    if (status === 'active' && !current.validationResolved) return current;
+    const next: AssessmentVersionView = { ...current, status };
+    assessment.versions[index] = next;
+    return next;
+  },
+
+  getPreview(assessmentId: string): AssessmentPreviewView | null {
+    const a = assessment.assessments.find((x) => x.id === assessmentId);
+    if (a === undefined) return null;
+    return {
+      versionId: 'ver_frontend_demo',
+      assessmentName: a.name,
+      sections: [
+        { title: 'Section 1 · Warm-up', tasks: ['Environment check', 'Sample task'] },
+        { title: 'Section 2 · Applied task', tasks: ['Task 1', 'Task 2', 'Task 3'] },
+        { title: 'Section 3 · Reflection', tasks: ['Written summary'] },
+      ],
+    };
+  },
+
+  getValidation(versionId: string): AssessmentValidationView | null {
+    return assessment.validations.get(versionId) ?? null;
+  },
+  resolveValidation(
+    versionId: string,
+    outcome: string,
+    rationale: string,
+  ): AssessmentValidationView | null {
+    const current = assessment.validations.get(versionId);
+    if (current === undefined) return null;
+    const next: AssessmentValidationView = {
+      ...current,
+      resolved: true,
+      outcome,
+      rationale,
+      checks: current.checks.map((c) => (c.status === 'pending' ? { ...c, status: 'pass' } : c)),
+    };
+    assessment.validations.set(versionId, next);
+    const vIndex = assessment.versions.findIndex((v) => v.id === versionId);
+    if (vIndex !== -1) {
+      const v = assessment.versions[vIndex];
+      if (v !== undefined) {
+        assessment.versions[vIndex] = { ...v, validationResolved: true, status: 'validated' };
+      }
+    }
+    return next;
+  },
+
+  getDefects(): Collection<DefectView> {
+    return { items: assessment.defects, total: assessment.defects.length };
+  },
+  logDefect(title: string, severity: DefectSeverity, scope: string): DefectView {
+    const d: DefectView = {
+      id: randomId('dfct'),
+      title,
+      severity,
+      status: 'open',
+      scope,
+      owner: 'You',
+    };
+    assessment.defects.unshift(d);
+    return d;
+  },
+
+  getModels(): Collection<AiModelView> {
+    return { items: assessment.models, total: assessment.models.length };
+  },
+  registerModel(name: string, provider: string, useCase: string, limitations: string): AiModelView {
+    const m: AiModelView = {
+      id: randomId('aim'),
+      name,
+      provider,
+      useCase,
+      status: 'registered',
+      limitations,
+    };
+    assessment.models.unshift(m);
+    assessment.modelApprovals.set(m.id, 0);
+    return m;
+  },
+  getModel(id: string): AiModelDetailView | null {
+    const m = assessment.models.find((x) => x.id === id);
+    if (m === undefined) return null;
+    const evaluation = assessment.evaluations.get(id);
+    return {
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+      useCase: m.useCase,
+      status: m.status,
+      limitations: m.limitations,
+      reference: `AI-${m.id.slice(-4).toUpperCase()}`,
+      evaluationRecorded: evaluation?.recorded ?? false,
+      approvals: assessment.modelApprovals.get(id) ?? 0,
+      approvalsRequired: MODEL_APPROVALS_REQUIRED,
+    };
+  },
+  setModelStatus(id: string, status: AiModelStatus): AiModelDetailView | null {
+    const index = assessment.models.findIndex((m) => m.id === id);
+    if (index === -1) return null;
+    const current = assessment.models[index];
+    if (current === undefined) return null;
+    const evaluation = assessment.evaluations.get(id);
+    const approvals = assessment.modelApprovals.get(id) ?? 0;
+    // Activation requires a recorded evaluation and the required number of human approvals.
+    if (
+      status === 'active' &&
+      (!(evaluation?.recorded ?? false) || approvals < MODEL_APPROVALS_REQUIRED)
+    ) {
+      return this.getModel(id);
+    }
+    assessment.models[index] = { ...current, status };
+    return this.getModel(id);
+  },
+
+  getEvaluation(modelId: string): AiEvaluationView | null {
+    return assessment.evaluations.get(modelId) ?? null;
+  },
+  recordEvaluation(modelId: string, outcome: string, rationale: string): AiEvaluationView | null {
+    const current = assessment.evaluations.get(modelId);
+    if (current === undefined) return null;
+    const next: AiEvaluationView = {
+      ...current,
+      recorded: true,
+      outcome,
+      rationale,
+      dimensions: current.dimensions.map((d) =>
+        d.status === 'pending' ? { ...d, status: 'pass' } : d,
+      ),
+    };
+    assessment.evaluations.set(modelId, next);
+    const mIndex = assessment.models.findIndex((m) => m.id === modelId);
+    if (mIndex !== -1) {
+      const m = assessment.models[mIndex];
+      if (m !== undefined) assessment.models[mIndex] = { ...m, status: 'approved' };
+    }
+    assessment.modelApprovals.set(modelId, MODEL_APPROVALS_REQUIRED);
+    return next;
+  },
+
+  getPrompts(): Collection<PromptVersionView> {
+    return { items: assessment.prompts, total: assessment.prompts.length };
+  },
+  createPromptVersion(name: string): PromptVersionView {
+    const latest = assessment.prompts
+      .filter((p) => p.name === name)
+      .reduce((max, p) => Math.max(max, p.version), 0);
+    const p: PromptVersionView = {
+      id: randomId('prm'),
+      name,
+      version: latest + 1,
+      status: 'active',
+      immutable: true,
+      createdAt: new Date().toISOString(),
+    };
+    // Immutable prompts: supersede the prior active version rather than mutating it.
+    assessment.prompts = assessment.prompts.map((existing) =>
+      existing.name === name && existing.status === 'active'
+        ? { ...existing, status: 'rolled_back' }
+        : existing,
+    );
+    assessment.prompts.unshift(p);
+    return p;
+  },
+
+  getPlugins(): Collection<PluginView> {
+    return { items: assessment.plugins, total: assessment.plugins.length };
+  },
+  registerPlugin(name: string, capabilities: readonly string[], dataScope: string): PluginView {
+    const p: PluginView = {
+      id: randomId('plg'),
+      name,
+      capabilities,
+      dataScope,
+      status: 'registered',
+    };
+    assessment.plugins.unshift(p);
+    return p;
+  },
+
+  reset(): void {
+    assessment = freshAssessment();
   },
 };

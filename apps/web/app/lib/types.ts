@@ -678,3 +678,129 @@ export interface AccessGrantView {
   readonly expiresAt: string | null;
   readonly approver: string | null;
 }
+
+// ── Assessment governance journey (Assessment Admin / AI Governance / Plugin Admin) ──
+// Invariants: immutable versions, human-approved activation, no AI output on these surfaces.
+
+export type RiskTier = 'minimal' | 'limited' | 'high';
+export type AssessmentStatus = 'draft' | 'in_review' | 'active' | 'suspended' | 'retired';
+export interface AssessmentView {
+  readonly id: string;
+  readonly name: string;
+  readonly roleFamily: string;
+  readonly riskTier: RiskTier;
+  readonly status: AssessmentStatus;
+  readonly owner: string;
+  readonly updatedAt: string;
+}
+
+export type AssessmentVersionStatus = 'draft' | 'validated' | 'active' | 'suspended';
+export interface AssessmentVersionView {
+  readonly id: string;
+  readonly assessmentId: string;
+  readonly label: string;
+  readonly status: AssessmentVersionStatus;
+  readonly effectiveDate: string;
+  readonly rationale: string;
+  readonly validationResolved: boolean;
+}
+
+export interface AssessmentDetailView {
+  readonly id: string;
+  readonly name: string;
+  readonly status: AssessmentStatus;
+  readonly owner: string;
+  readonly reference: string;
+  readonly riskTier: RiskTier;
+  readonly versions: readonly AssessmentVersionView[];
+}
+
+export interface AssessmentPreviewSection {
+  readonly title: string;
+  readonly tasks: readonly string[];
+}
+export interface AssessmentPreviewView {
+  readonly versionId: string;
+  readonly assessmentName: string;
+  readonly sections: readonly AssessmentPreviewSection[];
+}
+
+export type ValidationCheckStatus = 'pass' | 'fail' | 'pending';
+export interface ValidationCheckView {
+  readonly id: string;
+  readonly label: string;
+  readonly status: ValidationCheckStatus;
+}
+export interface AssessmentValidationView {
+  readonly versionId: string;
+  readonly checks: readonly ValidationCheckView[];
+  readonly resolved: boolean;
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+}
+
+export type DefectSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type DefectStatus = 'open' | 'triaged' | 'resolved';
+export interface DefectView {
+  readonly id: string;
+  readonly title: string;
+  readonly severity: DefectSeverity;
+  readonly status: DefectStatus;
+  readonly scope: string;
+  readonly owner: string;
+}
+
+export type AiModelStatus = 'registered' | 'in_evaluation' | 'approved' | 'active' | 'suspended';
+export interface AiModelView {
+  readonly id: string;
+  readonly name: string;
+  readonly provider: string;
+  readonly useCase: string;
+  readonly status: AiModelStatus;
+  readonly limitations: string;
+}
+
+export interface AiModelDetailView {
+  readonly id: string;
+  readonly name: string;
+  readonly provider: string;
+  readonly useCase: string;
+  readonly status: AiModelStatus;
+  readonly limitations: string;
+  readonly reference: string;
+  readonly evaluationRecorded: boolean;
+  readonly approvals: number;
+  readonly approvalsRequired: number;
+}
+
+export interface EvaluationDimensionView {
+  readonly id: string;
+  readonly label: string;
+  readonly status: ValidationCheckStatus;
+}
+export interface AiEvaluationView {
+  readonly modelId: string;
+  readonly dimensions: readonly EvaluationDimensionView[];
+  readonly recorded: boolean;
+  readonly outcome: string | null;
+  readonly rationale: string | null;
+}
+
+export type PromptStatus = 'draft' | 'active' | 'rolled_back';
+export interface PromptVersionView {
+  readonly id: string;
+  readonly name: string;
+  readonly version: number;
+  readonly status: PromptStatus;
+  readonly immutable: boolean;
+  readonly createdAt: string;
+}
+
+export type PluginStatus = 'registered' | 'approved' | 'suspended';
+export interface PluginView {
+  readonly id: string;
+  readonly name: string;
+  readonly capabilities: readonly string[];
+  readonly dataScope: string;
+  readonly status: PluginStatus;
+}
