@@ -1,373 +1,79 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-05 · Backend 244/244 operations complete · Wave 1 (account/auth) + Wave 4 (candidate) + assessment-runtime + reviewer + employer-admin frontend runnable_
-
-## Where we are
-
-Two things are now true and both are **green** (format + typecheck + lint + 1,399 tests passing):
-
-1. **Backend contract layer is complete.** All **244** OpenAPI operations have domain use-cases,
-   deny-by-default authorization, HTTP handlers and tests across `@cpf/account`, `@cpf/org` and
-   `apps/api`. This is the vertical-slice **backend** for every operation.
-2. **Frontend was previously ~1% and is now bootstrapped.** A runnable **Next.js (App Router)** web
-   app exists in `apps/web` with a role-aware shell, the full **account + auth journey**
-   (sign-in, MFA, password recovery, activation, profile, preferences, sessions, security activity,
-   notices, support), and the full **candidate journey** (home dashboard, applications with
-   human-oversight actions, accommodations, scheduling, data & privacy, complaints). Every page
-   and API route returns 200 under `next dev`.
-
-> Honest scope note: reaching "244/244 operations" satisfied only the _operation-count_ bullet of
-> the §20 completion definition — it is **backend-only**. The §20 requirement that **all 125
-> wireframe interfaces** be coded with state/responsive/a11y coverage is still largely open: this
-> checkpoint moves that from **1/125** to a runnable foundation plus **~11 account/auth screens**
-> and **6 candidate screens**.
-> Remaining: assessment-runtime, reviewer, employer-admin, platform/assessment-admin,
-> governance, support/ops boards; the 4 known UI/API gaps; workers/ai-gateway/companion; and
-> Vercel/AWS deployment.
-
-### Wave 1 frontend — evidence
-
-- **App**: `apps/web` converted from a component library into a Next.js 14 App Router app.
-  `next.config.mjs` transpiles `@cpf/tokens`/`@cpf/ui` and adds a webpack `extensionAlias` so the
-  packages' NodeNext `.js` specifiers resolve. Token values flow into CSS via a `:root` custom-property
-  block generated from `@cpf/tokens` (`app/theme.ts`) — single source of truth, no drift.
-- **Shell & primitives**: `SyntheticBanner` (persistent synthetic-demo marker per data-integrity
-  invariant), responsive `AppShell` (sidebar collapses below 768px), `SidebarNav` (`aria-current`),
-  `Card`, `PageHeader`, `StatusBadge`, `AsyncBoundary` (explicit loading / error / 401-403-denied /
-  empty / ready states), `AuthCard`. Reuses `@cpf/ui` `Button`/`Input`/`Field`.
-- **Data**: typed `apiClient` + `useAsync` hook; Next route handlers under `app/api/**` serve
-  **synthetic** account data (no real personal data) — the single seam a real `@cpf/*` adapter will
-  replace. `Field` prop types relaxed to `string | undefined` for `exactOptionalPropertyTypes`.
-- **Verification**: `pnpm --filter @cpf/web typecheck` clean; all routes smoke-tested 200 on
-  `next dev` (pages + GET/PATCH/POST/DELETE handlers); full repo suite still 1,399/153 green.
-
-### Wave 4 frontend (candidate journey) — evidence
-
-- **Screens** under `apps/web/app/candidate/**` behind a dedicated `AppShell` (candidate nav,
-  `homeHref=/candidate`): **home dashboard** (open applications / decisions / offered slots
-  summary + "what happens next"), **applications** (status badges + human decision rationale with a
-  "Made by a person" marker; withdraw, request-explanation and request-human-review actions),
-  **accommodations** (sensitive-request form + list; only the approved operational `adjustment` is
-  ever surfaced), **scheduling** (choose/booked slots, supervised-desktop mode), **data & privacy**
-  (export/rectification/erasure/restriction requests + status), **complaints** (raise + track).
-- **Invariants honoured**: no scores/ranks are ever shown to the candidate; decisions carry a
-  human rationale and decider; accommodation clinical detail is segregated (only an approved
-  adjustment string is exposed); all AI framed as an aid to a human reviewer.
-- **Data seam**: candidate view-models + `apiClient` methods + synthetic Next route handlers under
-  `app/api/candidate/**` (`applications`, `applications/[id]/actions`, `accommodations`,
-  `schedule`, `data-rights`, `complaints`). `useAsync` gained `setData` for optimistic slot booking.
-- **Verification**: web typecheck + repo typecheck + lint clean; all 6 candidate pages and 5
-  candidate API routes smoke-tested 200 on `next dev`; action validation returns 422 on short
-  reasons; POST creates return 201; full repo suite still 1,399/153 green.
-
-### Assessment-runtime frontend — evidence
-
-- **Screens** under `apps/web/app/candidate/assessment/**` and `apps/web/app/candidate/attempt/[id]/**`
-  (14 total): **readiness** (RUN-01: environment/consent checklist gate before start), attempt
-  **runtime shell** (server-authoritative countdown timer + autosave badge + tabbed navigation),
-  **overview** (section→task map with status badges + "open next task"), three **task editors**
-  (document / code / spreadsheet, shared `TaskRunner`, per-task flag + autosave), **AI panel**
-  (labelled assistant that logs every exchange and never scores), **plugin runs** (candidate-run
-  tests/tools with status), **artifacts** (upload evidence), **flags & break controls**,
-  **recovery** (connection-issue re-entry), **submit** (final confirmation), **receipt**
-  (immutable submission reference), and **unavailable** (expired/voided state).
-- **Invariants honoured**: the countdown is **server-authoritative** — the client anchors to
-  `serverNow` and only ticks the display; expiry is decided by the server (`projectAttempt`). AI is
-  explicitly labelled, every message is logged with a provenance reference, and it **never**
-  produces a score/rank/decision. Submit is **idempotent** (receipt minted once). No candidate-facing
-  scoring anywhere.
-- **Data seam**: runtime view-models + `apiClient` methods + synthetic Next route handlers under
-  `app/api/candidate/attempt/[id]/**` (`tasks`, `ai`, `plugin`, `artifacts`, `controls`, `submit`,
-  plus GET/reset on the attempt). A single in-memory `runtimeStore` (`ATTEMPT_ID`) models sections,
-  tasks, autosave, AI thread, plugin runs, artifacts, breaks and submission.
-- **Verification**: web typecheck + repo typecheck + lint clean; all 13 runtime pages + 5 GET API
-  routes smoke-tested 200 on `next dev`; mutating routes verified — save/ai/plugin/controls happy
-  paths 200, missing-taskId and 1-char AI message return 422, plugin/artifacts create 201,
-  double-submit is idempotent (same receipt), reset 200; full repo suite still 1,399/153 green.
-
-### Reviewer frontend — evidence
-
-- **Screens** under `apps/web/app/review/**` (14 total, REV-01…REV-14): **queue** (assignment list),
-  **profile**, **availability**, **training & eligibility**, and a tabbed **assignment workspace**
-  (`review/assignment/[id]/**`): **detail/accept**, **respond** (accept/decline/conflict),
-  **evidence review**, **criterion scorecard**, **AI observations** (reveal-gated), **integrity
-  review**, **clarification & escalation**, **submit**, **receipt**, and **amend**.
-- **Invariants honoured** (evidence-first, human-only scoring): the reviewer authors every score and
-  rationale — no AI number is ever suggested. **AI observations stay concealed until the reviewer has
-  independently scored every criterion** (`revealObservations` is server-gated and returns 409 if
-  scoring is incomplete); observations are descriptive only (no score/rank/recommendation) and carry
-  a provenance reference. **Submission is blocked** until every criterion is scored, all evidence is
-  reviewed and no integrity flag is open; submit is idempotent (receipt minted once); amend reopens
-  and re-mints on resubmission. Candidates are shown pseudonymously (`Candidate 7F3A`).
-- **Data seam**: reviewer view-models + `apiClient` methods + synthetic Next route handlers under
-  `app/api/review/**` (assignments, respond, evidence, scorecard, observations, integrity,
-  clarification, submit, amend, profile, availability, training). A single in-memory `reviewStore`
-  (`REVIEW_ASSIGNMENT_ID`) models the whole review lifecycle with server-enforced gates.
-- **Verification**: web typecheck + repo typecheck + lint clean; all 14 reviewer pages smoke-tested
-  200 on `next dev`; API invariants verified — observations reveal 409 before scoring / 200 after,
-  submit 409 before scoring, 409 with open flag, 200 after resolution, 200 idempotent; scorecard
-  422 without a score, respond 422 declining without a note, clarification 201; full repo suite still
-  1,399/153 green.
-
-### Employer-admin frontend — evidence
-
-- **Screens** under `apps/web/app/employer/**` (25 total, EMP-01…EMP-25): **dashboard**,
-  **organisation profile**, **members**, **structure** (departments/teams), **campaigns** (list,
-  new-campaign wizard, detail with gated lifecycle, **preflight** governance, **operations**,
-  **comparison**), **candidates** (list, **import** wizard with validate→commit, detail, **merge**
-  wizard), **invitations**, **scheduling**, **accommodations** (governance), **reviewers**,
-  **assignment board**, **decision** draft and **approval** (segregation of duties), **reports**,
-  **integrations**, **templates**, and **deployment readiness** (governance gate).
-- **Invariants honoured**: **decisions are human-only** — a drafter authors an outcome + required
-  written rationale (EMP-20) and a **separate approver** issues it (EMP-21); server enforces
-  awaiting-approval before issue. **No AI score/rank/band is ever shown** — the comparison surfaces
-  only `criteriaScored/criteriaTotal`, never an aggregate. **Campaign activation is gated** by
-  preflight blockers (activating with open blockers → 409). **Accommodation clinical detail is
-  segregated** — only the operational `adjustmentSummary` is surfaced. **Deployment readiness** is a
-  governance gate (DPIA + human-oversight blockers). Candidates are shown by pseudonymous reference.
-- **Data seam**: employer view-models + `apiClient` methods + 24 synthetic Next route handlers under
-  `app/api/employer/**`. A single in-memory `employerStore` (`EMPLOYER_CAMPAIGN_ID` /
-  `EMPLOYER_CANDIDATE_ID` / `EMPLOYER_APPLICATION_ID`) models all 25 screens with server-enforced
-  gates. **EMP-11 (candidates) and EMP-15 (scheduling)** are known baseline API gaps — built on the
-  synthetic seam with an explicit UI note that the real contract is unresolved.
-- **Verification**: web typecheck + repo typecheck + lint clean; all 22 employer GET routes
-  smoke-tested 200 on `next dev`; validation verified — member-invite/campaign-create/decision-
-  rationale/integration-https all 422, campaign activation gate 409; full repo suite still
-  1,399/153 green (no backend changes).
-
-## Historical Wave 0 record (unchanged)
-
-## Done (with evidence)
-
-- **Source fidelity:** all 6 v2.0 sources + Penpot handoff verified by SHA-256 (byte match to
-  contract). Counts confirmed: 362 reqs, 1,543 dict rows, 244 operations, 125 screens, 139
-  physical / 138 logical tables. Originals copied to `docs/source-of-truth/originals/`.
-  Evidence: `docs/source-of-truth/SOURCE_MANIFEST.md`, `docs/execution/evidence/wave0-baseline.md`.
-- **Repo topology:** dedicated git repo at `CPF-Dev/` (parent Desktop `.git` left untouched).
-  ADR-0001, ASM-01.
-- **Durable execution docs:** manifest, hierarchy, ledgers (implementation, assumption, risk,
-  defect), release gates, external actions, CONFLICT-001 (138 vs 139 resolved).
-- **Monorepo + tooling:** pnpm workspaces, strict TS, ESLint (flat, typed), Prettier, Vitest,
-  coverage with 100%-branch gate on invariant modules. CI workflow `.github/workflows/ci.yml`.
-- **First safety module `@cpf/domain`:** `ai-output-guard` (forbidden AI outputs) and
-  `rubric-aggregate` (human-only deterministic aggregation). 28 tests, 100% branch coverage.
-- **Database foundation `@cpf/db` (EXT-01 resolved):** connected to local PostgreSQL 18.4,
-  `cpf_dev` created, v2.0 baseline applies cleanly. `ensureBaselineApplied` + schema-facts
-  integration test (CONFLICT-001 138/139, `audit.events` partition, RLS on `runtime.sessions`).
-  3 tests green against live Postgres; `describe.skipIf` keeps CI green without a DB. CI gained a
-  `postgres:16` service job. Evidence: `docs/execution/evidence/wave0-db.md`.
-- **Contract types `@cpf/contracts`:** `openapi-typescript` generates `src/generated/openapi.ts`
-  from the baseline; a generated runtime `operation-manifest.ts` lists all **244** operations
-  (operationId/method/path). 3 tests assert count/uniqueness/shape. CI `contracts:check` gate
-  regenerates and `git diff --exit-code`s to prevent DTO drift (RISK-04).
-- **Tenant isolation proven `@cpf/db` + `@cpf/policy`:** `withTenant()` opens a transaction, sets
-  a non-superuser `SET LOCAL ROLE cpf_app` and `app.tenant_id`/`app.user_id` GUCs so RLS is
-  enforced (invariant §9). A cross-tenant negative test seeds two orgs/departments and proves
-  tenant A cannot read tenant B rows, and empty tenant → deny-by-default (0 rows). `@cpf/policy`
-  adds a pure deny-by-default `can(actor, action, resource, permissions)` predicate (cross-tenant
-  denied unless platform staff **and** explicitly permitted). 4 RLS + 7 policy tests; policy at
-  100% branch coverage. Contract §12.
-- **Design tokens `@cpf/tokens` (Wave 1 start):** verified Penpot `design-tokens.json` transcribed
-  into a typed const module (16 colors, font family/body, radii, 4px space unit, 44px WCAG target).
-  A parity test reads the source JSON and asserts every value matches, so token drift fails CI.
-- **UI primitives `@cpf/ui` (Wave 1):** accessible `Button`, `Input`, `Field` themed from
-  `@cpf/tokens` — real button semantics + default `type="button"`, `aria-invalid` inputs, and a
-  render-prop `Field` that always wires label/hint/error via `aria-describedby` (no orphan labels),
-  44px WCAG target size. 12 jsdom + Testing-Library a11y tests (roles, accessible name/description,
-  alert on error). Vitest runs `packages/ui/**` under jsdom; everything else stays on node.
-- **Account vertical `@cpf/account` (`get_me`, FR-ACC-04/12):** first server-side vertical. `getMe`
-  authorizes deny-by-default via `@cpf/policy` (`self_profile` read for authenticated callers), then
-  `PgAccountRepository` reads the caller's own `iam.users` row + current-tenant `iam.memberships`
-  role context **through the `withTenant` RLS context** as a non-superuser `cpf_app` role. 4 unit
-  tests (authz allow/deny, 404, null-tenant) + 2 live-Postgres tests proving a different-tenant
-  actor sees no membership (RLS). No audit event — `get_me` is `x-audit-event: false` in the spec.
-- **`get_me` HTTP boundary + profile UI:** `@cpf/http` provides reusable RFC 9457 problem+json and
-  `X-Correlation-ID` helpers; `apps/api` `handleGetMe` maps the use-case result to 200 `UserProfile`
-  / 403 / 404 problem+json (correlation id echoed in header and body). `apps/web` `AccountProfileView`
-  renders the profile as an accessible labelled region (roles list, no-membership fallback), tested
-  under jsdom. `UserProfile` projection recorded as ASM-06.
-- **Tamper-evident audit `@cpf/audit`:** deterministic `computeEventHash(previousHash, event)`
-  (SHA-256 over canonical, key-order-independent serialization) and a `PgAuditWriter` that appends
-  to `audit.events` on the caller's transaction client, chaining `event_hash` from the tenant's
-  most recent event. 4 unit tests (determinism, key-order independence, field sensitivity, chain).
-- **First audited write `patch_me` (FR-ACC-04, `x-audit-event: true`):** `@cpf/account` gains a
-  concrete `ProfileUpdate` DTO + `parseProfileUpdate` boundary validation (unknown-property
-  rejection, enum checks, non-empty patch → 422), a `write self_profile` grant, and `updateMe`
-  (deny-by-default authorize → whitelisted-column upsert of `iam.user_profiles` **and** a chained
-  `audit.events` append in one `withTenant` transaction). `apps/api` `handlePatchMe` returns 422
-  problem+json on invalid bodies, else maps to 200/403/404. Tests: 7 validate + 3 updateMe unit +
-  5 patch handler + 2 live-Postgres (profile persisted + audit row written with 64-hex
-  `event_hash`, `previous_hash` chained across successive writes).
-- **Account session vertical (`get_me_sessions`, `delete_me_sessions_sessionId`; FR-ACC-08):**
-  `@cpf/account` gains a `SessionDto`/`SessionPageDto` projection (never exposes
-  `refresh_token_hash`), `PgSessionRepository` reading/revoking the caller's own
-  `iam.user_sessions` rows through the `user_session_self` RLS policy, keyset pagination
-  (`(created_at, id)` cursor, opaque base64url token), a `listSessions` read use-case, and an
-  **audited** `revokeSession` write (`x-audit-event: true`) that chains a `session.revoke` event in
-  the same transaction. `apps/api` `handleGetMeSessions` (422 on bad paging, else 200 `SessionPage`)
-  and `handleDeleteMeSession` (200 `{revoked:true}` / 403 / 404). Tests: 10 unit + 6 handler + 3
-  live-Postgres (own sessions only via RLS, audited revoke writes a 64-hex `event_hash`, another
-  user's session cannot be revoked → 404).
-- **Security-events feed (`get_me_security_events`; FR-ACC-18, ASM-07):** `@cpf/account` reads the
-  caller's own `iam.account_security_events` newest-first, keyset-paginated via generic
-  `encodeCursor`/`decodeCursor` helpers. This table has **no RLS** (ASM-07), so scoping is enforced
-  by an explicit `WHERE user_id = $1` predicate on every query; the `SecurityEventDto` projection
-  omits `ip_hash`/`user_agent_hash`. `apps/api` `handleGetMeSecurityEvents` (422 on bad paging,
-  else 200 `SecurityEventPage`). Tests: 6 unit + 3 handler + 2 live-Postgres (own events only,
-  newest-first, keyset paging walks pages).
-- **Notification preferences (`get_me_notification_preferences` + audited
-  `put_me_notification_preferences`; FR-ACC-14):** `@cpf/account` reads/updates the caller's own
-  `iam.notification_preferences` through the `notification_preference_self` RLS policy.
-  `parsePreferenceUpdate` rejects unknown props (top-level + per-item), validates channel/digest
-  enums and non-empty categories, dedupes `channel::category`, and caps at 200 items → 422.
-  `applyPreferenceUpdate` upserts each setting (`ON CONFLICT (user_id,channel,category)`) with a
-  **mandatory guard** — a `mandatory` row can never be disabled by the user (server forces
-  `enabled=true`) — then chains a `notification_preferences.update` `audit.events` row in the same
-  `withTenant` transaction (`x-audit-event: true`). `apps/api` `handleGetMeNotificationPreferences`
-  (422 on bad paging, else 200 `NotificationPreferencePage`) and
-  `handlePutMeNotificationPreferences` (422 on bad body, else 200 page / 403). Tests: 12 unit + 6
-  handler + 2 live-Postgres (RLS hides other users, audited upsert writes a 64-hex `event_hash`,
-  mandatory preference stays enabled despite a disable request).
-- **Integration-test provisioning centralised:** the `cpf_app` role + all table/schema grants are
-  now created once in a Vitest `globalSetup` (`vitest.globalsetup.ts`) instead of per-file
-  `beforeAll` DDL. This removes a concurrent `CREATE ROLE`/`GRANT` catalog race
-  ("tuple concurrently updated") that could flake parallel integration suites; each test keeps only
-  its data seeding.
-- **General preferences (`get_me_preferences` + audited `put_me_preferences`; FR-ACC-12/13):**
-  `@cpf/account` reads/replaces the caller's locale + accessibility subset of `iam.user_profiles`
-  through the `user_profile_self` RLS policy. `parsePreferencesUpdate` enforces PUT full-replace
-  semantics (all fields required), bounds locale/timezone/dateFormat, checks theme/density enums,
-  and validates `accessibility` as a bounded object of boolean flags (≤50 keys) — rejecting unknown
-  props and non-boolean values → 422. `replacePreferences` upserts the columns
-  (`ON CONFLICT (user_id)`) writing `accessibility_preferences` as jsonb, then chains a
-  `preferences.update` `audit.events` row in the same `withTenant` transaction
-  (`x-audit-event: true`); reads filter legacy non-boolean jsonb entries. `apps/api`
-  `handleGetMePreferences` (200 `UserPreferences` / 403 / 404) and `handlePutMePreferences`
-  (422 on bad body, else 200 stored view / 403). `UserPreferences` was a `GenericRecord` placeholder
-  → concrete `UserPreferencesDto` projection recorded as ASM-08. Tests: 12 unit + 6 handler + 2
-  live-Postgres (RLS-scoped read filters non-boolean accessibility, audited replace writes a 64-hex
-  `event_hash` and persists the new values).
-
-- **Onboarding checklist (`get_me_onboarding` + audited `put_me_onboarding_stepCode`; FR-ACC-15):**
-  `@cpf/account` reads/updates the caller's own `iam.onboarding_progress` rows. The table has NO
-  row-level security (like `account_security_events`; ASM-10), so every query is scoped by an
-  explicit `user_id = $1` predicate. `get_me_onboarding` keyset-paginates over `(updated_at, id)`
-  reusing the generic cursor helpers → concrete `OnboardingStepDto` inside `OnboardingPage`.
-  `put_me_onboarding_stepCode` is **update-only**: it targets one existing step keyed by
-  `(user_id, roleCode, stepCode, materialVersion)` (the body supplies the required `roleCode` +
-  optional `materialVersion`; the path supplies `stepCode`), sets the user-settable status
-  (`in_progress`/`completed`/`dismissed`; `completed` stamps `completed_at`), and chains an
-  `onboarding.step.update` `audit.events` row in the same `withTenant` transaction
-  (`x-audit-event: true`); a missing row yields 404 (no row is invented). `apps/api`
-  `handleGetMeOnboarding` (200 `OnboardingPage` / 403 / 422) and `handlePutMeOnboardingStep`
-  (422 on bad input, else 200 step / 403 / 404). Baseline `OnboardingPage` items / `put` body /
-  response were `GenericRecord`/`GenericCommand` placeholders → concrete DTOs recorded as ASM-10.
-  Tests: 16 unit + 7 handler + 3 live-Postgres (user-scoped list, audited completion writes a
-  64-hex `event_hash` and stamps `completed_at`, 404 when no step matches).
-
-- **Support cases (`get_me_support_cases` + audited `post_me_support_cases`; FR-ACC-16/FR-SUP-01):**
-  `@cpf/account` lists/creates the caller's own `support.cases`. The table carries
-  `v2_tenant_isolation` RLS (tenant scope); requester ownership is additionally enforced by an
-  explicit `requester_user_id = $1` predicate on reads. `get_me_support_cases` keyset-paginates over
-  `(created_at, id)` → concrete `SupportCaseDto` inside `SupportCasePage`. `parseSupportCaseCreate`
-  requires `{category, severity, subject, description, purpose}` (severity enum, bounded strings,
-  unknown props → 422); `createCase` inserts with server-set `requester_user_id`/`tenant_id`, a
-  generated unique `case_reference` (`SC-<uuid>`), initial `status='open'`, then chains a
-  `support_case.create` `audit.events` row in the same `withTenant` transaction
-  (`x-audit-event: true`). `apps/api` `handleGetMeSupportCases` (200 `SupportCasePage` / 403 / 422)
-  and `handlePostMeSupportCase` (422 on bad body, else 200 case / 403). Baseline `SupportCase`/
-  `SupportCasePage` items / `SupportCaseCreate` were `GenericRecord`/`GenericCommand` placeholders →
-  concrete DTOs recorded as ASM-11 (this slice covers the two collection ops; case detail + messages
-  are a follow-up). Tests: 13 unit + 6 handler + 2 live-Postgres (audited create writes a 64-hex
-  `event_hash` with `requester_user_id`/`tenant_id` set; list returns only the caller's own case and
-  never another requester's in the same tenant).
-
-- **Support case detail + messages (`get_me_support_cases_caseId` + audited
-  `post_me_support_cases_caseId_messages`; FR-ACC-16/FR-SUP-02):** `@cpf/account` reads a case's
-  thread and appends requester messages over `support.case_messages` (also `v2_tenant_isolation`
-  RLS). ASM-12 restricts the `/me` surface to the **requester** relationship (case accessed only when
-  `requester_user_id`=caller; missing/non-owned → 404) and to `requester` **visibility only** —
-  `internal`/`restricted` messages are never read or written here, and appended messages are forced to
-  `visibility='requester'`, `author_user_id`=caller. `getCaseDetail` returns a concrete
-  `SupportCaseDetailDto` (the case fields plus a keyset-paginated `messages` page over
-  `(created_at, id)`); `addMessage` inserts a body-only message (attachments deferred → `[]`) and
-  chains a `support_case.message.create` `audit.events` row in the same `withTenant` transaction
-  (`x-audit-event: true`). The `{caseId}` segment is UUID-validated (422) before touching a `uuid`
-  column. `apps/api` `handleGetMeSupportCase` (200 detail / 422 / 403 / 404) and
-  `handlePostMeSupportCaseMessage` (200 message / 422 / 403 / 404). Tests: 15 unit + 10 handler +
-  3 live-Postgres (thread returns only `requester`-visible messages, never the seeded `internal`
-  one; audited add writes a 64-hex `event_hash` with `visibility='requester'`; a case owned by
-  another requester in the same tenant yields 404).
-
-- **Organisation read (`get_organization`; FR-EA-01) — first Employer Admin surface (`@cpf/org`):**
-  a new `@cpf/org` package reads the caller's own `tenant.organizations` row. The table carries **no
-  RLS** (it is only in the `updated_at` trigger array, not either RLS array, and has no `tenant_id`),
-  so scoping is service-layer: `WHERE id = <caller tenant>`, with no `{id}` path param and thus no
-  cross-tenant vector. Access is deny-by-default and gated on the `employer_admin` role (ASM-13);
-  `getOrganization` returns a concrete `OrganizationDto`
-  (id/slug/legalName/displayName/status/dataRegion/defaultTimezone/branding/settings/timestamps),
-  projecting `branding`/`settings` jsonb as objects. The declared `cursor`/`limit` params are
-  bounds-validated (422) but inert (no child collection). `apps/api` `handleGetOrganization`
-  (200 / 422 / 403 / 404). Tests: 7 unit + 4 handler + 2 live-Postgres (Employer Admin reads their
-  own org with jsonb settings projected; a caller without the role is denied 403).
-
-- **Organisation settings update (`patch_organization`; FR-EA-01) — first Employer Admin audited
-  write:** `updateOrganization` applies a partial update over the writable subset only
-  (`displayName`/`defaultTimezone`/`branding`/`settings`); identity/lifecycle fields
-  (`slug`/`status`/`legalName`/timestamps) are never mutable and unknown/immutable keys are rejected
-  (422), with at least one field required. Same no-RLS service-layer scoping as the read
-  (`WHERE id = <caller tenant>`), deny-by-default on the `employer_admin` `write` grant, and the
-  `organization.update` audit event is hash-chained in the **same transaction** as the `UPDATE`
-  (`x-audit-event: true`). `IdempotencyKey` is accepted but not yet deduplicated (no idempotency
-  store; ASM-14). `apps/api` `handlePatchOrganization` (200 / 422 / 403 / 404). Tests: 8 unit +
-  4 handler + 1 live-Postgres (an Employer Admin update writes a 64-hex `event_hash` and persists the
-  new values).
-
-- **Organisation members list (`get_organization_members`; FR-EA-02) — first Employer Admin
-  collection read:** `listMembers` keyset-paginates `iam.memberships` (both `tenant_isolation` and
-  `v2_tenant_isolation` RLS on `tenant_id`), joined with `iam.users` for display fields and role
-  codes aggregated from `iam.membership_roles` → `iam.roles`. Deny-by-default on the `employer_admin`
-  role (`read`,`organization_member`). Audit is disabled (`x-audit-event: false`). The 200 body uses
-  a concrete `MemberDto` (id/userId/email/displayName/status/roles/departmentId/teamId/startsAt/
-  endsAt/createdAt/updatedAt) inside a `MemberPageDto` (items/nextCursor/total), with keyset
-  cursor + limit. `apps/api` `handleGetOrganizationMembers` (200 / 422 / 403). Tests: 8 unit +
-  4 handler + 2 live-Postgres (lists only caller-tenant members with roles aggregated; never
-  surfaces members from another tenant via RLS).
-
-- **Organisation departments (`get_organization_departments` + audited
-  `post_organization_departments`; FR-EA-03) — first tenant-RLS audited CRUD pair:** `@cpf/org`
-  gains `listDepartments` (keyset-paginated over `(created_at, id)` DESC through `tenant_isolation`
-  - `v2_tenant_isolation` RLS) and `createDepartment` (INSERT with audited `department.create`
-    event, catching `23505` unique-violation → 409). Deny-by-default on `employer_admin` with
-    resource `department` (read/write). `PgDepartmentRepository` operates under the non-superuser
-    `cpf_app` role so RLS is enforced. Concrete `DepartmentDto`
-    (id/name/code/status/createdAt/updatedAt) inside `DepartmentPageDto` (items/nextCursor/total).
-    `apps/api` `handleGetOrganizationDepartments` (200 / 422 / 403) and
-    `handlePostOrganizationDepartment` (200 / 422 / 409 / 403). ASM-16. Tests: 10 unit + 7 handler +
-    3 live-Postgres (create + list in own tenant, RLS hides other tenant's dept, duplicate → 409,
-    audit event with 64-hex hash).
-
-- **Organisation teams (`get_organization_teams` + audited `post_organization_teams`; FR-EA-03):**
-  `@cpf/org` gains `listTeams` (keyset-paginated over `(created_at, id)` DESC through
-  `tenant_isolation` + `v2_tenant_isolation` RLS) and `createTeam` (INSERT with audited
-  `team.create` event, catching `23505` → 409). Deny-by-default on `employer_admin` with resource
-  `team` (read/write). `UNIQUE(tenant_id, department_id, name)` means teams are unique per
-  department, not globally — the same name can exist under different departments (including null).
-  `departmentId` is UUID-validated on input. Concrete `TeamDto`
-  (id/name/departmentId/status/createdAt/updatedAt) inside `TeamPageDto` (items/nextCursor/total).
-  `apps/api` `handleGetOrganizationTeams` (200 / 422 / 403) and `handlePostOrganizationTeam`
-  (200 / 422 / 409 / 403). ASM-17. Tests: 11 unit + 7 handler + 3 live-Postgres (create with
-  department FK + list in own tenant, RLS hides other tenant's team, duplicate → 409, same name
-  under null department allowed, audit event with 64-hex hash).
-
-`pnpm run format` ✅ · `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `vitest run` ✅ (**334/334**:
-309 prior + 11 team unit + 7 handler + 3 live-pg + 4 handler-level for 409/403).
-
-## Active blockers (see EXTERNAL_ACTIONS_REQUIRED.md)
-
-- ~~EXT-01 Docker/Postgres~~ **RESOLVED** — local Postgres connected; `DATABASE_URL` in `.env`.
-- EXT-02..07 — Vercel, AWS, AI keys, signing, legal/DPO, validated assessment content (later waves).
+_Last updated: 2026-08-10 · branch `codex/continuation-baseline` · baseline checkpoint `0db818e`_
 
 ## Release judgement
 
-**NOT READY** — foundation only. No demo/pilot/production or compliance claim is made.
+**NOT READY.** CPF is a substantial synthetic product demo plus a sizeable domain/API library. It
+is not yet an end-to-end, persisted, authenticated implementation of the master build contract.
+
+## Verified facts
+
+- Source package: 362 requirements (336 Must), 244 OpenAPI operations, 125 interface SVGs, 1,543
+  dictionary rows, and 139 physical / 138 logical PostgreSQL tables are present and hash-verified.
+- Repository verification on 2026-08-10 after the shared UI repair:
+  - `pnpm verify`: PASS.
+  - Formatting: PASS.
+  - Lint: PASS with 14 `no-console` warnings and no errors.
+  - TypeScript: PASS across all workspace packages.
+  - Vitest: 155 files / 1,526 tests PASS, including live PostgreSQL integration tests.
+  - `pnpm --filter @cpf/web build`: PASS; 97 static pages generated.
+- Web route inventory: 136 `page.tsx` files; the executable inventory test resolves all 125/125
+  handoff routes canonically.
+- Application/API inventory: 202 exported handler functions, 22 PostgreSQL repository classes, and
+  153 test files.
+- The latest uncommitted web expansion was preserved in checkpoint `0db818e`; execution documents
+  and temporary extraction files were deliberately excluded.
+
+## Important scope boundaries
+
+### Web product
+
+The Next.js product is runnable and covers most role surfaces, but its route handlers are backed by
+`apps/web/app/lib/synthetic.server.ts`, a process-local in-memory demo store. It does not issue real
+sessions, persist the critical journeys, or enforce tenant identity through verified server context.
+
+### API and server
+
+`apps/api` contains substantial typed handlers and domain use-cases. `apps/server`, however, exposes
+the 244-operation manifest through a generic in-memory catch-all and is not wired to those handlers.
+The browser product is also not wired to `apps/api`. Therefore “244/244” means contract/router
+surface coverage, not 244 production-complete persisted vertical slices.
+
+### Interface implementation
+
+The shared UI contract repair is complete. AUTH-04, ACC-04, ACC-05, and DS-01 now have functional
+canonical surfaces; the six semantic aliases now have canonical routes; and all 125 handoff routes
+are guarded by an executable inventory test. Multi-word font families are quoted correctly and the
+browser resolves Public Sans first.
+
+AUTH-04, ACC-04, ACC-05, and DS-01 passed source/implementation visual comparison at 1280 × 720,
+including primary interaction checks and a clean browser console. Evidence is recorded in
+`design-qa.md` and `docs/execution/evidence/screenshots/`.
+
+This does not mean all 125 SVGs have visual-fidelity evidence. Earlier representative comparisons
+of REV-08 and RUN-02 still showed material layout and interaction differences and are the next
+translation slice.
+
+### Traceability
+
+The authoritative requirements CSV still marks all 362 requirements as “Specified; evidence not yet
+supplied”. The implementation ledger links only a small early subset and is not a live completion
+ledger. Generated screen/API/schema coverage is design coverage, not implementation evidence.
+
+## Major remaining workstreams
+
+1. Translate the critical RUN-02 and REV-08 journeys with visual and accessibility evidence, then
+   continue through the remaining interface inventory.
+2. Wire authenticated web requests to real `apps/api` handlers and PostgreSQL repositories.
+3. Replace critical synthetic workflows with persistent, tenant-isolated vertical slices.
+4. Resolve EMP-11, EMP-15, GOV-09, and OPS-02 through additive contract proposals and tests.
+5. Implement transactional outbox/workers, AI gateway, integrations, communications, and companion.
+6. Complete security, privacy, accessibility, performance, resilience, backup/restore, and E2E gates.
+7. Prepare and verify protected Vercel preview and AWS IaC/runbook artifacts.
+
+## Active external blockers
+
+See `EXTERNAL_ACTIONS_REQUIRED.md`. Local PostgreSQL is available. Vercel/AWS credentials, real AI
+provider evidence, signing certificates, legal/DPO determinations, and validated assessment content
+remain external blockers for their respective later release stages.

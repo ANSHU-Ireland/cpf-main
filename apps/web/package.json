@@ -12,6 +12,7 @@
     "@cpf/account": "workspace:*",
     "@cpf/tokens": "workspace:*",
     "@cpf/ui": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
     "next": "^14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

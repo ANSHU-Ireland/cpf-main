@@ -6,6 +6,9 @@ import { color, font, radius, space, control } from '@cpf/tokens';
  * drift from — the token parity test in `packages/tokens` still guards the values.
  */
 export function buildThemeCss(): string {
+  const fontStack = font.family
+    .map((family) => (family.includes(' ') ? `"${family}"` : family))
+    .join(', ');
   const vars: Record<string, string> = {
     '--color-ink': color.ink,
     '--color-muted': color.muted,
@@ -23,7 +26,7 @@ export function buildThemeCss(): string {
     '--color-red-soft': color.red_soft,
     '--color-purple': color.purple,
     '--color-purple-soft': color.purple_soft,
-    '--font-family': font.family.join(', '),
+    '--font-family': fontStack,
     '--font-body': `${String(font.bodyPx)}px`,
     '--radius-control': `${String(radius.controlPx)}px`,
     '--radius-surface': `${String(radius.surfacePx)}px`,
