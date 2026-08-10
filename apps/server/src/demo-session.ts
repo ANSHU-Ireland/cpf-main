@@ -94,6 +94,9 @@ export function authorizeDemoOperation(
   params: Readonly<Record<string, string>>,
 ): boolean {
   if (hasScope(session, 'employer_admin', session.actor.tenantId)) return true;
+  if (hasScope(session, 'employer_admin_approver', session.actor.tenantId)) {
+    return operationId === 'post_decisions_decisionId_approvals';
+  }
   if (operationId.includes('review_assignments_')) {
     return hasScope(session, 'reviewer', params['assignmentId'] ?? '');
   }

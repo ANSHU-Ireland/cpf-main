@@ -547,10 +547,11 @@ export const apiClient = {
     id: string,
     outcome: DecisionOutcome,
     rationale: string,
+    evidenceLinks: readonly string[] = [],
   ): Promise<DecisionDraftView> =>
     request<DecisionDraftView>(`/api/employer/applications/${encodeURIComponent(id)}/decision`, {
       method: 'POST',
-      body: JSON.stringify({ outcome, rationale }),
+      body: JSON.stringify({ outcome, rationale, evidenceLinks }),
     }),
   getApproval: (id: string): Promise<DecisionApprovalView> =>
     request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`),
@@ -559,10 +560,10 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ action: 'approve' }),
     }),
-  returnDecision: (id: string): Promise<DecisionApprovalView> =>
+  returnDecision: (id: string, rationale: string): Promise<DecisionApprovalView> =>
     request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
       method: 'POST',
-      body: JSON.stringify({ action: 'return' }),
+      body: JSON.stringify({ action: 'return', rationale }),
     }),
   getReports: (): Promise<Collection<ReportView>> =>
     request<Collection<ReportView>>('/api/employer/reports'),

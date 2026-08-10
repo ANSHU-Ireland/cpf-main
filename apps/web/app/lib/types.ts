@@ -536,28 +536,36 @@ export interface ComparisonRowView {
   readonly criteriaTotal: number;
 }
 
-export type DecisionOutcome = 'advance' | 'hold' | 'reject';
+export type DecisionOutcome =
+  'progress' | 'hold' | 'live_verification' | 'reattempt' | 'not_progress' | 'withdrawn';
 export interface DecisionDraftView {
   readonly applicationId: string;
+  readonly decisionId: string | null;
   readonly candidateRef: string;
   readonly campaignName: string;
   readonly outcome: DecisionOutcome | null;
   readonly rationale: string;
+  readonly evidenceLinks: readonly string[];
   readonly reviewComplete: boolean;
-  readonly status: 'draft' | 'submitted';
+  readonly status: 'draft' | 'awaiting_approval' | 'issued' | 'returned';
 }
 
 export type ApprovalStatus =
   'awaiting_review' | 'awaiting_approval' | 'approved' | 'issued' | 'returned';
 export interface DecisionApprovalView {
   readonly applicationId: string;
+  readonly decisionId: string | null;
   readonly candidateRef: string;
+  readonly campaignName: string;
   readonly outcome: DecisionOutcome | null;
   readonly rationale: string;
+  readonly evidenceLinks: readonly string[];
   readonly draftedBy: string;
   readonly status: ApprovalStatus;
   readonly approver: string | null;
+  readonly approvedAt: string | null;
   readonly issuedAt: string | null;
+  readonly returnRationale: string | null;
 }
 
 export type ReportStatus = 'queued' | 'running' | 'ready' | 'failed';

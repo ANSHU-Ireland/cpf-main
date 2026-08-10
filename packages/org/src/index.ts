@@ -80,6 +80,7 @@ export * from './candidate-import-repository.js';
 export * from './bookings.js';
 export * from './data-rights.js';
 export * from './decisions.js';
+export * from './decision-repository.js';
 export * from './notification-templates.js';
 export * from './prompt-versions.js';
 export * from './audit-evidence.js';

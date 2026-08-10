@@ -1,6 +1,13 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
+import { createPool } from '@cpf/db';
+import {
+  PgDecisionRepository,
+  type Actor,
+  type DecisionContext,
+  type DecisionType,
+} from '@cpf/org';
 
 import type {
   AttemptStatus,
@@ -10,6 +17,9 @@ import type {
   Collection,
   CriterionState,
   CriterionView,
+  DecisionApprovalView,
+  DecisionDraftView,
+  DecisionOutcome,
   ImportResultView,
   TaskKind,
 } from './types';
@@ -20,14 +30,34 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const CANDIDATE_TOKEN = process.env.CPF_DEMO_CANDIDATE_TOKEN ?? 'cpf-demo-candidate-token-2026';
 const REVIEWER_TOKEN = process.env.CPF_DEMO_REVIEWER_TOKEN ?? 'cpf-demo-reviewer-token-2026';
 const ADMIN_TOKEN = process.env.CPF_DEMO_ADMIN_TOKEN ?? 'cpf-demo-admin-token-2026';
+const APPROVER_TOKEN = process.env.CPF_DEMO_APPROVER_TOKEN ?? 'cpf-demo-approver-token-2026';
 
 const DEMO_ATTEMPT_ID = '11111111-0000-4000-8000-000000000300';
 const DEMO_ASSIGNMENT_ID = '11111111-0000-4000-8000-000000000321';
 const DEMO_CAMPAIGN_ID = '11111111-0000-4000-8000-000000000200';
+const DEMO_DECISION_APPLICATION_ID = '11111111-0000-4000-8000-000000000217';
+const DEMO_ADMIN_USER_ID = '11111111-0000-4000-8000-000000000010';
 
 const CAMPAIGN_IDS: Readonly<Record<string, string>> = {
   cmp_frontend_demo: DEMO_CAMPAIGN_ID,
 };
+
+const APPLICATION_IDS: Readonly<Record<string, string>> = {
+  app_frontend_demo: DEMO_DECISION_APPLICATION_ID,
+};
+
+const DEMO_ADMIN_ACTOR: Actor = {
+  tenantId: '11111111-0000-4000-8000-000000000001',
+  userId: DEMO_ADMIN_USER_ID,
+  roles: ['employer_admin'],
+};
+
+let decisionReadRepository: PgDecisionRepository | null = null;
+
+function getDecisionReadRepository(): PgDecisionRepository {
+  decisionReadRepository ??= new PgDecisionRepository(createPool(), { role: 'cpf_app' });
+  return decisionReadRepository;
+}
 
 const TASK_IDS: Readonly<Record<string, string>> = {
   task_doc: '11111111-0000-4000-8000-000000000133',
@@ -381,6 +411,74 @@ async function readImportResult(importId: string): Promise<ImportResultView | nu
   return job === null || rows === null ? null : projectImportResult(job, rows);
 }
 
+function decisionDraftStatus(context: DecisionContext): DecisionDraftView['status'] {
+  if (context.decision === null) return 'draft';
+  if (context.decision.status === 'issued') return 'issued';
+  if (context.approval?.status === 'rejected') return 'returned';
+  if (context.approval?.status === 'pending' || context.decision.status === 'pending_approval') {
+    return 'awaiting_approval';
+  }
+  return 'draft';
+}
+
+function projectDecisionDraft(context: DecisionContext): DecisionDraftView {
+  return {
+    applicationId: externalId(APPLICATION_IDS, context.applicationId),
+    decisionId: context.decision?.id ?? null,
+    candidateRef: context.candidateRef,
+    campaignName: context.campaignName,
+    outcome: (context.decision?.decision as DecisionOutcome | undefined) ?? null,
+    rationale: context.decision?.rationale ?? '',
+    evidenceLinks: context.decision?.evidenceLinks ?? [],
+    reviewComplete: context.reviewComplete,
+    status: decisionDraftStatus(context),
+  };
+}
+
+function projectDecisionApproval(context: DecisionContext): DecisionApprovalView {
+  const decision = context.decision;
+  const status: DecisionApprovalView['status'] =
+    decision === null
+      ? 'awaiting_review'
+      : decision.status === 'issued'
+        ? 'issued'
+        : context.approval?.status === 'rejected'
+          ? 'returned'
+          : context.approval?.status === 'approved'
+            ? 'approved'
+            : 'awaiting_approval';
+  return {
+    applicationId: externalId(APPLICATION_IDS, context.applicationId),
+    decisionId: decision?.id ?? null,
+    candidateRef: context.candidateRef,
+    campaignName: context.campaignName,
+    outcome: (decision?.decision as DecisionOutcome | undefined) ?? null,
+    rationale: decision?.rationale ?? '',
+    evidenceLinks: decision?.evidenceLinks ?? [],
+    draftedBy: decision?.decidedByName ?? 'Not yet drafted',
+    status,
+    approver: decision?.secondApprovedByName ?? null,
+    approvedAt: decision?.secondApprovedAt ?? null,
+    issuedAt: decision?.issuedAt ?? null,
+    returnRationale: context.approval?.status === 'rejected' ? context.approval.rationale : null,
+  };
+}
+
+async function readDecisionContext(routeId: string): Promise<DecisionContext | null> {
+  if (!PERSISTENCE_ENABLED) return null;
+  const applicationId = mappedId(APPLICATION_IDS, routeId, 'Application');
+  try {
+    return await getDecisionReadRepository().getDecisionContext(DEMO_ADMIN_ACTOR, applicationId);
+  } catch (error) {
+    throw new DemoPersistenceError(
+      503,
+      error instanceof Error
+        ? `The persisted decision read model is unavailable: ${error.message}`
+        : 'The persisted decision read model is unavailable.',
+    );
+  }
+}
+
 export const demoPersistence = {
   enabled: PERSISTENCE_ENABLED,
 
@@ -490,6 +588,85 @@ export const demoPersistence = {
       {},
     );
     return campaign === null ? null : projectDemoCampaign(campaign);
+  },
+
+  getDecision: async (applicationId: string): Promise<DecisionDraftView | null> => {
+    const context = await readDecisionContext(applicationId);
+    return context === null ? null : projectDecisionDraft(context);
+  },
+
+  saveDecision: async (
+    applicationId: string,
+    outcome: DecisionOutcome,
+    rationale: string,
+    evidenceLinks: readonly string[],
+  ): Promise<DecisionDraftView | null> => {
+    const persistedApplicationId = mappedId(APPLICATION_IDS, applicationId, 'Application');
+    await requestJson(
+      `/applications/${persistedApplicationId}/decisions`,
+      'POST',
+      ADMIN_TOKEN,
+      {
+        data: {
+          decision: outcome as DecisionType,
+          rationale,
+          evidenceLinks,
+          secondApprovalRequired: true,
+        },
+      },
+      { 'idempotency-key': `decision-draft-${randomUUID()}` },
+    );
+    const context = await readDecisionContext(applicationId);
+    return context === null ? null : projectDecisionDraft(context);
+  },
+
+  getApproval: async (applicationId: string): Promise<DecisionApprovalView | null> => {
+    const context = await readDecisionContext(applicationId);
+    return context === null ? null : projectDecisionApproval(context);
+  },
+
+  approveDecision: async (applicationId: string): Promise<DecisionApprovalView | null> => {
+    const context = await readDecisionContext(applicationId);
+    const decisionId = context?.decision?.id;
+    if (decisionId === undefined) {
+      throw new DemoPersistenceError(409, 'No human decision is awaiting approval.');
+    }
+    await requestJson(
+      `/decisions/${decisionId}/approvals`,
+      'POST',
+      APPROVER_TOKEN,
+      { data: { status: 'approved', rationale: 'Independent human approval completed.' } },
+      { 'idempotency-key': `decision-approval-${randomUUID()}` },
+    );
+    await requestJson(
+      `/decisions/${decisionId}/issue`,
+      'POST',
+      APPROVER_TOKEN,
+      { data: {} },
+      { 'idempotency-key': `decision-issue-${randomUUID()}` },
+    );
+    const next = await readDecisionContext(applicationId);
+    return next === null ? null : projectDecisionApproval(next);
+  },
+
+  returnDecision: async (
+    applicationId: string,
+    rationale: string,
+  ): Promise<DecisionApprovalView | null> => {
+    const context = await readDecisionContext(applicationId);
+    const decisionId = context?.decision?.id;
+    if (decisionId === undefined) {
+      throw new DemoPersistenceError(409, 'No human decision is awaiting approval.');
+    }
+    await requestJson(
+      `/decisions/${decisionId}/approvals`,
+      'POST',
+      APPROVER_TOKEN,
+      { data: { status: 'rejected', rationale } },
+      { 'idempotency-key': `decision-return-${randomUUID()}` },
+    );
+    const next = await readDecisionContext(applicationId);
+    return next === null ? null : projectDecisionApproval(next);
   },
 
   validateCandidateImport: async (

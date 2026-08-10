@@ -5,6 +5,7 @@ import {
   createCandidateService,
   createCandidateImportService,
   createInvitationService,
+  createDecisionService,
   createAttemptService,
   createScorecardService,
   handleAddAttemptArtifact,
@@ -39,6 +40,9 @@ import {
   handleResendInvitation,
   handleRevokeInvitation,
   handleExtendInvitation,
+  handleCreateDecision,
+  handleApproveDecision,
+  handleIssueDecision,
   handleSaveAttemptResponse,
   handleStartAttempt,
   handleSubmitAttempt,
@@ -49,6 +53,7 @@ import {
   PgCandidateRepository,
   PgCandidateImportRepository,
   PgInvitationRepository,
+  PgDecisionRepository,
   PgScorecardRepository,
   type Actor,
   type RawCampaignListQuery,
@@ -82,6 +87,9 @@ const CONCRETE_OPERATIONS = new Set([
   'post_campaigns_campaignId_duplicate',
   'post_campaigns_campaignId_pause',
   'post_applications_applicationId_invitations',
+  'post_applications_applicationId_decisions',
+  'post_decisions_decisionId_approvals',
+  'post_decisions_decisionId_issue',
   'post_invitations_invitationId_extend',
   'post_invitations_invitationId_resend',
   'post_candidate_imports_importId_cancel',
@@ -104,6 +112,7 @@ export class ConcreteDispatcher {
   readonly #candidates;
   readonly #candidateImports;
   readonly #invitations;
+  readonly #decisions;
   readonly #scorecards;
 
   constructor(pool: Pool, options: { role?: string; importDataKey?: string } = {}) {
@@ -122,6 +131,9 @@ export class ConcreteDispatcher {
     });
     this.#invitations = createInvitationService({
       repository: new PgInvitationRepository(pool, options),
+    });
+    this.#decisions = createDecisionService({
+      repository: new PgDecisionRepository(pool, options),
     });
     this.#scorecards = createScorecardService({
       repository: new PgScorecardRepository(pool, options),
@@ -145,6 +157,7 @@ export class ConcreteDispatcher {
     const invitationId = params['invitationId'] ?? '';
     const importId = params['importId'] ?? '';
     const rowId = params['rowId'] ?? '';
+    const decisionId = params['decisionId'] ?? '';
 
     switch (operationId) {
       case 'get_attempts_attemptId':
@@ -206,6 +219,22 @@ export class ConcreteDispatcher {
         return handleDuplicateCampaign(this.#campaignLifecycle, { actor, campaignId, body });
       case 'post_applications_applicationId_invitations':
         return handlePostInvitation(this.#invitations, { actor, applicationId, body });
+      case 'post_applications_applicationId_decisions':
+        return handleCreateDecision(this.#decisions, {
+          actor,
+          applicationId,
+          body,
+          idempotencyKey,
+        });
+      case 'post_decisions_decisionId_approvals':
+        return handleApproveDecision(this.#decisions, {
+          actor,
+          decisionId,
+          body,
+          idempotencyKey,
+        });
+      case 'post_decisions_decisionId_issue':
+        return handleIssueDecision(this.#decisions, { actor, decisionId, idempotencyKey });
       case 'post_invitations_invitationId_resend':
         return handleResendInvitation(this.#invitations, { actor, invitationId });
       case 'post_invitations_invitationId_extend':

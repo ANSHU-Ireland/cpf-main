@@ -90,6 +90,12 @@ importers:
       '@cpf/account':
         specifier: workspace:*
         version: link:../../packages/account
+      '@cpf/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@cpf/org':
+        specifier: workspace:*
+        version: link:../../packages/org
       '@cpf/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens

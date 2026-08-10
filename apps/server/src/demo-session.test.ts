@@ -14,7 +14,13 @@ const ASSIGNMENT_ID = '11111111-0000-4000-8000-000000000321';
 function session(role: string, scopeId: string): DemoSession {
   return {
     actor: { tenantId: TENANT_ID, userId: 'user-1', roles: [role] },
-    scopes: [{ role, scopeType: role === 'employer_admin' ? 'tenant' : 'submission', scopeId }],
+    scopes: [
+      {
+        role,
+        scopeType: role.startsWith('employer_admin') ? 'tenant' : 'submission',
+        scopeId,
+      },
+    ],
   };
 }
 
@@ -99,5 +105,24 @@ describe('demo resource authorization', () => {
         assignmentId: ASSIGNMENT_ID,
       }),
     ).toBe(true);
+  });
+
+  it('limits the employer approver role to the approval command', () => {
+    const approver = session('employer_admin_approver', TENANT_ID);
+    expect(
+      authorizeDemoOperation(approver, 'post_decisions_decisionId_approvals', {
+        decisionId: 'decision-1',
+      }),
+    ).toBe(true);
+    expect(
+      authorizeDemoOperation(approver, 'post_applications_applicationId_decisions', {
+        applicationId: 'application-1',
+      }),
+    ).toBe(false);
+    expect(
+      authorizeDemoOperation(approver, 'post_decisions_decisionId_issue', {
+        decisionId: 'decision-1',
+      }),
+    ).toBe(false);
   });
 });

@@ -1,84 +1,160 @@
 import {
-  listDecisions,
-  getDecision,
   approveDecision,
+  createDecision,
   issueDecision,
+  parseDecisionApplicationId,
+  parseDecisionApproval,
   parseDecisionCreate,
   parseDecisionId,
+  parseIdempotencyKey,
+  type Actor,
+  type DecisionApprovalInput,
+  type DecisionCreate,
   type DecisionRepository,
 } from '@cpf/org';
-import type { Actor } from '@cpf/org';
 import { ensureCorrelationId, jsonResponse, problemResponse, type HttpResponse } from '@cpf/http';
 
 export interface DecisionService {
-  list(actor: Actor): ReturnType<typeof listDecisions>;
-  get(actor: Actor, id: string): ReturnType<typeof getDecision>;
-  approve(actor: Actor, id: string): Promise<HttpResponse>;
-  issue(actor: Actor, body: unknown): Promise<HttpResponse>;
+  create(
+    actor: Actor,
+    applicationId: string,
+    input: DecisionCreate,
+    idempotencyKey: string,
+  ): ReturnType<typeof createDecision>;
+  approve(
+    actor: Actor,
+    decisionId: string,
+    input: DecisionApprovalInput,
+    idempotencyKey: string,
+  ): ReturnType<typeof approveDecision>;
+  issue(actor: Actor, decisionId: string, idempotencyKey: string): ReturnType<typeof issueDecision>;
 }
 
 export function createDecisionService(deps: { repository: DecisionRepository }): DecisionService {
   return {
-    list: (actor) => listDecisions(deps, actor),
-    get: (actor, id) => getDecision(deps, actor, id),
-    approve: async (actor, id) => {
-      const correlationId = ensureCorrelationId();
-      const validId = parseDecisionId(id);
-      if (validId === null)
-        return problemResponse({ status: 422, title: 'Invalid ID', correlationId });
-      const r = await approveDecision(deps, actor, validId);
-      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
-      return jsonResponse(200, r.approval, correlationId);
-    },
-    issue: async (actor, body) => {
-      const correlationId = ensureCorrelationId();
-      const parsed = parseDecisionCreate(body);
-      if (!parsed.ok)
-        return problemResponse({
-          status: 422,
-          title: 'Validation',
-          correlationId,
-          errors: parsed.errors.map((message) => ({ detail: message })),
-        });
-      const r = await issueDecision(deps, actor, parsed.value);
-      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
-      return jsonResponse(201, r.decision, correlationId);
-    },
+    create: (actor, applicationId, input, idempotencyKey) =>
+      createDecision(deps, actor, applicationId, input, idempotencyKey),
+    approve: (actor, decisionId, input, idempotencyKey) =>
+      approveDecision(deps, actor, decisionId, input, idempotencyKey),
+    issue: (actor, decisionId, idempotencyKey) =>
+      issueDecision(deps, actor, decisionId, idempotencyKey),
   };
 }
 
-export async function handleListDecisions(
-  svc: DecisionService,
-  req: { actor: Actor },
-): Promise<HttpResponse> {
-  const correlationId = ensureCorrelationId();
-  const r = await svc.list(req.actor);
-  if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
-  return jsonResponse(200, { items: r.items, total: r.total }, correlationId);
+function invalidIdempotencyKey(correlationId: string): HttpResponse {
+  return problemResponse({
+    status: 422,
+    title: 'Unprocessable Entity',
+    detail: 'Idempotency-Key must contain between 8 and 200 characters.',
+    correlationId,
+  });
 }
 
-export async function handleGetDecision(
-  svc: DecisionService,
-  req: { actor: Actor; decisionId: string },
+function validationResponse(correlationId: string, errors: readonly string[]): HttpResponse {
+  return problemResponse({
+    status: 422,
+    title: 'Unprocessable Entity',
+    detail: 'The request body failed validation.',
+    correlationId,
+    errors: errors.map((detail) => ({ detail })),
+  });
+}
+
+function resultProblem(
+  result: { readonly status: 403 | 404 | 409; readonly reason: string },
+  correlationId: string,
+): HttpResponse {
+  return problemResponse({
+    status: result.status,
+    title: result.status === 403 ? 'Forbidden' : result.status === 404 ? 'Not Found' : 'Conflict',
+    detail: result.reason,
+    correlationId,
+  });
+}
+
+export async function handleCreateDecision(
+  service: DecisionService,
+  req: {
+    readonly actor: Actor;
+    readonly applicationId: string;
+    readonly body: unknown;
+    readonly idempotencyKey: string;
+    readonly correlationId?: string;
+  },
 ): Promise<HttpResponse> {
-  const correlationId = ensureCorrelationId();
-  const id = parseDecisionId(req.decisionId);
-  if (id === null) return problemResponse({ status: 422, title: 'Invalid ID', correlationId });
-  const r = await svc.get(req.actor, id);
-  if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
-  return jsonResponse(200, r.decision, correlationId);
+  const correlationId = ensureCorrelationId(req.correlationId);
+  const applicationId = parseDecisionApplicationId(req.applicationId);
+  if (applicationId === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      detail: 'applicationId must be a valid UUID.',
+      correlationId,
+    });
+  }
+  const idempotencyKey = parseIdempotencyKey(req.idempotencyKey);
+  if (idempotencyKey === null) return invalidIdempotencyKey(correlationId);
+  const parsed = parseDecisionCreate(req.body);
+  if (!parsed.ok) return validationResponse(correlationId, parsed.errors);
+  const result = await service.create(req.actor, applicationId, parsed.value, idempotencyKey);
+  return result.ok
+    ? jsonResponse(200, result.decision, correlationId)
+    : resultProblem(result, correlationId);
 }
 
 export async function handleApproveDecision(
-  svc: DecisionService,
-  req: { actor: Actor; decisionId: string },
+  service: DecisionService,
+  req: {
+    readonly actor: Actor;
+    readonly decisionId: string;
+    readonly body: unknown;
+    readonly idempotencyKey: string;
+    readonly correlationId?: string;
+  },
 ): Promise<HttpResponse> {
-  return svc.approve(req.actor, req.decisionId);
+  const correlationId = ensureCorrelationId(req.correlationId);
+  const decisionId = parseDecisionId(req.decisionId);
+  if (decisionId === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      detail: 'decisionId must be a valid UUID.',
+      correlationId,
+    });
+  }
+  const idempotencyKey = parseIdempotencyKey(req.idempotencyKey);
+  if (idempotencyKey === null) return invalidIdempotencyKey(correlationId);
+  const parsed = parseDecisionApproval(req.body);
+  if (!parsed.ok) return validationResponse(correlationId, parsed.errors);
+  const result = await service.approve(req.actor, decisionId, parsed.value, idempotencyKey);
+  return result.ok
+    ? jsonResponse(200, result.decision, correlationId)
+    : resultProblem(result, correlationId);
 }
 
 export async function handleIssueDecision(
-  svc: DecisionService,
-  req: { actor: Actor; body: unknown },
+  service: DecisionService,
+  req: {
+    readonly actor: Actor;
+    readonly decisionId: string;
+    readonly idempotencyKey: string;
+    readonly correlationId?: string;
+  },
 ): Promise<HttpResponse> {
-  return svc.issue(req.actor, req.body);
+  const correlationId = ensureCorrelationId(req.correlationId);
+  const decisionId = parseDecisionId(req.decisionId);
+  if (decisionId === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      detail: 'decisionId must be a valid UUID.',
+      correlationId,
+    });
+  }
+  const idempotencyKey = parseIdempotencyKey(req.idempotencyKey);
+  if (idempotencyKey === null) return invalidIdempotencyKey(correlationId);
+  const result = await service.issue(req.actor, decisionId, idempotencyKey);
+  return result.ok
+    ? jsonResponse(200, result.decision, correlationId)
+    : resultProblem(result, correlationId);
 }

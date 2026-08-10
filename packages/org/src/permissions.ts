@@ -5,6 +5,7 @@ import type { Permission } from '@cpf/policy';
  * `iam.membership_roles` to actor roles is owned by the (unbuilt) auth layer; tests pass it explicitly.
  */
 export const EMPLOYER_ADMIN_ROLE = 'employer_admin';
+export const EMPLOYER_APPROVER_ROLE = 'employer_admin_approver';
 export const CANDIDATE_ROLE = 'candidate';
 export const REVIEWER_ROLE = 'reviewer';
 
@@ -62,6 +63,8 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'complaint' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'decision' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'decision' },
+  { role: EMPLOYER_APPROVER_ROLE, action: 'read', resourceType: 'decision' },
+  { role: EMPLOYER_APPROVER_ROLE, action: 'write', resourceType: 'decision' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'notification_template' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'notification_template' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'governance_doc' },

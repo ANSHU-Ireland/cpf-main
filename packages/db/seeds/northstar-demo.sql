@@ -19,7 +19,8 @@ VALUES
   ('11111111-0000-4000-8000-000000000010', 'admin@northstar.invalid', 'Morgan Lee', 'employer_user', 'active', true),
   ('11111111-0000-4000-8000-000000000011', 'reviewer@northstar.invalid', 'Avery Chen', 'employer_user', 'active', true),
   ('11111111-0000-4000-8000-000000000012', 'candidate.one@northstar.invalid', 'Jamie Patel', 'candidate', 'active', false),
-  ('11111111-0000-4000-8000-000000000013', 'candidate.two@northstar.invalid', 'Riley Morgan', 'candidate', 'active', false)
+  ('11111111-0000-4000-8000-000000000013', 'candidate.two@northstar.invalid', 'Riley Morgan', 'candidate', 'active', false),
+  ('11111111-0000-4000-8000-000000000014', 'approver@northstar.invalid', 'Priya Shah', 'employer_user', 'active', true)
 ON CONFLICT (id) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   status = EXCLUDED.status,
@@ -30,7 +31,8 @@ INSERT INTO iam.roles (id, code, name, scope, is_system)
 VALUES
   ('11111111-0000-4000-8000-000000000020', 'employer_admin', 'Employer administrator', 'tenant', true),
   ('11111111-0000-4000-8000-000000000021', 'reviewer', 'Reviewer', 'tenant', true),
-  ('11111111-0000-4000-8000-000000000022', 'candidate', 'Candidate', 'candidate_self', true)
+  ('11111111-0000-4000-8000-000000000022', 'candidate', 'Candidate', 'candidate_self', true),
+  ('11111111-0000-4000-8000-000000000023', 'employer_admin_approver', 'Employer decision approver', 'tenant', true)
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, scope = EXCLUDED.scope;
 
 INSERT INTO iam.memberships (id, tenant_id, user_id, status, starts_at, ends_at)
@@ -40,7 +42,9 @@ VALUES
   ('11111111-0000-4000-8000-000000000031', '11111111-0000-4000-8000-000000000001',
    '11111111-0000-4000-8000-000000000011', 'active', now() - interval '30 days', NULL),
   ('11111111-0000-4000-8000-000000000032', '11111111-0000-4000-8000-000000000001',
-   '11111111-0000-4000-8000-000000000012', 'active', now() - interval '30 days', NULL)
+   '11111111-0000-4000-8000-000000000012', 'active', now() - interval '30 days', NULL),
+  ('11111111-0000-4000-8000-000000000033', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000014', 'active', now() - interval '30 days', NULL)
 ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, ends_at = NULL, updated_at = now();
 
 INSERT INTO iam.membership_roles
@@ -53,7 +57,11 @@ FROM (VALUES
   ('11111111-0000-4000-8000-000000000031', 'reviewer', 'submission',
    '11111111-0000-4000-8000-000000000321'),
   ('11111111-0000-4000-8000-000000000032', 'candidate', 'submission',
-   '11111111-0000-4000-8000-000000000300')
+   '11111111-0000-4000-8000-000000000300'),
+  ('11111111-0000-4000-8000-000000000033', 'employer_admin', 'tenant',
+   '11111111-0000-4000-8000-000000000001'),
+  ('11111111-0000-4000-8000-000000000033', 'employer_admin_approver', 'tenant',
+   '11111111-0000-4000-8000-000000000001')
 ) AS fixture(membership_id, role_code, scope_type, scope_id)
 JOIN iam.roles AS role ON role.code = fixture.role_code
 ON CONFLICT (membership_id, role_id, scope_type, scope_id)
@@ -71,6 +79,9 @@ VALUES
    now() + interval '30 days', NULL, NULL),
   ('11111111-0000-4000-8000-000000000042', '11111111-0000-4000-8000-000000000012',
    encode(digest('cpf-demo-candidate-token-2026', 'sha256'), 'hex'), 'CPF synthetic candidate', now(), now(),
+   now() + interval '30 days', NULL, NULL),
+  ('11111111-0000-4000-8000-000000000043', '11111111-0000-4000-8000-000000000014',
+   encode(digest('cpf-demo-approver-token-2026', 'sha256'), 'hex'), 'CPF synthetic approver', now(), now(),
    now() + interval '30 days', NULL, NULL)
 ON CONFLICT (id) DO UPDATE SET
   refresh_token_hash = EXCLUDED.refresh_token_hash,
@@ -246,7 +257,8 @@ VALUES
   ('11111111-0000-4000-8000-000000000202', '11111111-0000-4000-8000-000000000001', 'DEMO-CANDIDATE-01', 'active'),
   ('11111111-0000-4000-8000-000000000205', '11111111-0000-4000-8000-000000000001', 'DEMO-CANDIDATE-02', 'active'),
   ('11111111-0000-4000-8000-000000000210', '11111111-0000-4000-8000-000000000001', 'DEMO-CANDIDATE-03', 'active'),
-  ('11111111-0000-4000-8000-000000000213', '11111111-0000-4000-8000-000000000001', 'DEMO-CANDIDATE-04', 'withdrawn')
+  ('11111111-0000-4000-8000-000000000213', '11111111-0000-4000-8000-000000000001', 'DEMO-CANDIDATE-04', 'withdrawn'),
+  ('11111111-0000-4000-8000-000000000216', '11111111-0000-4000-8000-000000000001', 'DEMO-CANDIDATE-05', 'active')
 ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = now();
 
 INSERT INTO hiring.applications
@@ -263,7 +275,10 @@ VALUES
    'invited', 'demo_seed', 'NORTHSTAR-WAREHOUSE-001'),
   ('11111111-0000-4000-8000-000000000214', '11111111-0000-4000-8000-000000000001',
    '11111111-0000-4000-8000-000000000209', '11111111-0000-4000-8000-000000000213',
-   'withdrawn', 'demo_seed', 'NORTHSTAR-DATA-001')
+   'withdrawn', 'demo_seed', 'NORTHSTAR-DATA-001'),
+  ('11111111-0000-4000-8000-000000000217', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000200', '11111111-0000-4000-8000-000000000216',
+   'reviewed', 'demo_seed', 'NORTHSTAR-OPS-005')
 ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = now();
 
 INSERT INTO hiring.invitations

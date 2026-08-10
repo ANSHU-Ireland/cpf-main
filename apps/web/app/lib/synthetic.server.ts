@@ -1556,22 +1556,29 @@ function freshEmployer(): EmployerState {
     ],
     decision: {
       applicationId: EMPLOYER_APPLICATION_ID,
+      decisionId: null,
       candidateRef: 'CND-7F3A',
       campaignName: 'Backend engineers — Q3',
       outcome: null,
       rationale: '',
+      evidenceLinks: [],
       reviewComplete: true,
       status: 'draft',
     },
     approval: {
       applicationId: EMPLOYER_APPLICATION_ID,
+      decisionId: null,
       candidateRef: 'CND-7F3A',
+      campaignName: 'Backend engineers — Q3',
       outcome: null,
       rationale: '',
+      evidenceLinks: [],
       draftedBy: 'Sam Recruiter',
       status: 'awaiting_review',
       approver: null,
+      approvedAt: null,
       issuedAt: null,
+      returnRationale: null,
     },
     reports: [
       {
@@ -1996,14 +2003,28 @@ export const employerStore = {
   getDecision(): DecisionDraftView {
     return employer.decision;
   },
-  saveDecision(outcome: DecisionOutcome, rationale: string): DecisionDraftView {
+  saveDecision(
+    outcome: DecisionOutcome,
+    rationale: string,
+    evidenceLinks: readonly string[] = [],
+  ): DecisionDraftView {
     // A human decision requires completed review and a written rationale (enforced at the boundary).
-    employer.decision = { ...employer.decision, outcome, rationale, status: 'submitted' };
-    employer.approval = {
-      ...employer.approval,
+    employer.decision = {
+      ...employer.decision,
+      decisionId: employer.decision.decisionId ?? randomId('dec'),
       outcome,
       rationale,
+      evidenceLinks,
       status: 'awaiting_approval',
+    };
+    employer.approval = {
+      ...employer.approval,
+      decisionId: employer.decision.decisionId,
+      outcome,
+      rationale,
+      evidenceLinks,
+      status: 'awaiting_approval',
+      returnRationale: null,
     };
     return employer.decision;
   },
@@ -2018,15 +2039,18 @@ export const employerStore = {
         ...employer.approval,
         status: 'issued',
         approver: 'Dana Owner',
+        approvedAt: new Date().toISOString(),
         issuedAt: new Date().toISOString(),
       };
     }
     return employer.approval;
   },
-  returnDecision(): DecisionApprovalView {
+  returnDecision(
+    rationale = 'Returned for a clearer evidence-based rationale.',
+  ): DecisionApprovalView {
     if (employer.approval.status === 'awaiting_approval') {
-      employer.approval = { ...employer.approval, status: 'returned' };
-      employer.decision = { ...employer.decision, status: 'draft' };
+      employer.approval = { ...employer.approval, status: 'returned', returnRationale: rationale };
+      employer.decision = { ...employer.decision, status: 'returned' };
     }
     return employer.approval;
   },

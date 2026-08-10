@@ -84,7 +84,16 @@ TO cpf_app;
 GRANT SELECT, INSERT, UPDATE ON
   review.scorecards,
   review.criterion_scores,
-  review.scorecard_drafts
+  review.scorecard_drafts,
+  review.progression_decisions
+TO cpf_app;
+
+GRANT SELECT, INSERT, UPDATE ON
+  hiring.decision_approvals
+TO cpf_app;
+
+GRANT SELECT, INSERT ON
+  integration.outbound_messages
 TO cpf_app;
 
 GRANT SELECT, INSERT, UPDATE ON

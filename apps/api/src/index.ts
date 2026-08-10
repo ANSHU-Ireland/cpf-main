@@ -40,3 +40,4 @@ export * from './campaign/review-quality.handler.js';
 export * from './campaign/candidate-merges.handler.js';
 export * from './campaign/candidate-actions.handler.js';
 export * from './campaign/candidate-imports.handler.js';
+export * from './campaign/decisions.handler.js';
