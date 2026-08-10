@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  getAttempt,
   startAttempt,
   submitAttempt,
   saveAttemptResponse,
@@ -26,6 +27,7 @@ import {
   parseAttemptPluginExecute,
   type AttemptRepository,
   type AttemptRecord,
+  type AttemptSessionRecord,
   type AttemptResponseRecord,
   type AttemptItemFlagRecord,
   type AttemptArtifactRecord,
@@ -50,6 +52,18 @@ const attempt: AttemptRecord = {
   status: 'in_progress',
   startedAt: '2026-01-01T00:00:00.000Z',
   submittedAt: null,
+};
+const attemptSession: AttemptSessionRecord = {
+  ...attempt,
+  assessmentTitle: 'Senior Frontend Engineer assessment',
+  remainingSeconds: 3600,
+  rowVersion: 1,
+  serverNow: '2026-08-10T16:00:00.000Z',
+  deadlineAt: '2026-08-10T17:00:00.000Z',
+  sections: [],
+  tasks: [],
+  activeItemId: null,
+  receiptRef: null,
 };
 const response: AttemptResponseRecord = { attemptId: ID, itemId: ITEM, value: 42, savedAt: '' };
 const flag: AttemptItemFlagRecord = { attemptId: ID, itemId: ITEM, flagged: true };
@@ -86,6 +100,7 @@ const execution: AttemptPluginExecutionRecord = {
 
 function repo(overrides: Partial<AttemptRepository> = {}): AttemptRepository {
   return {
+    getAttempt: () => Promise.resolve(attemptSession),
     startAttempt: () => Promise.resolve(attempt),
     submitAttempt: () => Promise.resolve({ ...attempt, status: 'submitted' }),
     saveResponse: () => Promise.resolve(response),
@@ -105,6 +120,18 @@ function repo(overrides: Partial<AttemptRepository> = {}): AttemptRepository {
 function deps(overrides: Partial<AttemptRepository> = {}) {
   return { repository: repo(overrides) };
 }
+
+describe('getAttempt', () => {
+  it('reads for an admin', async () => expect((await getAttempt(deps(), admin, ID)).ok).toBe(true));
+  it('denies a viewer', async () => {
+    const r = await getAttempt(deps(), noRole, ID);
+    expect(r.ok === false && r.status).toBe(403);
+  });
+  it('404 when missing', async () => {
+    const r = await getAttempt(deps({ getAttempt: () => Promise.resolve(null) }), admin, ID);
+    expect(r.ok === false && r.status).toBe(404);
+  });
+});
 
 describe('parsers', () => {
   it('parseAttemptId', () => {

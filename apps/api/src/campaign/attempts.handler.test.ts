@@ -3,6 +3,7 @@ import type {
   Actor,
   AttemptRepository,
   AttemptRecord,
+  AttemptSessionRecord,
   AttemptResponseRecord,
   AttemptItemFlagRecord,
   AttemptArtifactRecord,
@@ -14,6 +15,7 @@ import type {
 } from '@cpf/org';
 import {
   createAttemptService,
+  handleGetAttempt,
   handleStartAttempt,
   handleSubmitAttempt,
   handleSaveAttemptResponse,
@@ -40,6 +42,18 @@ const attempt: AttemptRecord = {
   status: 'in_progress',
   startedAt: '',
   submittedAt: null,
+};
+const attemptSession: AttemptSessionRecord = {
+  ...attempt,
+  assessmentTitle: 'Senior Frontend Engineer assessment',
+  remainingSeconds: 3600,
+  rowVersion: 1,
+  serverNow: '2026-08-10T16:00:00.000Z',
+  deadlineAt: '2026-08-10T17:00:00.000Z',
+  sections: [],
+  tasks: [],
+  activeItemId: null,
+  receiptRef: null,
 };
 const response: AttemptResponseRecord = { attemptId: ID, itemId: ITEM, value: 1, savedAt: '' };
 const flag: AttemptItemFlagRecord = { attemptId: ID, itemId: ITEM, flagged: true };
@@ -76,6 +90,7 @@ const execution: AttemptPluginExecutionRecord = {
 
 function repo(overrides: Partial<AttemptRepository> = {}): AttemptRepository {
   return {
+    getAttempt: () => Promise.resolve(attemptSession),
     startAttempt: () => Promise.resolve(attempt),
     submitAttempt: () => Promise.resolve(attempt),
     saveResponse: () => Promise.resolve(response),
@@ -95,6 +110,22 @@ function repo(overrides: Partial<AttemptRepository> = {}): AttemptRepository {
 function svc(overrides: Partial<AttemptRepository> = {}) {
   return createAttemptService({ repository: repo(overrides) });
 }
+
+describe('handleGetAttempt', () => {
+  it('200', async () =>
+    expect((await handleGetAttempt(svc(), { actor, attemptId: ID })).status).toBe(200));
+  it('422 for a bad id', async () =>
+    expect((await handleGetAttempt(svc(), { actor, attemptId: 'bad' })).status).toBe(422));
+  it('404 when missing', async () =>
+    expect(
+      (
+        await handleGetAttempt(svc({ getAttempt: () => Promise.resolve(null) }), {
+          actor,
+          attemptId: ID,
+        })
+      ).status,
+    ).toBe(404));
+});
 
 describe('handleStartAttempt', () => {
   it('200', async () =>

@@ -7,9 +7,20 @@ BEGIN
   END IF;
 END $$;
 
-GRANT USAGE ON SCHEMA assessment, runtime, evidence, review, audit TO cpf_app;
+GRANT USAGE ON SCHEMA iam, assessment, runtime, evidence, review, audit TO cpf_app;
 
 GRANT SELECT ON
+  iam.users,
+  iam.roles,
+  iam.memberships,
+  iam.membership_roles,
+  iam.user_sessions
+TO cpf_app;
+
+GRANT SELECT ON
+  assessment.assessments,
+  assessment.assessment_versions,
+  assessment.assessment_sections,
   assessment.assessment_items,
   assessment.plugin_registry,
   assessment.rubric_criteria
@@ -20,7 +31,8 @@ GRANT SELECT, UPDATE ON
 TO cpf_app;
 
 GRANT SELECT ON
-  runtime.attempt_version_bindings
+  runtime.attempt_version_bindings,
+  runtime.submissions
 TO cpf_app;
 
 GRANT SELECT, INSERT, UPDATE ON

@@ -1,4 +1,5 @@
 import {
+  getAttempt,
   startAttempt,
   submitAttempt,
   saveAttemptResponse,
@@ -29,6 +30,7 @@ import type { Actor } from '@cpf/org';
 import { ensureCorrelationId, jsonResponse, problemResponse, type HttpResponse } from '@cpf/http';
 
 export interface AttemptService {
+  get(actor: Actor, attemptId: string): Promise<HttpResponse>;
   start(actor: Actor, attemptId: string): Promise<HttpResponse>;
   submit(actor: Actor, attemptId: string): Promise<HttpResponse>;
   saveResponse(
@@ -68,6 +70,14 @@ function invalidId(correlationId: string, detail: string): HttpResponse {
 
 export function createAttemptService(deps: { repository: AttemptRepository }): AttemptService {
   return {
+    get: async (actor, attemptId) => {
+      const correlationId = ensureCorrelationId();
+      const aid = parseAttemptId(attemptId);
+      if (aid === null) return invalidId(correlationId, 'attemptId must be a valid UUID.');
+      const r = await getAttempt(deps, actor, aid);
+      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
+      return jsonResponse(200, r.attempt, correlationId);
+    },
     start: async (actor, attemptId) => {
       const correlationId = ensureCorrelationId();
       const aid = parseAttemptId(attemptId);
@@ -189,6 +199,13 @@ export function createAttemptService(deps: { repository: AttemptRepository }): A
       return jsonResponse(200, r.execution, correlationId);
     },
   };
+}
+
+export async function handleGetAttempt(
+  svc: AttemptService,
+  req: { actor: Actor; attemptId: string },
+): Promise<HttpResponse> {
+  return svc.get(req.actor, req.attemptId);
 }
 
 export async function handleStartAttempt(

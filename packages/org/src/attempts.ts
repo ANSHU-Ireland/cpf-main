@@ -35,6 +35,38 @@ export interface AttemptRecord {
   readonly submittedAt: string | null;
 }
 
+export interface AttemptSessionSectionRecord {
+  readonly id: string;
+  readonly title: string;
+  readonly displayOrder: number;
+}
+
+export interface AttemptSessionTaskRecord {
+  readonly id: string;
+  readonly sectionId: string;
+  readonly itemType: string;
+  readonly title: string;
+  readonly prompt: unknown;
+  readonly displayOrder: number;
+  readonly response: unknown;
+  readonly savedAt: string | null;
+  readonly flagged: boolean;
+  readonly version: number;
+  readonly checksum: string;
+}
+
+export interface AttemptSessionRecord extends AttemptRecord {
+  readonly assessmentTitle: string;
+  readonly remainingSeconds: number;
+  readonly rowVersion: number;
+  readonly serverNow: string;
+  readonly deadlineAt: string;
+  readonly sections: readonly AttemptSessionSectionRecord[];
+  readonly tasks: readonly AttemptSessionTaskRecord[];
+  readonly activeItemId: string | null;
+  readonly receiptRef: string | null;
+}
+
 export interface AttemptResponseRecord {
   readonly attemptId: string;
   readonly itemId: string;
@@ -128,6 +160,7 @@ export interface AttemptPluginExecuteInput {
 }
 
 export interface AttemptRepository {
+  getAttempt(actor: Actor, attemptId: string): Promise<AttemptSessionRecord | null>;
   startAttempt(actor: Actor, attemptId: string): Promise<AttemptRecord | null>;
   submitAttempt(actor: Actor, attemptId: string): Promise<AttemptRecord | null>;
   saveResponse(
@@ -291,6 +324,17 @@ function authorize(actor: Actor, action: 'read' | 'write'): boolean {
     { type: 'attempt', tenantId: actor.tenantId },
     ORG_PERMISSIONS,
   ).allowed;
+}
+
+export async function getAttempt(
+  deps: { repository: AttemptRepository },
+  actor: Actor,
+  attemptId: string,
+): Promise<Result<{ attempt: AttemptSessionRecord }>> {
+  if (!authorize(actor, 'read')) return { ok: false, status: 403, reason: 'forbidden' };
+  const attempt = await deps.repository.getAttempt(actor, attemptId);
+  if (attempt === null) return { ok: false, status: 404, reason: 'not_found' };
+  return { ok: true, attempt };
 }
 
 export async function startAttempt(

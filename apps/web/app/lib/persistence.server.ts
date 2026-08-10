@@ -1,7 +1,19 @@
 import 'server-only';
 
+import type {
+  AttemptStatus,
+  AttemptTaskView,
+  AttemptView,
+  Collection,
+  CriterionState,
+  CriterionView,
+  TaskKind,
+} from './types';
+
 const API_BASE_URL = process.env.CPF_API_BASE_URL ?? 'http://127.0.0.1:3300';
 const PERSISTENCE_ENABLED = process.env.CPF_DEMO_PERSISTENCE === 'true';
+const CANDIDATE_TOKEN = process.env.CPF_DEMO_CANDIDATE_TOKEN ?? 'cpf-demo-candidate-token-2026';
+const REVIEWER_TOKEN = process.env.CPF_DEMO_REVIEWER_TOKEN ?? 'cpf-demo-reviewer-token-2026';
 
 const DEMO_ATTEMPT_ID = '11111111-0000-4000-8000-000000000300';
 const DEMO_ASSIGNMENT_ID = '11111111-0000-4000-8000-000000000321';
@@ -22,6 +34,50 @@ const CRITERION_IDS: Readonly<Record<string, string>> = {
   cri_delivery: '11111111-0000-4000-8000-000000000115',
 };
 
+interface BackendAttemptTask {
+  readonly id: string;
+  readonly sectionId: string;
+  readonly itemType: string;
+  readonly title: string;
+  readonly prompt: unknown;
+  readonly response: unknown;
+  readonly savedAt: string | null;
+  readonly flagged: boolean;
+  readonly version: number;
+  readonly checksum: string;
+}
+
+interface BackendAttempt {
+  readonly status: string;
+  readonly assessmentTitle: string;
+  readonly serverNow: string;
+  readonly deadlineAt: string;
+  readonly submittedAt: string | null;
+  readonly receiptRef: string | null;
+  readonly activeItemId: string | null;
+  readonly sections: readonly {
+    readonly id: string;
+    readonly title: string;
+  }[];
+  readonly tasks: readonly BackendAttemptTask[];
+}
+
+interface BackendCriterion {
+  readonly criterionId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly humanScore: number | null;
+  readonly insufficientEvidence: boolean;
+  readonly evidenceLinks: readonly unknown[];
+  readonly reviewerComment: string | null;
+  readonly updatedAt: string | null;
+}
+
+interface BackendScorecard {
+  readonly status: string;
+  readonly criteria?: readonly BackendCriterion[];
+}
+
 export class DemoPersistenceError extends Error {
   readonly status: number;
 
@@ -32,13 +88,21 @@ export class DemoPersistenceError extends Error {
   }
 }
 
-async function persist(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<void> {
-  if (!PERSISTENCE_ENABLED) return;
+async function requestJson<T>(
+  path: string,
+  method: 'GET' | 'POST' | 'PUT',
+  token: string,
+  body?: unknown,
+): Promise<T | null> {
+  if (!PERSISTENCE_ENABLED) return null;
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       cache: 'no-store',
       signal: AbortSignal.timeout(5_000),
@@ -56,40 +120,203 @@ async function persist(path: string, method: 'POST' | 'PUT', body?: unknown): Pr
     }
     throw new DemoPersistenceError(response.status, detail);
   }
+  if (response.status === 204) return null;
+  return (await response.json()) as T;
+}
+
+async function persist(
+  path: string,
+  method: 'POST' | 'PUT',
+  token: string,
+  body?: unknown,
+): Promise<void> {
+  await requestJson(path, method, token, body);
 }
 
 function mappedId(map: Readonly<Record<string, string>>, id: string, label: string): string {
+  if (Object.values(map).includes(id)) return id;
   const mapped = map[id];
   if (mapped === undefined)
     throw new DemoPersistenceError(404, `${label} is not in the demo fixture.`);
   return mapped;
 }
 
+function externalId(map: Readonly<Record<string, string>>, id: string): string {
+  return Object.entries(map).find(([, value]) => value === id)?.[0] ?? id;
+}
+
+function attemptStatus(status: string): AttemptStatus {
+  switch (status) {
+    case 'in_progress':
+      return 'in_progress';
+    case 'on_break':
+    case 'paused':
+      return 'paused';
+    case 'submitting':
+      return 'submitting';
+    case 'submitted':
+      return 'submitted';
+    case 'expired':
+      return 'expired';
+    case 'abandoned':
+    case 'voided':
+      return 'voided';
+    default:
+      return 'ready';
+  }
+}
+
+function taskKind(itemType: string): TaskKind {
+  if (itemType === 'code' || itemType === 'coding') return 'code';
+  if (itemType === 'sheet' || itemType === 'spreadsheet') return 'sheet';
+  return 'document';
+}
+
+function promptText(prompt: unknown): string {
+  if (typeof prompt === 'string') return prompt;
+  if (prompt !== null && typeof prompt === 'object') {
+    const brief = (prompt as Record<string, unknown>)['brief'];
+    if (typeof brief === 'string') return brief;
+  }
+  return JSON.stringify(prompt ?? '');
+}
+
+function responseText(response: unknown): string {
+  if (typeof response === 'string') return response;
+  if (response === null || response === undefined) return '';
+  return JSON.stringify(response);
+}
+
+export function projectDemoAttempt(attempt: BackendAttempt, routeId: string): AttemptView {
+  const activeItemId =
+    attempt.activeItemId === null ? null : externalId(TASK_IDS, attempt.activeItemId);
+  const tasks: readonly AttemptTaskView[] = attempt.tasks.map((task) => {
+    const id = externalId(TASK_IDS, task.id);
+    return {
+      id,
+      sectionId: task.sectionId,
+      kind: taskKind(task.itemType),
+      title: task.title,
+      prompt: promptText(task.prompt),
+      status: task.flagged
+        ? 'flagged'
+        : id === activeItemId
+          ? 'in_progress'
+          : task.savedAt === null
+            ? 'not_started'
+            : 'saved',
+      response: responseText(task.response),
+      savedAt: task.savedAt,
+      flagged: task.flagged,
+      version: task.version,
+      checksum: task.checksum,
+    };
+  });
+  return {
+    id: routeId,
+    assessmentTitle: attempt.assessmentTitle,
+    status: attemptStatus(attempt.status),
+    deadlineAt: attempt.deadlineAt,
+    serverNow: attempt.serverNow,
+    autosave: tasks.some((task) => task.savedAt !== null) ? 'saved' : 'idle',
+    sections: attempt.sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      taskIds: tasks.filter((task) => task.sectionId === section.id).map((task) => task.id),
+    })),
+    tasks,
+    submittedAt: attempt.submittedAt,
+    receiptRef: attempt.receiptRef,
+  };
+}
+
+function evidenceLabel(evidenceLinks: readonly unknown[]): string {
+  const first = evidenceLinks[0];
+  if (typeof first === 'string') return first;
+  if (first !== null && typeof first === 'object') {
+    const label = (first as Record<string, unknown>)['label'];
+    if (typeof label === 'string') return label;
+  }
+  return '';
+}
+
+function criterionState(scorecardStatus: string, criterion: BackendCriterion): CriterionState {
+  if (scorecardStatus === 'submitted' || scorecardStatus === 'locked') return 'submitted';
+  if (
+    criterion.updatedAt !== null ||
+    criterion.humanScore !== null ||
+    criterion.insufficientEvidence ||
+    criterion.reviewerComment !== null
+  )
+    return 'saved';
+  return 'draft';
+}
+
+export function projectDemoScorecard(scorecard: BackendScorecard): Collection<CriterionView> {
+  const items = (scorecard.criteria ?? []).map((criterion) => ({
+    id: externalId(CRITERION_IDS, criterion.criterionId),
+    label: criterion.title,
+    descriptor: criterion.description,
+    maxScore: 4,
+    score: criterion.humanScore,
+    rationale: criterion.reviewerComment ?? '',
+    state: criterionState(scorecard.status, criterion),
+    evidenceLink: evidenceLabel(criterion.evidenceLinks),
+    insufficientEvidence: criterion.insufficientEvidence,
+  }));
+  return { items, total: items.length };
+}
+
 export const demoPersistence = {
   enabled: PERSISTENCE_ENABLED,
 
-  startAttempt: (): Promise<void> => persist(`/attempts/${DEMO_ATTEMPT_ID}/start`, 'POST', {}),
+  getAttempt: async (routeId: string): Promise<AttemptView | null> => {
+    const attempt = await requestJson<BackendAttempt>(
+      `/attempts/${DEMO_ATTEMPT_ID}`,
+      'GET',
+      CANDIDATE_TOKEN,
+    );
+    return attempt === null ? null : projectDemoAttempt(attempt, routeId);
+  },
 
-  submitAttempt: (): Promise<void> => persist(`/attempts/${DEMO_ATTEMPT_ID}/submit`, 'POST', {}),
+  startAttempt: (): Promise<void> =>
+    persist(`/attempts/${DEMO_ATTEMPT_ID}/start`, 'POST', CANDIDATE_TOKEN, {}),
+
+  submitAttempt: (): Promise<void> =>
+    persist(`/attempts/${DEMO_ATTEMPT_ID}/submit`, 'POST', CANDIDATE_TOKEN, {}),
 
   saveTask: (taskId: string, response: string): Promise<void> =>
-    persist(`/attempts/${DEMO_ATTEMPT_ID}/responses/${mappedId(TASK_IDS, taskId, 'Task')}`, 'PUT', {
-      value: response,
-    }),
+    persist(
+      `/attempts/${DEMO_ATTEMPT_ID}/responses/${mappedId(TASK_IDS, taskId, 'Task')}`,
+      'PUT',
+      CANDIDATE_TOKEN,
+      { value: response },
+    ),
 
   setTaskFlag: (taskId: string, flagged: boolean): Promise<void> =>
     persist(
       `/attempts/${DEMO_ATTEMPT_ID}/item-flags/${mappedId(TASK_IDS, taskId, 'Task')}`,
       'PUT',
+      CANDIDATE_TOKEN,
       { flagged },
     ),
 
   startBreak: (): Promise<void> =>
-    persist(`/attempts/${DEMO_ATTEMPT_ID}/breaks`, 'POST', {
+    persist(`/attempts/${DEMO_ATTEMPT_ID}/breaks`, 'POST', CANDIDATE_TOKEN, {
       reason: 'Candidate requested a scheduled break.',
     }),
 
-  endBreak: (): Promise<void> => persist(`/attempts/${DEMO_ATTEMPT_ID}/start`, 'POST', {}),
+  endBreak: (): Promise<void> =>
+    persist(`/attempts/${DEMO_ATTEMPT_ID}/start`, 'POST', CANDIDATE_TOKEN, {}),
+
+  getScorecard: async (): Promise<Collection<CriterionView> | null> => {
+    const scorecard = await requestJson<BackendScorecard>(
+      `/review-assignments/${DEMO_ASSIGNMENT_ID}/scorecard`,
+      'GET',
+      REVIEWER_TOKEN,
+    );
+    return scorecard === null ? null : projectDemoScorecard(scorecard);
+  },
 
   saveCriterion: (
     criterionId: string,
@@ -98,7 +325,7 @@ export const demoPersistence = {
     evidenceLink: string,
     insufficientEvidence: boolean,
   ): Promise<void> =>
-    persist(`/review-assignments/${DEMO_ASSIGNMENT_ID}/scorecard`, 'PUT', {
+    persist(`/review-assignments/${DEMO_ASSIGNMENT_ID}/scorecard`, 'PUT', REVIEWER_TOKEN, {
       criterion: {
         criterionId: mappedId(CRITERION_IDS, criterionId, 'Criterion'),
         humanScore: insufficientEvidence ? null : score,

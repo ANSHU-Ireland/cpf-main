@@ -7,19 +7,20 @@ import { createPool, isDatabaseConfigured } from '@cpf/db';
 import { Store, type Record_ } from './store.js';
 import { Router, classify } from './router.js';
 import { ConcreteDispatcher, isConcreteOperation } from './concrete-dispatch.js';
-import { resolveDemoActor } from './demo-actor.js';
+import { authorizeDemoOperation, DemoSessionResolver } from './demo-session.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '127.0.0.1';
 
 const store = new Store();
 const router = new Router();
-const demoActor = resolveDemoActor();
-const pool = demoActor !== null && isDatabaseConfigured() ? createPool() : null;
+const demoMode = process.env.CPF_DEMO_MODE === 'true';
+const pool = demoMode && isDatabaseConfigured() ? createPool() : null;
 const concreteDispatcher =
   pool === null
     ? null
     : new ConcreteDispatcher(pool, { role: process.env.CPF_DB_ROLE ?? 'cpf_app' });
+const sessionResolver = pool === null ? null : new DemoSessionResolver(pool);
 const allowedOrigin = process.env.CPF_ALLOWED_ORIGIN ?? 'http://127.0.0.1:4300';
 
 /** Turns a collection key like 'campaigns/:id/reviewers' into a singular type label. */
@@ -63,7 +64,7 @@ function send(res: ServerResponse, status: number, correlationId: string, body: 
     'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json',
     [CORRELATION_HEADER]: correlationId,
     'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'Content-Type, X-Correlation-Id',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Correlation-Id',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
   });
   res.end(payload);
@@ -74,7 +75,7 @@ function sendHttpResponse(res: ServerResponse, response: HttpResponse): void {
   res.writeHead(response.status, {
     ...response.headers,
     'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'Content-Type, X-Correlation-Id',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Correlation-Id',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
   });
   res.end(payload);
@@ -133,7 +134,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   const { route, params } = matched;
   if (isConcreteOperation(route.op.operationId)) {
-    if (concreteDispatcher === null || demoActor === null) {
+    if (concreteDispatcher === null || sessionResolver === null) {
       return send(res, 503, correlationId, {
         type: 'about:blank',
         title: 'Concrete persistence disabled',
@@ -143,10 +144,29 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       });
     }
     try {
+      const session = await sessionResolver.resolve(req.headers.authorization);
+      if (session === null) {
+        return send(res, 401, correlationId, {
+          type: 'about:blank',
+          title: 'Unauthorized',
+          status: 401,
+          correlationId,
+          detail: 'A valid active demo session is required.',
+        });
+      }
+      if (!authorizeDemoOperation(session, route.op.operationId, params)) {
+        return send(res, 403, correlationId, {
+          type: 'about:blank',
+          title: 'Forbidden',
+          status: 403,
+          correlationId,
+          detail: 'This session cannot access the requested demo resource.',
+        });
+      }
       const body = await readBody(req);
       const response = await concreteDispatcher.dispatch(
         route.op.operationId,
-        demoActor,
+        session.actor,
         params,
         body,
       );

@@ -14,7 +14,15 @@ export async function GET(
   if (params.id !== runtimeStore.attemptId()) {
     return Response.json({ error: 'Attempt not found.' }, { status: 404 });
   }
-  return Response.json(runtimeStore.getAttempt());
+  try {
+    const persisted = await demoPersistence.getAttempt(params.id);
+    return Response.json(persisted ?? runtimeStore.getAttempt());
+  } catch (error) {
+    if (error instanceof DemoPersistenceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 }
 
 export async function POST(
@@ -33,6 +41,8 @@ export async function POST(
   if (body.action === 'reset') return Response.json(runtimeStore.resetAttempt());
   try {
     await demoPersistence.startAttempt();
+    const persisted = await demoPersistence.getAttempt(params.id);
+    if (persisted !== null) return Response.json(persisted);
   } catch (error) {
     if (error instanceof DemoPersistenceError) {
       return Response.json({ error: error.message }, { status: error.status });

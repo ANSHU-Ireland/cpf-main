@@ -22,6 +22,9 @@ import type {
   AttemptRepository,
   AttemptResponseInput,
   AttemptResponseRecord,
+  AttemptSessionRecord,
+  AttemptSessionSectionRecord,
+  AttemptSessionTaskRecord,
   AttemptStatus,
   IncidentType,
 } from './attempts.js';
@@ -34,6 +37,31 @@ interface AttemptRow {
   status: string;
   started_at: Date | null;
   submitted_at: Date | null;
+}
+
+interface AttemptSessionRow extends AttemptRow {
+  assessment_title: string;
+  duration_seconds: number;
+  remaining_seconds: number | null;
+  row_version: number;
+  server_now: Date;
+  receipt_ref: string | null;
+}
+
+interface SessionTaskRow {
+  id: string;
+  section_id: string;
+  section_title: string;
+  section_display_order: number;
+  item_type: string;
+  title: string;
+  prompt: unknown;
+  display_order: number;
+  response_json: { value?: unknown } | null;
+  response_version: number | null;
+  saved_at: Date | null;
+  flagged: boolean | null;
+  content_hash: string | null;
 }
 
 interface ResponseRow {
@@ -115,6 +143,25 @@ function toAttempt(row: AttemptRow): AttemptRecord {
   };
 }
 
+function toSessionTask(row: SessionTaskRow): AttemptSessionTaskRecord {
+  const value = row.response_json?.value ?? '';
+  const checksum =
+    row.content_hash ?? createHash('sha256').update(JSON.stringify({ value })).digest('hex');
+  return {
+    id: row.id,
+    sectionId: row.section_id,
+    itemType: row.item_type,
+    title: row.title,
+    prompt: row.prompt,
+    displayOrder: row.display_order,
+    response: value,
+    savedAt: row.saved_at?.toISOString() ?? null,
+    flagged: row.flagged ?? false,
+    version: row.response_version ?? 0,
+    checksum: checksum.slice(0, 8),
+  };
+}
+
 async function appendOutbox(
   client: PoolClient,
   actor: Actor,
@@ -168,6 +215,92 @@ export class PgAttemptRepository implements AttemptRepository {
     return this.#role === undefined
       ? { tenantId: actor.tenantId, userId: actor.userId }
       : { tenantId: actor.tenantId, userId: actor.userId, role: this.#role };
+  }
+
+  async getAttempt(actor: Actor, attemptId: string): Promise<AttemptSessionRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const attemptResult = await client.query<AttemptSessionRow>(
+        `SELECT a.id, a.application_id, b.assessment_version_id, a.status, a.started_at,
+                a.submitted_at, asm.title AS assessment_title, av.duration_seconds,
+                a.remaining_seconds, a.row_version, now() AS server_now,
+                submission.confirmation_code AS receipt_ref
+           FROM runtime.attempts AS a
+           JOIN runtime.attempt_version_bindings AS b ON b.attempt_id = a.id
+           JOIN assessment.assessment_versions AS av ON av.id = b.assessment_version_id
+           JOIN assessment.assessments AS asm ON asm.id = av.assessment_id
+           LEFT JOIN runtime.submissions AS submission ON submission.attempt_id = a.id
+          WHERE a.tenant_id = $1 AND a.id = $2`,
+        [actor.tenantId, attemptId],
+      );
+      const row = attemptResult.rows[0];
+      if (row === undefined) return null;
+
+      const taskResult = await client.query<SessionTaskRow>(
+        `SELECT item.id, section.id AS section_id, section.title AS section_title,
+                section.display_order AS section_display_order, item.item_type, item.title,
+                item.prompt, item.display_order, response.response_json,
+                response.row_version AS response_version, response.updated_at AS saved_at,
+                flag.flagged, latest_autosave.content_hash
+           FROM assessment.assessment_sections AS section
+           JOIN assessment.assessment_items AS item ON item.section_id = section.id
+           LEFT JOIN runtime.responses AS response
+             ON response.tenant_id = $1 AND response.attempt_id = $2
+            AND response.assessment_item_id = item.id
+           LEFT JOIN runtime.item_flags AS flag
+             ON flag.tenant_id = $1 AND flag.attempt_id = $2
+            AND flag.assessment_item_id = item.id
+           LEFT JOIN LATERAL (
+             SELECT autosave.content_hash
+               FROM runtime.autosaves AS autosave
+              WHERE autosave.tenant_id = $1 AND autosave.attempt_id = $2
+                AND autosave.response_id = response.id
+              ORDER BY autosave.server_received_at DESC, autosave.id DESC
+              LIMIT 1
+           ) AS latest_autosave ON true
+          WHERE section.assessment_version_id = $3
+          ORDER BY section.display_order, item.display_order`,
+        [actor.tenantId, attemptId, row.assessment_version_id],
+      );
+
+      const sections = new Map<string, AttemptSessionSectionRecord>();
+      const tasks = taskResult.rows.map((taskRow) => {
+        sections.set(taskRow.section_id, {
+          id: taskRow.section_id,
+          title: taskRow.section_title,
+          displayOrder: taskRow.section_display_order,
+        });
+        return toSessionTask(taskRow);
+      });
+      const activeTask = [...tasks]
+        .filter((task) => task.savedAt !== null)
+        .sort((left, right) => right.version - left.version)[0];
+      const elapsedSeconds =
+        row.status === 'in_progress' && row.started_at !== null
+          ? Math.max(0, Math.floor((row.server_now.getTime() - row.started_at.getTime()) / 1000))
+          : 0;
+      const remainingSeconds = Math.max(
+        0,
+        Math.min(
+          row.remaining_seconds ?? row.duration_seconds,
+          row.status === 'in_progress'
+            ? row.duration_seconds - elapsedSeconds
+            : (row.remaining_seconds ?? row.duration_seconds),
+        ),
+      );
+
+      return {
+        ...toAttempt(row),
+        assessmentTitle: row.assessment_title,
+        remainingSeconds,
+        rowVersion: row.row_version,
+        serverNow: row.server_now.toISOString(),
+        deadlineAt: new Date(row.server_now.getTime() + remainingSeconds * 1000).toISOString(),
+        sections: [...sections.values()],
+        tasks,
+        activeItemId: activeTask?.id ?? tasks[0]?.id ?? null,
+        receiptRef: row.receipt_ref,
+      };
+    });
   }
 
   async startAttempt(actor: Actor, attemptId: string): Promise<AttemptRecord | null> {

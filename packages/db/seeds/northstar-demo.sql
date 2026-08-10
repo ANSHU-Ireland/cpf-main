@@ -26,6 +26,59 @@ ON CONFLICT (id) DO UPDATE SET
   mfa_enforced = EXCLUDED.mfa_enforced,
   updated_at = now();
 
+INSERT INTO iam.roles (id, code, name, scope, is_system)
+VALUES
+  ('11111111-0000-4000-8000-000000000020', 'employer_admin', 'Employer administrator', 'tenant', true),
+  ('11111111-0000-4000-8000-000000000021', 'reviewer', 'Reviewer', 'tenant', true),
+  ('11111111-0000-4000-8000-000000000022', 'candidate', 'Candidate', 'candidate_self', true)
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, scope = EXCLUDED.scope;
+
+INSERT INTO iam.memberships (id, tenant_id, user_id, status, starts_at, ends_at)
+VALUES
+  ('11111111-0000-4000-8000-000000000030', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000010', 'active', now() - interval '30 days', NULL),
+  ('11111111-0000-4000-8000-000000000031', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000011', 'active', now() - interval '30 days', NULL),
+  ('11111111-0000-4000-8000-000000000032', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000012', 'active', now() - interval '30 days', NULL)
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, ends_at = NULL, updated_at = now();
+
+INSERT INTO iam.membership_roles
+  (membership_id, role_id, scope_type, scope_id, granted_by, expires_at)
+SELECT fixture.membership_id::uuid, role.id, fixture.scope_type,
+       fixture.scope_id::uuid, '11111111-0000-4000-8000-000000000010'::uuid, NULL
+FROM (VALUES
+  ('11111111-0000-4000-8000-000000000030', 'employer_admin', 'tenant',
+   '11111111-0000-4000-8000-000000000001'),
+  ('11111111-0000-4000-8000-000000000031', 'reviewer', 'submission',
+   '11111111-0000-4000-8000-000000000321'),
+  ('11111111-0000-4000-8000-000000000032', 'candidate', 'submission',
+   '11111111-0000-4000-8000-000000000300')
+) AS fixture(membership_id, role_code, scope_type, scope_id)
+JOIN iam.roles AS role ON role.code = fixture.role_code
+ON CONFLICT (membership_id, role_id, scope_type, scope_id)
+DO UPDATE SET expires_at = NULL, granted_by = EXCLUDED.granted_by;
+
+INSERT INTO iam.user_sessions
+  (id, user_id, refresh_token_hash, device_label, created_at, last_seen_at, expires_at,
+   revoked_at, revocation_reason)
+VALUES
+  ('11111111-0000-4000-8000-000000000040', '11111111-0000-4000-8000-000000000010',
+   encode(digest('cpf-demo-admin-token-2026', 'sha256'), 'hex'), 'CPF synthetic admin', now(), now(),
+   now() + interval '30 days', NULL, NULL),
+  ('11111111-0000-4000-8000-000000000041', '11111111-0000-4000-8000-000000000011',
+   encode(digest('cpf-demo-reviewer-token-2026', 'sha256'), 'hex'), 'CPF synthetic reviewer', now(), now(),
+   now() + interval '30 days', NULL, NULL),
+  ('11111111-0000-4000-8000-000000000042', '11111111-0000-4000-8000-000000000012',
+   encode(digest('cpf-demo-candidate-token-2026', 'sha256'), 'hex'), 'CPF synthetic candidate', now(), now(),
+   now() + interval '30 days', NULL, NULL)
+ON CONFLICT (id) DO UPDATE SET
+  refresh_token_hash = EXCLUDED.refresh_token_hash,
+  last_seen_at = EXCLUDED.last_seen_at,
+  expires_at = EXCLUDED.expires_at,
+  revoked_at = NULL,
+  revocation_reason = NULL;
+
 INSERT INTO assessment.competency_frameworks
   (id, tenant_id, code, name, owner_user_id, status)
 VALUES

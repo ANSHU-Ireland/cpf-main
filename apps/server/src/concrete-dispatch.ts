@@ -11,6 +11,7 @@ import {
   handleDeleteAttemptArtifact,
   handleExecuteAttemptPlugin,
   handleFlagAttemptItem,
+  handleGetAttempt,
   handleGetScorecard,
   handlePutScorecard,
   handleSaveAttemptResponse,
@@ -22,6 +23,7 @@ import type { HttpResponse } from '@cpf/http';
 
 const CONCRETE_OPERATIONS = new Set([
   'delete_attempts_attemptId_artifacts_artifactId',
+  'get_attempts_attemptId',
   'get_review_assignments_assignmentId_scorecard',
   'post_attempts_attemptId_ai_messages',
   'post_attempts_attemptId_ai_reset',
@@ -63,6 +65,8 @@ export class ConcreteDispatcher {
     const assignmentId = params['assignmentId'] ?? '';
 
     switch (operationId) {
+      case 'get_attempts_attemptId':
+        return handleGetAttempt(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_start':
         return handleStartAttempt(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_submit':

@@ -18,7 +18,15 @@ export async function GET(
   if (reviewStore.getAssignment(params.id) === null) {
     return Response.json({ error: 'Assignment not found.' }, { status: 404 });
   }
-  return Response.json(reviewStore.getScorecard());
+  try {
+    const persisted = await demoPersistence.getScorecard();
+    return Response.json(persisted ?? reviewStore.getScorecard());
+  } catch (error) {
+    if (error instanceof DemoPersistenceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 }
 
 export async function POST(
@@ -64,6 +72,14 @@ export async function POST(
       evidenceLink,
       insufficientEvidence,
     );
+    const persisted = await demoPersistence.getScorecard();
+    if (persisted !== null) {
+      const criterion = persisted.items.find((item) => item.id === criterionId);
+      if (criterion === undefined) {
+        return Response.json({ error: 'Criterion not found.' }, { status: 404 });
+      }
+      return Response.json(criterion);
+    }
   } catch (error) {
     if (error instanceof DemoPersistenceError) {
       return Response.json({ error: error.message }, { status: error.status });

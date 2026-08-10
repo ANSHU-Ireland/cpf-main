@@ -5,9 +5,15 @@ import type { Permission } from '@cpf/policy';
  * `iam.membership_roles` to actor roles is owned by the (unbuilt) auth layer; tests pass it explicitly.
  */
 export const EMPLOYER_ADMIN_ROLE = 'employer_admin';
+export const CANDIDATE_ROLE = 'candidate';
+export const REVIEWER_ROLE = 'reviewer';
 
 /** Minimal grants for the Employer Admin organisation surface. */
 export const ORG_PERMISSIONS: readonly Permission[] = [
+  { role: CANDIDATE_ROLE, action: 'read', resourceType: 'attempt' },
+  { role: CANDIDATE_ROLE, action: 'write', resourceType: 'attempt' },
+  { role: REVIEWER_ROLE, action: 'read', resourceType: 'review_assignment' },
+  { role: REVIEWER_ROLE, action: 'write', resourceType: 'review_assignment' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'organization' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'organization' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'organization_member' },

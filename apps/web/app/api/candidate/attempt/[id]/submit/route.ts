@@ -12,6 +12,8 @@ export async function POST(
   }
   try {
     await demoPersistence.submitAttempt();
+    const persisted = await demoPersistence.getAttempt(params.id);
+    if (persisted !== null) return Response.json(persisted);
   } catch (error) {
     if (error instanceof DemoPersistenceError) {
       return Response.json({ error: error.message }, { status: error.status });

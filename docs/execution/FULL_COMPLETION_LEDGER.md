@@ -23,10 +23,10 @@ This ledger is the executable completion record for the v2.0 handover. It reconc
 | CPF-03 | Candidate runtime RUN-02 vertical slice                       | Complete    | five realistic tasks; timer, save, version/checksum, flag and next-task interaction                                               |
 | CPF-04 | Reviewer scorecard REV-08 vertical slice                      | Complete    | evidence-led human scoring, citation, insufficient-evidence rationale and concealed AI observations                               |
 | CPF-05 | Remaining interface fidelity and interaction closure          | In progress | all 125 routes require route-specific ready/empty/error/denied and primary interaction evidence                                   |
-| CPF-06 | Replace web process-local stores with authenticated API calls | In progress | RUN-02 and REV-08 writes now reach tenant-scoped PostgreSQL repositories; remaining routes and authenticated reads are pending    |
+| CPF-06 | Replace web process-local stores with authenticated API calls | In progress | RUN-02 and REV-08 reads/writes use scoped bearer sessions and tenant-scoped PostgreSQL repositories; remaining routes are pending |
 | CPF-07 | Wire 244 OpenAPI operations to concrete handlers              | Not started | no generic catch-all response; contract conformance suite passes                                                                  |
 | CPF-08 | PostgreSQL repositories and transaction/outbox coverage       | In progress | current repositories cover a subset; all material writes require atomic audit/outbox                                              |
-| CPF-09 | Identity, sessions, MFA, RBAC/ABAC and tenant isolation       | In progress | negative auth, IDOR, stale-token, cross-tenant and privilege tests pass                                                           |
+| CPF-09 | Identity, sessions, MFA, RBAC/ABAC and tenant isolation       | In progress | runtime/review sessions enforce 401/403 and scoped resources; MFA, global route enforcement and full negative suites are pending  |
 | CPF-10 | Worker, integration, notification and webhook runtime         | Not started | retry/idempotency/dead-letter/replay protection evidence                                                                          |
 | CPF-11 | Governed AI/tool gateway and evidence ledger                  | Not started | disabled-by-default gateway, provenance, budget, safety, version and outage gates                                                 |
 | CPF-12 | Desktop companion and governed telemetry                      | Not started | signed/version-gated client, allow-list, recovery and privacy evidence                                                            |
@@ -46,15 +46,15 @@ All visible identities and records are synthetic. The web scenario now includes:
 - Employer campaigns, candidates, invitations, scheduling, accommodations, review allocation, decisions and reports.
 - Platform tenants, releases, jobs, flags, support access, governance registers, risks, incidents and evidence collections.
 
-The canonical RUN-02 candidate mutations and REV-08 human criterion scoring now persist through the explicit demo API into PostgreSQL. The repositories apply tenant context, write audit records and enqueue transactional outbox events atomically. Browser verification proves the saved response, task flag and human score can be read back from PostgreSQL, with `ai_observation_id` remaining null. The Northstar seed is idempotent at two attempts, six responses, one reviewer assignment and three criterion scores.
+The canonical RUN-02 candidate flow and REV-08 human criterion scorecard now read and write through the explicit demo API into PostgreSQL. The repositories apply tenant context, write audit records and enqueue transactional outbox events atomically. The server resolves hashed, expiring candidate/reviewer/admin sessions from IAM tables and checks the resource scope before domain authorization. Live probes prove missing credentials return 401, candidate/reviewer resources return 200 for their assigned identity, and cross-role access returns 403. Browser verification proves the saved responses, flags, rubric scores and rationales rehydrate from PostgreSQL with `ai_observation_id` remaining null. The Northstar seed remains idempotent at two attempts, six responses, one reviewer assignment and three criterion scores.
 
-The remaining role journeys still use process-local synthetic state and the current browser reads are not yet fully rehydrated from PostgreSQL. CPF-06 and CPF-13 therefore remain active release blockers rather than completed programme stages.
+The remaining role journeys still use process-local synthetic state. CPF-06 and CPF-13 therefore remain active release blockers rather than completed programme stages.
 
 ## Release blockers
 
 1. The generic server dispatcher now has concrete runtime and scorecard operations, but the remaining OpenAPI operations still return compatibility responses instead of invoking every `apps/api` handler.
-2. RUN-02 and REV-08 mutations are persistent; the remaining web routes and read models still use process-local synthetic stores.
-3. Authentication/session, tenant context and resource ABAC are not enforced end-to-end in the browser journey.
+2. RUN-02 and REV-08 are persistent and session-protected; the remaining web routes and read models still use process-local synthetic stores.
+3. Session, role and resource-scope enforcement is proven for RUN-02/REV-08 only; MFA and the remaining API/browser journeys still need end-to-end enforcement.
 4. Worker/outbox publishing, integrations, governed AI/tool adapters and desktop companion are incomplete.
 5. Traceability rows still require executable evidence for every Must requirement.
 6. Independent security, accessibility, human-factors, privacy/legal and controlled-pilot approvals are outside the current evidence set.
