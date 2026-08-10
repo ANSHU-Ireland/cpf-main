@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
 import type { AiLiteracyView, BadgeTone, Collection } from '../../lib/types';
-import { api } from '../../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceAiLiteracyPage() {
@@ -18,12 +23,12 @@ export default function GovernanceAiLiteracyPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getAiLiteracy();
+    const collection = await apiClient.getAiLiteracy();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<AiLiteracyView>>(loader);
+  const { state, reload } = useAsync<Collection<AiLiteracyView>>(loader);
 
   const handleAssign = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,9 +38,9 @@ export default function GovernanceAiLiteracyPage() {
     const trainingModule = (formData.get('trainingModule') as string) || '';
     const assignee = (formData.get('assignee') as string) || '';
     if (!role.trim() || !trainingModule.trim() || !assignee.trim()) return;
-    await api.assignTraining(role.trim(), trainingModule.trim(), assignee.trim());
+    await apiClient.assignTraining(role.trim(), trainingModule.trim(), assignee.trim());
     form.reset();
-    const updated = await api.getAiLiteracy();
+    const updated = await apiClient.getAiLiteracy();
     setData(updated);
   };
 
@@ -62,9 +67,9 @@ export default function GovernanceAiLiteracyPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="AI literacy training"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No training assignments"
         emptyBody="Assign your first AI literacy training to track competency."
       >
@@ -154,7 +159,7 @@ export default function GovernanceAiLiteracyPage() {
                     {filtered.map((l) => (
                       <tr key={l.id}>
                         <td className="px-3 py-3">
-                          <Badge tone="blue">{l.role}</Badge>
+                          <StatusBadge tone="info">{l.role}</StatusBadge>
                         </td>
                         <td className="px-3 py-3 text-sm text-ink">{l.trainingModule}</td>
                         <td className="px-3 py-3 text-sm text-muted">{l.assignee}</td>
@@ -165,7 +170,7 @@ export default function GovernanceAiLiteracyPage() {
                           {l.expiresAt ? new Date(l.expiresAt).toLocaleDateString() : '—'}
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[l.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[l.status] || 'neutral'}>
                             {l.status}
                           </StatusBadge>
                         </td>

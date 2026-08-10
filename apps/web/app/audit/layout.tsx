@@ -1,6 +1,7 @@
-import { AppShell, type AppShellNavLink } from '@cpf/ui';
+import { AppShell } from '../components/AppShell';
+import type { NavItem } from '../components/SidebarNav';
 
-const AUDIT_NAV: readonly AppShellNavLink[] = [
+const AUDIT_NAV: readonly NavItem[] = [
   { label: 'Evidence collections', href: '/audit/evidence' },
   { label: 'Traceability', href: '/audit/traceability' },
   { label: '← Back to Governance', href: '/governance' },
@@ -12,7 +13,7 @@ export default function AuditLayout({ children }: { readonly children: React.Rea
       homeHref="/audit/evidence"
       workspaceLabel="Governance & Audit"
       navLabel="Audit"
-      navLinks={AUDIT_NAV}
+      navItems={AUDIT_NAV}
     >
       {children}
     </AppShell>

@@ -1,6 +1,7 @@
-import { AppShell, type AppShellNavLink } from '@cpf/ui';
+import { AppShell } from '../components/AppShell';
+import type { NavItem } from '../components/SidebarNav';
 
-const GOVERNANCE_NAV: readonly AppShellNavLink[] = [
+const GOVERNANCE_NAV: readonly NavItem[] = [
   { label: 'Overview', href: '/governance' },
   { label: 'AI systems', href: '/governance/ai-systems' },
   { label: 'Classifications', href: '/governance/classifications' },
@@ -30,7 +31,7 @@ export default function GovernanceLayout({ children }: { readonly children: Reac
       homeHref="/governance"
       workspaceLabel="Governance & Audit"
       navLabel="Governance"
-      navLinks={GOVERNANCE_NAV}
+      navItems={GOVERNANCE_NAV}
     >
       {children}
     </AppShell>

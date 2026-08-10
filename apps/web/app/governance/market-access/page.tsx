@@ -1,20 +1,25 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type { BadgeTone, Collection, MarketAccessView, MarketAccessType } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, Collection, MarketAccessView, MarketAccessType } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 const ACCESS_TYPE_TONE: Record<string, BadgeTone> = {
-  declaration: 'blue',
-  registration: 'amber',
-  ce_marking: 'sage',
+  declaration: 'info',
+  registration: 'warning',
+  ce_marking: 'success',
 };
 
 export default function GovernanceMarketAccessPage() {
@@ -23,12 +28,12 @@ export default function GovernanceMarketAccessPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getMarketAccess();
+    const collection = await apiClient.getMarketAccess();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<MarketAccessView>>(loader);
+  const { state, reload } = useAsync<Collection<MarketAccessView>>(loader);
 
   const handleRecord = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,9 +43,13 @@ export default function GovernanceMarketAccessPage() {
     const accessType = (formData.get('accessType') as string) || '';
     const evidence = (formData.get('evidence') as string) || '';
     if (!systemId.trim() || !accessType.trim() || !evidence.trim()) return;
-    await api.recordMarketAccess(systemId.trim(), accessType as MarketAccessType, evidence.trim());
+    await apiClient.recordMarketAccess(
+      systemId.trim(),
+      accessType as MarketAccessType,
+      evidence.trim(),
+    );
     form.reset();
-    const updated = await api.getMarketAccess();
+    const updated = await apiClient.getMarketAccess();
     setData(updated);
   };
 
@@ -66,9 +75,9 @@ export default function GovernanceMarketAccessPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Market access"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No market access records"
         emptyBody="Record your first market access completion."
       >
@@ -160,14 +169,16 @@ export default function GovernanceMarketAccessPage() {
                       <tr key={m.id}>
                         <td className="px-3 py-3 text-sm text-ink">{m.systemId}</td>
                         <td className="px-3 py-3">
-                          <Badge tone={ACCESS_TYPE_TONE[m.accessType]}>{m.accessType}</Badge>
+                          <StatusBadge tone={ACCESS_TYPE_TONE[m.accessType]}>
+                            {m.accessType}
+                          </StatusBadge>
                         </td>
                         <td className="px-3 py-3 text-sm text-muted">{m.evidence}</td>
                         <td className="px-3 py-3 text-sm text-muted">
-                          {new Date(m.completedAt).toLocaleDateString()}
+                          {m.completedAt ? new Date(m.completedAt).toLocaleDateString() : '\u2014'}
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[m.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[m.status] || 'neutral'}>
                             {m.status}
                           </StatusBadge>
                         </td>

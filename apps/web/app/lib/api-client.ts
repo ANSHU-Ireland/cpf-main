@@ -118,6 +118,24 @@ import type {
   TraceabilityView,
   VendorEvidenceView,
 } from './types';
+import type {
+  ApplicationDetail,
+  CandidateProfile,
+  CheckStatus,
+  IntegrationDelivery,
+  JitAccessSession,
+  KillSwitchStatus,
+  Notice,
+  NotificationPreference,
+  OperationsDashboard,
+  PracticeModule,
+  ReviewableDecision,
+  SecurityIncident,
+  SupportCase,
+  SupportCaseDetail,
+  SupportTicket,
+  SystemCheck,
+} from './types';
 
 /** Normalised transport error carrying the HTTP status so screens can branch on 401/403/etc. */
 export class ApiError extends Error {
@@ -1007,4 +1025,145 @@ export const apiClient = {
   // AUD-02: Traceability
   getTraceability: (): Promise<Collection<TraceabilityView>> =>
     request<Collection<TraceabilityView>>('/api/audit/traceability'),
+
+  // ACC-02: Notification preferences
+  getNotificationPreferences: (): Promise<Collection<NotificationPreference>> =>
+    request<Collection<NotificationPreference>>('/api/account/notifications'),
+  updateNotificationPreferences: (
+    updates: Array<{ channel: string; category: string; enabled: boolean }>,
+  ): Promise<void> =>
+    request<void>('/api/account/notifications', {
+      method: 'POST',
+      body: JSON.stringify({ updates }),
+    }),
+
+  // CAN-02: Candidate profile
+  getCandidateProfile: (): Promise<CandidateProfile> =>
+    request<CandidateProfile>('/api/candidate/profile'),
+  submitProfileCorrection: (correction: {
+    field: string;
+    currentValue: string;
+    correctedValue: string;
+    reason: string;
+  }): Promise<void> =>
+    request<void>('/api/candidate/profile/corrections', {
+      method: 'POST',
+      body: JSON.stringify(correction),
+    }),
+
+  // CAN-03: Notices
+  getCandidateNotices: (): Promise<{ notices: Notice[]; allAcknowledged: boolean }> =>
+    request<{ notices: Notice[]; allAcknowledged: boolean }>('/api/candidate/notices'),
+  acknowledgeCandidateNotice: (noticeId: string): Promise<void> =>
+    request<void>(`/api/candidate/notices/${noticeId}`, {
+      method: 'POST',
+    }),
+
+  // CAN-06: Practice centre
+  getPracticeModules: (): Promise<{ modules: PracticeModule[] }> =>
+    request<{ modules: PracticeModule[] }>('/api/candidate/practice'),
+
+  // CAN-07: System pre-check
+  getSystemChecks: (): Promise<{ checks: SystemCheck[]; overallStatus: CheckStatus }> =>
+    request<{ checks: SystemCheck[]; overallStatus: CheckStatus }>('/api/candidate/precheck'),
+  runSystemChecks: (): Promise<{ checks: SystemCheck[]; overallStatus: CheckStatus }> =>
+    request<{ checks: SystemCheck[]; overallStatus: CheckStatus }>('/api/candidate/precheck', {
+      method: 'POST',
+    }),
+
+  // CAN-09: Withdraw application
+  getApplicationDetail: (id: string): Promise<ApplicationDetail> =>
+    request<ApplicationDetail>(`/api/candidate/applications/${id}`),
+  withdrawApplication: (id: string): Promise<void> =>
+    request<void>(`/api/candidate/applications/${id}/withdraw`, {
+      method: 'POST',
+    }),
+
+  // CAN-10: Review request
+  getReviewableDecisions: (): Promise<{ decisions: ReviewableDecision[] }> =>
+    request<{ decisions: ReviewableDecision[] }>('/api/candidate/review-requests'),
+  requestHumanReview: (decisionId: string, grounds: string): Promise<void> =>
+    request<void>('/api/candidate/review-requests', {
+      method: 'POST',
+      body: JSON.stringify({ decisionId, grounds }),
+    }),
+
+  // CAN-13: Candidate support
+  getCandidateTickets: (): Promise<Collection<SupportTicket>> =>
+    request<Collection<SupportTicket>>('/api/candidate/support'),
+  createCandidateTicket: (ticket: {
+    subject: string;
+    category: string;
+    description: string;
+  }): Promise<SupportTicket> =>
+    request<SupportTicket>('/api/candidate/support', {
+      method: 'POST',
+      body: JSON.stringify(ticket),
+    }),
+
+  // SUP-01: Support queue
+  getSupportQueue: (): Promise<Collection<SupportCase>> =>
+    request<Collection<SupportCase>>('/api/support/queue'),
+
+  // SUP-02: Support case workspace
+  getSupportCase: (id: string): Promise<SupportCaseDetail> =>
+    request<SupportCaseDetail>(`/api/support/cases/${id}`),
+  addSupportMessage: (caseId: string, content: string, internal: boolean): Promise<void> =>
+    request<void>(`/api/support/cases/${caseId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, internal }),
+    }),
+  updateSupportCaseStatus: (caseId: string, status: string): Promise<void> =>
+    request<void>(`/api/support/cases/${caseId}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
+
+  // SUP-03: JIT access
+  getJitAccessSessions: (): Promise<{ sessions: JitAccessSession[] }> =>
+    request<{ sessions: JitAccessSession[] }>('/api/support/jit-access'),
+  requestJitAccess: (scope: string, justification: string): Promise<void> =>
+    request<void>('/api/support/jit-access', {
+      method: 'POST',
+      body: JSON.stringify({ scope, justification }),
+    }),
+  revokeJitAccess: (sessionId: string): Promise<void> =>
+    request<void>(`/api/support/jit-access/${sessionId}/revoke`, {
+      method: 'POST',
+    }),
+
+  // OPS-01: Operations dashboard
+  getOperationsDashboard: (): Promise<OperationsDashboard> =>
+    request<OperationsDashboard>('/api/operations/dashboard'),
+  acknowledgeOperationalAlert: (alertId: string): Promise<void> =>
+    request<void>(`/api/operations/alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+    }),
+
+  // OPS-02: Security incident
+  getSecurityStatus: (): Promise<{ incidents: SecurityIncident[]; killSwitch: KillSwitchStatus }> =>
+    request<{ incidents: SecurityIncident[]; killSwitch: KillSwitchStatus }>(
+      '/api/operations/security',
+    ),
+  activateKillSwitch: (reason: string): Promise<void> =>
+    request<void>('/api/operations/kill-switch', {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  deactivateKillSwitch: (): Promise<void> =>
+    request<void>('/api/operations/kill-switch', {
+      method: 'DELETE',
+    }),
+  escalateSecurityIncident: (incidentId: string): Promise<void> =>
+    request<void>(`/api/operations/incidents/${incidentId}/escalate`, {
+      method: 'POST',
+    }),
+
+  // OPS-03: Integration deliveries
+  getIntegrationDeliveries: (): Promise<Collection<IntegrationDelivery>> =>
+    request<Collection<IntegrationDelivery>>('/api/operations/deliveries'),
+  retryIntegrationDelivery: (deliveryId: string): Promise<void> =>
+    request<void>(`/api/operations/deliveries/${deliveryId}/retry`, {
+      method: 'POST',
+    }),
 };

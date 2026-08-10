@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type { BadgeTone, Collection, EvidenceCollectionView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, Collection, EvidenceCollectionView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function AuditEvidencePage() {
@@ -18,12 +23,12 @@ export default function AuditEvidencePage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getEvidenceCollections();
+    const collection = await apiClient.getEvidenceCollections();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<EvidenceCollectionView>>(loader);
+  const { state, reload } = useAsync<Collection<EvidenceCollectionView>>(loader);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,9 +37,9 @@ export default function AuditEvidencePage() {
     const title = (formData.get('title') as string) || '';
     const purpose = (formData.get('purpose') as string) || '';
     if (!title.trim() || !purpose.trim()) return;
-    await api.createEvidenceCollection(title.trim(), purpose.trim());
+    await apiClient.createEvidenceCollection(title.trim(), purpose.trim());
     form.reset();
-    const updated = await api.getEvidenceCollections();
+    const updated = await apiClient.getEvidenceCollections();
     setData(updated);
   };
 
@@ -60,9 +65,9 @@ export default function AuditEvidencePage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Evidence collections"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No evidence collections"
         emptyBody="Create your first evidence collection to establish chain of custody."
       >
@@ -144,13 +149,13 @@ export default function AuditEvidencePage() {
                         <td className="px-3 py-3 text-sm text-muted">{e.custodian}</td>
                         <td className="px-3 py-3">
                           {e.sealed ? (
-                            <Badge tone="blue">Sealed</Badge>
+                            <StatusBadge tone="info">Sealed</StatusBadge>
                           ) : (
-                            <Badge tone="amber">Open</Badge>
+                            <StatusBadge tone="warning">Open</StatusBadge>
                           )}
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[e.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[e.status] || 'neutral'}>
                             {e.status}
                           </StatusBadge>
                         </td>

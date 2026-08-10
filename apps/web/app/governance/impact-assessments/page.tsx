@@ -1,10 +1,15 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, useAsync } from '@cpf/ui';
-import type { ImpactAssessmentView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { ImpactAssessmentView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
+import { governanceStore } from '../../lib/synthetic.server';
 
 export default function GovernanceImpactAssessmentsPage() {
   const headingId = useId();
@@ -13,12 +18,12 @@ export default function GovernanceImpactAssessmentsPage() {
   const [data, setData] = useState<ImpactAssessmentView | null>(null);
 
   const loader = useCallback(async () => {
-    const assessment = await api.getImpactAssessment(systemId);
+    const assessment = await apiClient.getImpactAssessment(systemId);
     setData(assessment);
     return assessment;
   }, [systemId]);
 
-  const state = useAsync<ImpactAssessmentView>(loader);
+  const { state, reload } = useAsync<ImpactAssessmentView>(loader);
 
   const handleRecord = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -28,13 +33,13 @@ export default function GovernanceImpactAssessmentsPage() {
     const outcome = (formData.get('outcome') as string) || '';
     const rationale = (formData.get('rationale') as string) || '';
     if (!assessmentType.trim() || !outcome.trim() || !rationale.trim()) return;
-    await api.recordImpactAssessment(
+    await apiClient.recordImpactAssessment(
       systemId,
       assessmentType as 'DPIA' | 'FundamentalRights',
       outcome.trim(),
       rationale.trim(),
     );
-    const updated = await api.getImpactAssessment(systemId);
+    const updated = await apiClient.getImpactAssessment(systemId);
     setData(updated);
   };
 
@@ -50,14 +55,14 @@ export default function GovernanceImpactAssessmentsPage() {
         headingId={headingId}
       />
 
-      <AsyncBoundary state={state} onRetry={loader} label="Impact assessment">
+      <AsyncBoundary state={state} onRetry={reload} label="Impact assessment">
         {() => (
           <Card
             aria-label="Human authority checkpoint"
             style={{ borderLeft: '3px solid var(--color-amber)' }}
           >
             <div className="mb-4">
-              <Badge tone="amber">Human authority checkpoint</Badge>
+              <StatusBadge tone="warning">Human authority checkpoint</StatusBadge>
               <p className="text-sm text-muted mt-2">
                 Human initiates and confirms consequential actions.
               </p>
@@ -67,7 +72,7 @@ export default function GovernanceImpactAssessmentsPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Assessment type</h3>
-                  <Badge tone="blue">{data.assessmentType}</Badge>
+                  <StatusBadge tone="info">{data.assessmentType}</StatusBadge>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Outcome</h3>

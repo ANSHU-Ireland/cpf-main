@@ -1,10 +1,15 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, useAsync } from '@cpf/ui';
-import type { ConformityAssessmentView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { ConformityAssessmentView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
+import { governanceStore } from '../../lib/synthetic.server';
 
 export default function GovernanceConformityPage() {
   const headingId = useId();
@@ -13,12 +18,12 @@ export default function GovernanceConformityPage() {
   const [data, setData] = useState<ConformityAssessmentView | null>(null);
 
   const loader = useCallback(async () => {
-    const assessment = await api.getConformityAssessment(systemId);
+    const assessment = await apiClient.getConformityAssessment(systemId);
     setData(assessment);
     return assessment;
   }, [systemId]);
 
-  const state = useAsync<ConformityAssessmentView>(loader);
+  const { state, reload } = useAsync<ConformityAssessmentView>(loader);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -37,7 +42,7 @@ export default function GovernanceConformityPage() {
       !rationale.trim()
     )
       return;
-    await api.submitConformityAssessment(
+    await apiClient.submitConformityAssessment(
       systemId,
       requirements.trim(),
       tests.trim(),
@@ -45,7 +50,7 @@ export default function GovernanceConformityPage() {
       outcome.trim(),
       rationale.trim(),
     );
-    const updated = await api.getConformityAssessment(systemId);
+    const updated = await apiClient.getConformityAssessment(systemId);
     setData(updated);
   };
 
@@ -61,14 +66,14 @@ export default function GovernanceConformityPage() {
         headingId={headingId}
       />
 
-      <AsyncBoundary state={state} onRetry={loader} label="Conformity assessment">
+      <AsyncBoundary state={state} onRetry={reload} label="Conformity assessment">
         {() => (
           <Card
             aria-label="Human authority checkpoint"
             style={{ borderLeft: '3px solid var(--color-amber)' }}
           >
             <div className="mb-4">
-              <Badge tone="amber">Human authority checkpoint</Badge>
+              <StatusBadge tone="warning">Human authority checkpoint</StatusBadge>
               <p className="text-sm text-muted mt-2">
                 Human initiates and confirms consequential actions.
               </p>
@@ -78,7 +83,7 @@ export default function GovernanceConformityPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Outcome</h3>
-                  <Badge tone="sage">{data.outcome}</Badge>
+                  <StatusBadge tone="success">{data.outcome}</StatusBadge>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Requirements</h3>

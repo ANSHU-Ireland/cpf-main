@@ -403,6 +403,258 @@ export const candidateStore = {
     complaints.unshift(created);
     return created;
   },
+  // New methods for CAN-02, CAN-03, CAN-06, CAN-07, CAN-09, CAN-10, CAN-13
+  async getCandidateProfile() {
+    return {
+      fullName: 'Jordan Smith',
+      email: 'jordan.smith@example.com',
+      dateOfBirth: '1995-03-15',
+      phone: '+353 87 123 4567',
+    };
+  },
+  async submitProfileCorrection(
+    field: string,
+    currentValue: string,
+    correctedValue: string,
+    reason: string,
+  ) {
+    console.log(
+      `Profile correction: ${field} from "${currentValue}" to "${correctedValue}" - ${reason}`,
+    );
+  },
+  async getCandidateNotices() {
+    const notices = [
+      {
+        id: '1',
+        title: 'Data Processing and Your Rights',
+        content:
+          '<p>We process your personal data to assess your suitability for employment. You have the right to access, correct, and request deletion of your data.</p><p>AI-assisted scoring is used but all final decisions are reviewed by qualified humans.</p>',
+        category: 'Privacy & Data',
+        acknowledged: false,
+      },
+      {
+        id: '2',
+        title: 'Assessment Monitoring Notice',
+        content:
+          '<p>Your assessment session will be monitored using webcam, screen recording, and keystroke analysis to detect potential integrity violations.</p><p>All recordings are securely stored and reviewed only when needed.</p>',
+        category: 'Monitoring',
+        acknowledged: false,
+      },
+      {
+        id: '3',
+        title: 'Algorithmic Decision Making',
+        content:
+          '<p>Parts of your application may be scored algorithmically. You have the right to request human review of any decision that significantly affects your application.</p>',
+        category: 'AI & Decisions',
+        acknowledged: false,
+      },
+    ];
+    const allAcknowledged = notices.every((n) => n.acknowledged);
+    return { notices, allAcknowledged };
+  },
+  async acknowledgeCandidateNotice(noticeId: string) {
+    console.log(`Notice ${noticeId} acknowledged`);
+  },
+  async getPracticeModules() {
+    return {
+      modules: [
+        {
+          id: '1',
+          title: 'Spreadsheet Task Practice',
+          description:
+            'Practice working with spreadsheet data, formulas, and analysis in a simulated environment.',
+          duration: '15',
+          taskCount: 3,
+          completed: false,
+        },
+        {
+          id: '2',
+          title: 'Document Task Practice',
+          description: 'Familiarize yourself with the document editing and formatting interface.',
+          duration: '10',
+          taskCount: 2,
+          completed: true,
+        },
+        {
+          id: '3',
+          title: 'Code Task Practice',
+          description: 'Test the code editor with syntax highlighting and execution.',
+          duration: '20',
+          taskCount: 4,
+          completed: false,
+        },
+      ],
+    };
+  },
+  async getSystemChecks() {
+    return {
+      checks: [
+        {
+          id: '1',
+          name: 'Browser compatibility',
+          description: 'Check if your browser meets minimum requirements',
+          status: 'not_started' as const,
+          required: true,
+        },
+        {
+          id: '2',
+          name: 'Webcam access',
+          description: 'Verify webcam is available and working',
+          status: 'not_started' as const,
+          required: true,
+        },
+        {
+          id: '3',
+          name: 'Microphone access',
+          description: 'Verify microphone is available',
+          status: 'not_started' as const,
+          required: true,
+        },
+        {
+          id: '4',
+          name: 'Network speed',
+          description: 'Test upload and download speeds',
+          status: 'not_started' as const,
+          required: true,
+        },
+        {
+          id: '5',
+          name: 'Desktop companion',
+          description: 'Check if desktop monitoring application is installed',
+          status: 'not_started' as const,
+          required: false,
+        },
+        {
+          id: '6',
+          name: 'Screen recording',
+          description: 'Verify screen recording permissions',
+          status: 'not_started' as const,
+          required: true,
+        },
+      ],
+      overallStatus: 'not_started' as const,
+    };
+  },
+  async runSystemChecks() {
+    return {
+      checks: [
+        {
+          id: '1',
+          name: 'Browser compatibility',
+          description: 'Check if your browser meets minimum requirements',
+          status: 'passed' as const,
+          message: 'Chrome 120.0 detected - fully supported',
+          required: true,
+        },
+        {
+          id: '2',
+          name: 'Webcam access',
+          description: 'Verify webcam is available and working',
+          status: 'passed' as const,
+          message: 'Webcam detected and accessible',
+          required: true,
+        },
+        {
+          id: '3',
+          name: 'Microphone access',
+          description: 'Verify microphone is available',
+          status: 'passed' as const,
+          message: 'Microphone detected and accessible',
+          required: true,
+        },
+        {
+          id: '4',
+          name: 'Network speed',
+          description: 'Test upload and download speeds',
+          status: 'passed' as const,
+          message: 'Download: 45 Mbps, Upload: 12 Mbps - sufficient',
+          required: true,
+        },
+        {
+          id: '5',
+          name: 'Desktop companion',
+          description: 'Check if desktop monitoring application is installed',
+          status: 'warning' as const,
+          message: 'Desktop companion not detected - optional but recommended',
+          required: false,
+        },
+        {
+          id: '6',
+          name: 'Screen recording',
+          description: 'Verify screen recording permissions',
+          status: 'passed' as const,
+          message: 'Screen recording permission granted',
+          required: true,
+        },
+      ],
+      overallStatus: 'passed' as const,
+    };
+  },
+  async getReviewableDecisions() {
+    return {
+      decisions: [
+        {
+          id: '1',
+          decisionType: 'Application screening',
+          outcome: 'Not shortlisted',
+          reasoning:
+            'Based on automated scoring of experience and qualifications against role requirements, your application did not meet the minimum threshold.',
+          decidedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          canRequest: true,
+          reviewRequested: false,
+        },
+      ],
+    };
+  },
+  async requestHumanReview(decisionId: string, grounds: string) {
+    console.log(`Human review requested for decision ${decisionId}: ${grounds}`);
+  },
+  async getCandidateTickets() {
+    const tickets = [
+      {
+        id: '1',
+        subject: 'Cannot access assessment link',
+        category: 'Technical',
+        status: 'open' as const,
+        priority: 'high' as const,
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: '2',
+        subject: 'Question about application status',
+        category: 'Application',
+        status: 'in_progress' as const,
+        priority: 'medium' as const,
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+    return { items: tickets, total: tickets.length };
+  },
+  async createCandidateTicket(subject: string, category: string, _description: string) {
+    return {
+      id: randomId('tkt'),
+      subject,
+      category,
+      status: 'open' as const,
+      priority: 'medium' as const,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async getApplicationDetail(id: string) {
+    return {
+      id,
+      campaignTitle: 'Graduate Software Engineer Programme 2026',
+      roleTitle: 'Software Engineer',
+      appliedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'under_review' as const,
+    };
+  },
+  async withdrawApplication(id: string) {
+    console.log(`Application ${id} withdrawn`);
+  },
 };
 
 /* ── Assessment runtime store ─────────────────────────────────────────────────────────────── */
@@ -3128,5 +3380,250 @@ export const governanceStore = {
 
   reset(): void {
     governance = freshGovernance();
+  },
+};
+
+// ===== ACCOUNT STORE (ACC-02) =====
+
+interface NotificationPref {
+  id: string;
+  channel: 'email' | 'in_app' | 'sms';
+  category: string;
+  enabled: boolean;
+  mandatory: boolean;
+}
+
+const notificationPrefs: NotificationPref[] = [
+  {
+    id: '1',
+    channel: 'email',
+    category: 'Application status',
+    enabled: true,
+    mandatory: true,
+  },
+  { id: '2', channel: 'email', category: 'Assessment invitations', enabled: true, mandatory: true },
+  { id: '3', channel: 'email', category: 'Support responses', enabled: true, mandatory: false },
+  { id: '4', channel: 'in_app', category: 'Application status', enabled: true, mandatory: false },
+  { id: '5', channel: 'in_app', category: 'System notices', enabled: true, mandatory: false },
+  { id: '6', channel: 'sms', category: 'Assessment invitations', enabled: false, mandatory: false },
+  { id: '7', channel: 'sms', category: 'Critical alerts', enabled: true, mandatory: true },
+];
+
+export const accountStore = {
+  async getNotificationPreferences() {
+    return { items: notificationPrefs, total: notificationPrefs.length };
+  },
+  async updateNotificationPreferences(
+    updates: Array<{ channel: string; category: string; enabled: boolean }>,
+  ) {
+    updates.forEach((update) => {
+      const pref = notificationPrefs.find(
+        (p) => p.channel === update.channel && p.category === update.category,
+      );
+      if (pref && !pref.mandatory) {
+        pref.enabled = update.enabled;
+      }
+    });
+  },
+};
+
+// ===== SUPPORT STORE =====
+
+export const supportStore = {
+  async getSupportQueue() {
+    const cases = [
+      {
+        id: '1',
+        ticketNumber: 'SUP-2458',
+        subject: 'Cannot access assessment - timeout error',
+        requester: 'jordan.smith@example.com',
+        priority: 'high' as const,
+        status: 'new' as const,
+        category: 'Technical',
+        age: '2h',
+      },
+      {
+        id: '2',
+        ticketNumber: 'SUP-2457',
+        subject: 'Request profile data correction',
+        requester: 'alex.chen@example.com',
+        priority: 'medium' as const,
+        status: 'assigned' as const,
+        category: 'Account',
+        age: '5h',
+        assignedTo: 'Sarah Johnson',
+      },
+      {
+        id: '3',
+        ticketNumber: 'SUP-2456',
+        subject: 'Webcam not detected during system check',
+        requester: 'morgan.taylor@example.com',
+        priority: 'medium' as const,
+        status: 'in_progress' as const,
+        category: 'Technical',
+        age: '1d',
+        assignedTo: 'Michael Brown',
+      },
+    ];
+    return { items: cases, total: cases.length };
+  },
+  async getSupportCase(id: string) {
+    return {
+      id,
+      ticketNumber: 'SUP-2458',
+      subject: 'Cannot access assessment - timeout error',
+      description:
+        'I clicked the assessment link from my email but it keeps timing out. I have tried on Chrome and Firefox.',
+      requester: 'jordan.smith@example.com',
+      priority: 'high' as const,
+      status: 'new' as const,
+      category: 'Technical',
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      messages: [
+        {
+          id: '1',
+          author: 'Jordan Smith',
+          content:
+            'I clicked the assessment link from my email but it keeps timing out. I have tried on Chrome and Firefox.',
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          internal: false,
+        },
+      ],
+    };
+  },
+  async addSupportMessage(caseId: string, content: string, internal: boolean) {
+    console.log(`Message added to case ${caseId} (internal: ${internal}): ${content}`);
+  },
+  async updateSupportCaseStatus(caseId: string, status: string) {
+    console.log(`Case ${caseId} status updated to: ${status}`);
+  },
+  async getJitAccessSessions() {
+    return {
+      sessions: [
+        {
+          id: '1',
+          grantedTo: 'sarah.johnson@cpf.internal',
+          scope: 'candidate_data',
+          justification: 'Need to review candidate data to resolve support ticket SUP-2457',
+          grantedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          status: 'active' as const,
+          actions: [
+            {
+              id: '1',
+              action: 'Viewed candidate profile',
+              timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+              outcome: 'Success',
+            },
+          ],
+        },
+      ],
+    };
+  },
+  async requestJitAccess(scope: string, justification: string) {
+    console.log(`JIT access requested for ${scope}: ${justification}`);
+  },
+  async revokeJitAccess(sessionId: string) {
+    console.log(`JIT access revoked for session ${sessionId}`);
+  },
+};
+
+// ===== OPERATIONS STORE =====
+
+export const operationsStore = {
+  async getOperationsDashboard() {
+    return {
+      metrics: [
+        { label: 'Active assessments', value: '247', trend: '+12%', tone: 'sage' as const },
+        { label: 'System uptime', value: '99.8%', tone: 'sage' as const },
+        { label: 'Avg response time', value: '142ms', trend: '+8ms', tone: 'amber' as const },
+        { label: 'Error rate', value: '0.12%', trend: '-0.03%', tone: 'sage' as const },
+        { label: 'Support queue', value: '23', trend: '+5', tone: 'amber' as const },
+        { label: 'AI model accuracy', value: '94.2%', trend: '+1.1%', tone: 'sage' as const },
+      ],
+      alerts: [
+        {
+          id: '1',
+          severity: 'warning' as const,
+          message: 'Database query performance degraded - average latency 320ms (threshold 250ms)',
+          timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          acknowledged: false,
+        },
+      ],
+      recentActivity: [
+        {
+          id: '1',
+          description: 'AI model "screening-v3" promoted to production',
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        },
+        {
+          id: '2',
+          description: 'Change request CR-1247 approved by QMS',
+          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+        },
+        {
+          id: '3',
+          description: '156 candidates completed assessments',
+          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        },
+      ],
+    };
+  },
+  async acknowledgeOperationalAlert(alertId: string) {
+    console.log(`Alert ${alertId} acknowledged`);
+  },
+  async getSecurityStatus() {
+    return {
+      incidents: [],
+      killSwitch: {
+        enabled: false,
+      },
+    };
+  },
+  async activateKillSwitch(reason: string) {
+    console.log(`Kill switch activated: ${reason}`);
+  },
+  async deactivateKillSwitch() {
+    console.log('Kill switch deactivated');
+  },
+  async escalateSecurityIncident(incidentId: string) {
+    console.log(`Security incident ${incidentId} escalated`);
+  },
+  async getIntegrationDeliveries() {
+    const deliveries = [
+      {
+        id: '1',
+        deliveryType: 'export' as const,
+        destination: 'SFTP://hr.client.com/exports',
+        status: 'delivered' as const,
+        recordCount: 45,
+        initiatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        completedAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+        retryCount: 0,
+      },
+      {
+        id: '2',
+        deliveryType: 'webhook' as const,
+        destination: 'https://api.client.com/webhooks/assessment-complete',
+        status: 'failed' as const,
+        recordCount: 12,
+        initiatedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        errorMessage: 'Connection timeout after 30s',
+        retryCount: 2,
+      },
+      {
+        id: '3',
+        deliveryType: 'api' as const,
+        destination: 'https://ats.company.com/api/v2/applications',
+        status: 'in_progress' as const,
+        recordCount: 23,
+        initiatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        retryCount: 0,
+      },
+    ];
+    return { items: deliveries, total: deliveries.length };
+  },
+  async retryIntegrationDelivery(deliveryId: string) {
+    console.log(`Retrying integration delivery ${deliveryId}`);
   },
 };

@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type { BadgeTone, ChangeRequestView, Collection } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, ChangeRequestView, Collection } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceChangesPage() {
@@ -19,12 +24,12 @@ export default function GovernanceChangesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const loader = useCallback(async () => {
-    const collection = await api.getChangeRequests();
+    const collection = await apiClient.getChangeRequests();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<ChangeRequestView>>(loader);
+  const { state, reload } = useAsync<Collection<ChangeRequestView>>(loader);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,13 +39,13 @@ export default function GovernanceChangesPage() {
     const significance = (formData.get('significance') as string) || '';
     const affectedControls = (formData.get('affectedControls') as string) || '';
     if (!title.trim() || !significance.trim() || !affectedControls.trim()) return;
-    await api.submitChangeRequest(
+    await apiClient.submitChangeRequest(
       title.trim(),
       significance as 'minor' | 'major' | 'substantial',
       affectedControls.trim(),
     );
     form.reset();
-    const updated = await api.getChangeRequests();
+    const updated = await apiClient.getChangeRequests();
     setData(updated);
   };
 
@@ -52,10 +57,10 @@ export default function GovernanceChangesPage() {
     const outcome = (formData.get('outcome') as string) || '';
     const rationale = (formData.get('rationale') as string) || '';
     if (!outcome.trim() || !rationale.trim()) return;
-    await api.recordChangeDecision(selectedId, outcome.trim(), rationale.trim());
+    await apiClient.recordChangeDecision(selectedId, outcome.trim(), rationale.trim());
     form.reset();
     setSelectedId(null);
-    const updated = await api.getChangeRequests();
+    const updated = await apiClient.getChangeRequests();
     setData(updated);
   };
 
@@ -81,9 +86,9 @@ export default function GovernanceChangesPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Change requests"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No change requests"
         emptyBody="Submit your first change request to establish change governance."
       >
@@ -143,7 +148,7 @@ export default function GovernanceChangesPage() {
                 style={{ borderLeft: '3px solid var(--color-amber)' }}
               >
                 <div className="mb-4">
-                  <Badge tone="amber">Human authority checkpoint</Badge>
+                  <StatusBadge tone="warning">Human authority checkpoint</StatusBadge>
                   <p className="text-sm text-muted mt-2">
                     Human initiates and confirms consequential actions.
                   </p>
@@ -227,23 +232,21 @@ export default function GovernanceChangesPage() {
                       <tr key={c.id}>
                         <td className="px-3 py-3 text-sm text-ink">{c.title}</td>
                         <td className="px-3 py-3">
-                          <Badge tone={c.significance === 'substantial' ? 'red' : 'amber'}>
+                          <StatusBadge
+                            tone={c.significance === 'substantial' ? 'danger' : 'warning'}
+                          >
                             {c.significance}
-                          </Badge>
+                          </StatusBadge>
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[c.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[c.status] || 'neutral'}>
                             {c.status}
                           </StatusBadge>
                         </td>
                         <td className="px-3 py-3 text-sm text-muted">{c.owner}</td>
                         <td className="px-3 py-3">
                           {!c.resolved && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => setSelectedId(c.id)}
-                              size="small"
-                            >
+                            <Button variant="secondary" onClick={() => setSelectedId(c.id)}>
                               Decide
                             </Button>
                           )}

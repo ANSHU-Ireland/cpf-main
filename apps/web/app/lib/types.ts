@@ -4,6 +4,8 @@
  * packages and will replace the synthetic source when the API adapter is wired.
  */
 
+export type { BadgeTone } from '../components/StatusBadge';
+
 export interface ProfileView {
   readonly userId: string;
   readonly email: string;
@@ -1045,4 +1047,179 @@ export interface TraceabilityView {
   readonly surfaces: readonly string[];
   readonly endpoints: readonly string[];
   readonly evidence: readonly string[];
+}
+
+// Notification preferences (ACC-02)
+export interface NotificationPreference {
+  readonly id: string;
+  readonly channel: 'email' | 'in_app' | 'sms';
+  readonly category: string;
+  readonly enabled: boolean;
+  readonly mandatory: boolean;
+}
+
+// Candidate profile (CAN-02)
+export interface CandidateProfile {
+  readonly fullName: string;
+  readonly email: string;
+  readonly dateOfBirth: string;
+  readonly phone?: string;
+}
+
+// Notices (CAN-03)
+export interface Notice {
+  readonly id: string;
+  readonly title: string;
+  readonly content: string;
+  readonly category: string;
+  readonly acknowledged: boolean;
+}
+
+// Practice modules (CAN-06)
+export interface PracticeModule {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly duration: string;
+  readonly taskCount: number;
+  readonly completed: boolean;
+}
+
+// System checks (CAN-07)
+export type CheckStatus = 'not_started' | 'checking' | 'passed' | 'warning' | 'failed';
+export interface SystemCheck {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly status: CheckStatus;
+  readonly message?: string;
+  readonly required: boolean;
+}
+
+// Review requests (CAN-10)
+export interface ReviewableDecision {
+  readonly id: string;
+  readonly decisionType: string;
+  readonly outcome: string;
+  readonly reasoning: string;
+  readonly decidedAt: string;
+  readonly canRequest: boolean;
+  readonly reviewRequested: boolean;
+}
+
+// Support tickets (CAN-13)
+export interface SupportTicket {
+  readonly id: string;
+  readonly subject: string;
+  readonly category: string;
+  readonly status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  readonly priority: 'low' | 'medium' | 'high';
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+// Support queue (SUP-01)
+export interface SupportCase {
+  readonly id: string;
+  readonly ticketNumber: string;
+  readonly subject: string;
+  readonly requester: string;
+  readonly priority: 'low' | 'medium' | 'high' | 'critical';
+  readonly status: 'new' | 'assigned' | 'in_progress' | 'escalated' | 'resolved';
+  readonly category: string;
+  readonly age: string;
+  readonly assignedTo?: string;
+}
+
+// Support case detail (SUP-02)
+export interface SupportCaseDetail extends SupportCase {
+  readonly description: string;
+  readonly createdAt: string;
+  readonly messages: Array<{
+    readonly id: string;
+    readonly author: string;
+    readonly content: string;
+    readonly timestamp: string;
+    readonly internal: boolean;
+  }>;
+}
+
+// JIT access (SUP-03)
+export interface JitAccessSession {
+  readonly id: string;
+  readonly grantedTo: string;
+  readonly scope: string;
+  readonly justification: string;
+  readonly grantedAt: string;
+  readonly expiresAt: string;
+  readonly status: 'active' | 'expired' | 'revoked';
+  readonly actions: Array<{
+    readonly id: string;
+    readonly action: string;
+    readonly timestamp: string;
+    readonly outcome: string;
+  }>;
+}
+
+// Operations dashboard (OPS-01)
+export interface OperationalMetric {
+  readonly label: string;
+  readonly value: string;
+  readonly trend?: string;
+  readonly tone?: 'neutral' | 'success' | 'warning' | 'danger';
+}
+
+export interface SystemAlert {
+  readonly id: string;
+  readonly severity: 'info' | 'warning' | 'error' | 'critical';
+  readonly message: string;
+  readonly timestamp: string;
+  readonly acknowledged: boolean;
+}
+
+export interface OperationsDashboard {
+  readonly metrics: OperationalMetric[];
+  readonly alerts: SystemAlert[];
+  readonly recentActivity: Array<{
+    readonly id: string;
+    readonly description: string;
+    readonly timestamp: string;
+  }>;
+}
+
+// Security incident (OPS-02)
+export interface SecurityIncident {
+  readonly id: string;
+  readonly title: string;
+  readonly severity: 'low' | 'medium' | 'high' | 'critical';
+  readonly status: 'active' | 'contained' | 'resolved';
+  readonly detectedAt: string;
+}
+
+export interface KillSwitchStatus {
+  readonly enabled: boolean;
+  readonly reason?: string;
+  readonly enabledAt?: string;
+  readonly enabledBy?: string;
+}
+
+// Integration deliveries (OPS-03)
+export interface IntegrationDelivery {
+  readonly id: string;
+  readonly deliveryType: 'export' | 'webhook' | 'api';
+  readonly destination: string;
+  readonly status: 'pending' | 'in_progress' | 'delivered' | 'failed' | 'retrying';
+  readonly recordCount: number;
+  readonly initiatedAt: string;
+  readonly completedAt?: string;
+  readonly errorMessage?: string;
+  readonly retryCount: number;
+}
+
+export interface ApplicationDetail {
+  readonly id: string;
+  readonly campaignTitle: string;
+  readonly roleTitle: string;
+  readonly appliedAt: string;
+  readonly status: 'under_review' | 'withdrawn';
 }

@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
 import type { BadgeTone, Collection, QmsProcedureView } from '../../lib/types';
-import { api } from '../../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceQmsPage() {
@@ -18,12 +23,12 @@ export default function GovernanceQmsPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getQmsProcedures();
+    const collection = await apiClient.getQmsProcedures();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<QmsProcedureView>>(loader);
+  const { state, reload } = useAsync<Collection<QmsProcedureView>>(loader);
 
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,9 +37,9 @@ export default function GovernanceQmsPage() {
     const title = (formData.get('title') as string) || '';
     const policy = (formData.get('policy') as string) || '';
     if (!title.trim() || !policy.trim()) return;
-    await api.addQmsProcedure(title.trim(), policy.trim());
+    await apiClient.addQmsProcedure(title.trim(), policy.trim());
     form.reset();
-    const updated = await api.getQmsProcedures();
+    const updated = await apiClient.getQmsProcedures();
     setData(updated);
   };
 
@@ -60,9 +65,9 @@ export default function GovernanceQmsPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="QMS procedures"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No QMS procedures documented"
         emptyBody="Add your first QMS procedure to establish governance processes."
       >
@@ -143,7 +148,7 @@ export default function GovernanceQmsPage() {
                         <td className="px-3 py-3 text-sm text-muted">{p.policy}</td>
                         <td className="px-3 py-3 text-sm text-muted">{p.approvedBy || '—'}</td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[p.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[p.status] || 'neutral'}>
                             {p.status}
                           </StatusBadge>
                         </td>

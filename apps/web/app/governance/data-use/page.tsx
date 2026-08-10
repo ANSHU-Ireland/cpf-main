@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
 import type { BadgeTone, Collection, DataUseView } from '../../lib/types';
-import { api } from '../../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceDataUsePage() {
@@ -18,12 +23,12 @@ export default function GovernanceDataUsePage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getDataUse();
+    const collection = await apiClient.getDataUse();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<DataUseView>>(loader);
+  const { state, reload } = useAsync<Collection<DataUseView>>(loader);
 
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -42,7 +47,7 @@ export default function GovernanceDataUsePage() {
       !retention.trim()
     )
       return;
-    await api.addDataUsePurpose(
+    await apiClient.addDataUsePurpose(
       purpose.trim(),
       lawfulBasis.trim(),
       categories.trim(),
@@ -50,7 +55,7 @@ export default function GovernanceDataUsePage() {
       retention.trim(),
     );
     form.reset();
-    const updated = await api.getDataUse();
+    const updated = await apiClient.getDataUse();
     setData(updated);
   };
 
@@ -76,9 +81,9 @@ export default function GovernanceDataUsePage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Data-use records"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No processing purposes registered"
         emptyBody="Add your first processing purpose to document data-use compliance."
       >
@@ -200,7 +205,7 @@ export default function GovernanceDataUsePage() {
                         <td className="px-3 py-3 text-sm text-muted">{d.lawfulBasis}</td>
                         <td className="px-3 py-3 text-sm text-muted">{d.retention}</td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[d.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[d.status] || 'neutral'}>
                             {d.status}
                           </StatusBadge>
                         </td>

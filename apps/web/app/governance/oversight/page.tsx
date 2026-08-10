@@ -1,10 +1,15 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, useAsync } from '@cpf/ui';
-import type { OversightPlanView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { OversightPlanView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
+import { governanceStore } from '../../lib/synthetic.server';
 
 export default function GovernanceOversightPage() {
   const headingId = useId();
@@ -13,12 +18,12 @@ export default function GovernanceOversightPage() {
   const [data, setData] = useState<OversightPlanView | null>(null);
 
   const loader = useCallback(async () => {
-    const plan = await api.getOversightPlan(systemId);
+    const plan = await apiClient.getOversightPlan(systemId);
     setData(plan);
     return plan;
   }, [systemId]);
 
-  const state = useAsync<OversightPlanView>(loader);
+  const { state, reload } = useAsync<OversightPlanView>(loader);
 
   const handleApprove = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -37,7 +42,7 @@ export default function GovernanceOversightPage() {
       !rationale.trim()
     )
       return;
-    await api.approveOversightPlan(
+    await apiClient.approveOversightPlan(
       systemId,
       authority.trim(),
       competency.trim(),
@@ -45,7 +50,7 @@ export default function GovernanceOversightPage() {
       outcome.trim(),
       rationale.trim(),
     );
-    const updated = await api.getOversightPlan(systemId);
+    const updated = await apiClient.getOversightPlan(systemId);
     setData(updated);
   };
 
@@ -61,14 +66,14 @@ export default function GovernanceOversightPage() {
         headingId={headingId}
       />
 
-      <AsyncBoundary state={state} onRetry={loader} label="Oversight plan">
+      <AsyncBoundary state={state} onRetry={reload} label="Oversight plan">
         {() => (
           <Card
             aria-label="Human authority checkpoint"
             style={{ borderLeft: '3px solid var(--color-amber)' }}
           >
             <div className="mb-4">
-              <Badge tone="amber">Human authority checkpoint</Badge>
+              <StatusBadge tone="warning">Human authority checkpoint</StatusBadge>
               <p className="text-sm text-muted mt-2">
                 Human initiates and confirms consequential actions.
               </p>
@@ -78,7 +83,7 @@ export default function GovernanceOversightPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Outcome</h3>
-                  <Badge tone="sage">{data.outcome}</Badge>
+                  <StatusBadge tone="success">{data.outcome}</StatusBadge>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Authority</h3>

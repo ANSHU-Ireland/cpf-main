@@ -1,32 +1,32 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type {
-  BadgeTone,
-  SignalDashboardView,
-  SignalPriority,
-  SignalType,
-} from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, SignalDashboardView, SignalPriority, SignalType } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 const PRIORITY_TONE: Record<string, BadgeTone> = {
-  low: 'sage',
-  medium: 'amber',
-  high: 'red',
-  critical: 'red',
+  low: 'success',
+  medium: 'warning',
+  high: 'danger',
+  critical: 'danger',
 };
 const TYPE_TONE: Record<string, BadgeTone> = {
-  safety: 'red',
-  performance: 'amber',
-  bias: 'red',
-  drift: 'amber',
+  safety: 'danger',
+  performance: 'warning',
+  bias: 'danger',
+  drift: 'warning',
 };
 
 export default function GovernanceSignalsPage() {
@@ -35,12 +35,12 @@ export default function GovernanceSignalsPage() {
   const [showForm, setShowForm] = useState(false);
 
   const loader = useCallback(async () => {
-    const dashboard = await api.getSignalsDashboard();
+    const dashboard = await apiClient.getSignalsDashboard();
     setData(dashboard);
     return dashboard;
   }, []);
 
-  const state = useAsync<SignalDashboardView>(loader);
+  const { state, reload } = useAsync<SignalDashboardView>(loader);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -50,10 +50,14 @@ export default function GovernanceSignalsPage() {
     const priority = (formData.get('priority') as string) || '';
     const description = (formData.get('description') as string) || '';
     if (!type.trim() || !priority.trim() || !description.trim()) return;
-    await api.createSignal(type as SignalType, priority as SignalPriority, description.trim());
+    await apiClient.createSignal(
+      type as SignalType,
+      priority as SignalPriority,
+      description.trim(),
+    );
     form.reset();
     setShowForm(false);
-    const updated = await api.getSignalsDashboard();
+    const updated = await apiClient.getSignalsDashboard();
     setData(updated);
   };
 
@@ -69,7 +73,7 @@ export default function GovernanceSignalsPage() {
         headingId={headingId}
       />
 
-      <AsyncBoundary state={state} onRetry={loader} label="Signals dashboard">
+      <AsyncBoundary state={state} onRetry={reload} label="Signals dashboard">
         {() => (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -169,14 +173,14 @@ export default function GovernanceSignalsPage() {
                     {data?.signals.map((s) => (
                       <tr key={s.id}>
                         <td className="px-3 py-3">
-                          <Badge tone={TYPE_TONE[s.type]}>{s.type}</Badge>
+                          <StatusBadge tone={TYPE_TONE[s.type]}>{s.type}</StatusBadge>
                         </td>
                         <td className="px-3 py-3">
-                          <Badge tone={PRIORITY_TONE[s.priority]}>{s.priority}</Badge>
+                          <StatusBadge tone={PRIORITY_TONE[s.priority]}>{s.priority}</StatusBadge>
                         </td>
                         <td className="px-3 py-3 text-sm text-ink">{s.description}</td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[s.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[s.status] || 'neutral'}>
                             {s.status}
                           </StatusBadge>
                         </td>

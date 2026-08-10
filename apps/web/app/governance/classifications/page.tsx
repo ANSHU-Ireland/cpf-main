@@ -1,10 +1,15 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, useAsync } from '@cpf/ui';
-import type { ClassificationView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { ClassificationView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
+import { governanceStore } from '../../lib/synthetic.server';
 
 export default function GovernanceClassificationsPage() {
   const headingId = useId();
@@ -13,12 +18,12 @@ export default function GovernanceClassificationsPage() {
   const [data, setData] = useState<ClassificationView | null>(null);
 
   const loader = useCallback(async () => {
-    const classification = await api.getClassification(systemId);
+    const classification = await apiClient.getClassification(systemId);
     setData(classification);
     return classification;
   }, [systemId]);
 
-  const state = useAsync<ClassificationView>(loader);
+  const { state, reload } = useAsync<ClassificationView>(loader);
 
   const handleRecord = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -30,14 +35,14 @@ export default function GovernanceClassificationsPage() {
     const reasoning = (formData.get('reasoning') as string) || '';
     if (!role.trim() || !intendedPurpose.trim() || !classification.trim() || !reasoning.trim())
       return;
-    await api.recordClassification(
+    await apiClient.recordClassification(
       systemId,
       role.trim(),
       intendedPurpose.trim(),
       classification.trim(),
       reasoning.trim(),
     );
-    const updated = await api.getClassification(systemId);
+    const updated = await apiClient.getClassification(systemId);
     setData(updated);
   };
 
@@ -53,14 +58,14 @@ export default function GovernanceClassificationsPage() {
         headingId={headingId}
       />
 
-      <AsyncBoundary state={state} onRetry={loader} label="Classification">
+      <AsyncBoundary state={state} onRetry={reload} label="Classification">
         {() => (
           <Card
             aria-label="Human authority checkpoint"
             style={{ borderLeft: '3px solid var(--color-amber)' }}
           >
             <div className="mb-4">
-              <Badge tone="amber">Human authority checkpoint</Badge>
+              <StatusBadge tone="warning">Human authority checkpoint</StatusBadge>
               <p className="text-sm text-muted mt-2">
                 Human initiates and confirms consequential actions.
               </p>
@@ -70,7 +75,7 @@ export default function GovernanceClassificationsPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Classification</h3>
-                  <Badge tone="blue">{data.classification}</Badge>
+                  <StatusBadge tone="info">{data.classification}</StatusBadge>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-ink mb-1">Reasoning</h3>

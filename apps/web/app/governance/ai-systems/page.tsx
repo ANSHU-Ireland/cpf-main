@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
 import type { AiSystemView, BadgeTone, Collection } from '../../lib/types';
-import { api } from '../../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceAiSystemsPage() {
@@ -18,12 +23,12 @@ export default function GovernanceAiSystemsPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getAiSystems();
+    const collection = await apiClient.getAiSystems();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<AiSystemView>>(loader);
+  const { state, reload } = useAsync<Collection<AiSystemView>>(loader);
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,9 +38,9 @@ export default function GovernanceAiSystemsPage() {
     const purpose = (formData.get('purpose') as string) || '';
     const classification = (formData.get('classification') as string) || '';
     if (!name.trim() || !purpose.trim() || !classification.trim()) return;
-    await api.registerAiSystem(name.trim(), purpose.trim(), classification.trim());
+    await apiClient.registerAiSystem(name.trim(), purpose.trim(), classification.trim());
     form.reset();
-    const updated = await api.getAiSystems();
+    const updated = await apiClient.getAiSystems();
     setData(updated);
   };
 
@@ -62,9 +67,9 @@ export default function GovernanceAiSystemsPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="AI systems"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No AI systems registered"
         emptyBody="Register your first AI system to begin AI Act classification and governance."
       >
@@ -156,10 +161,10 @@ export default function GovernanceAiSystemsPage() {
                         <td className="px-3 py-3 text-sm text-ink">{s.name}</td>
                         <td className="px-3 py-3 text-sm text-muted">{s.purpose}</td>
                         <td className="px-3 py-3 text-sm text-ink">
-                          <Badge tone="blue">{s.classification}</Badge>
+                          <StatusBadge tone="info">{s.classification}</StatusBadge>
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[s.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[s.status] || 'neutral'}>
                             {s.status}
                           </StatusBadge>
                         </td>

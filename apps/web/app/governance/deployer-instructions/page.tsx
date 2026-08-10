@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type { BadgeTone, Collection, DeployerInstructionsView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, Collection, DeployerInstructionsView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceDeployerInstructionsPage() {
@@ -18,12 +23,12 @@ export default function GovernanceDeployerInstructionsPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getDeployerInstructions();
+    const collection = await apiClient.getDeployerInstructions();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<DeployerInstructionsView>>(loader);
+  const { state, reload } = useAsync<Collection<DeployerInstructionsView>>(loader);
 
   const handlePublish = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,14 +39,14 @@ export default function GovernanceDeployerInstructionsPage() {
     const limitations = (formData.get('limitations') as string) || '';
     const oversight = (formData.get('oversight') as string) || '';
     if (!systemId.trim() || !version.trim() || !limitations.trim() || !oversight.trim()) return;
-    await api.publishDeployerInstructions(
+    await apiClient.publishDeployerInstructions(
       systemId.trim(),
       version.trim(),
       limitations.trim(),
       oversight.trim(),
     );
     form.reset();
-    const updated = await api.getDeployerInstructions();
+    const updated = await apiClient.getDeployerInstructions();
     setData(updated);
   };
 
@@ -67,9 +72,9 @@ export default function GovernanceDeployerInstructionsPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Deployer instructions"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No deployer instructions"
         emptyBody="Publish your first set of deployer instructions."
       >
@@ -177,7 +182,7 @@ export default function GovernanceDeployerInstructionsPage() {
                         <td className="px-3 py-3 text-sm text-muted">{d.version}</td>
                         <td className="px-3 py-3 text-sm text-muted">{d.reference}</td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[d.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[d.status] || 'neutral'}>
                             {d.status}
                           </StatusBadge>
                         </td>

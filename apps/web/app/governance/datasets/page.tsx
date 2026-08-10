@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
 import type { BadgeTone, Collection, DatasetView } from '../../lib/types';
-import { api } from '../../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceDatasetsPage() {
@@ -18,12 +23,12 @@ export default function GovernanceDatasetsPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getDatasets();
+    const collection = await apiClient.getDatasets();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<DatasetView>>(loader);
+  const { state, reload } = useAsync<Collection<DatasetView>>(loader);
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -35,14 +40,14 @@ export default function GovernanceDatasetsPage() {
     const representativeness = (formData.get('representativeness') as string) || '';
     if (!name.trim() || !provenance.trim() || !lawfulBasis.trim() || !representativeness.trim())
       return;
-    await api.registerDataset(
+    await apiClient.registerDataset(
       name.trim(),
       provenance.trim(),
       lawfulBasis.trim(),
       representativeness.trim(),
     );
     form.reset();
-    const updated = await api.getDatasets();
+    const updated = await apiClient.getDatasets();
     setData(updated);
   };
 
@@ -68,9 +73,9 @@ export default function GovernanceDatasetsPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Datasets"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No datasets registered"
         emptyBody="Register your first training dataset to document provenance and compliance."
       >
@@ -175,7 +180,7 @@ export default function GovernanceDatasetsPage() {
                         <td className="px-3 py-3 text-sm text-ink">{d.name}</td>
                         <td className="px-3 py-3 text-sm text-muted">{d.provenance}</td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[d.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[d.status] || 'neutral'}>
                             {d.status}
                           </StatusBadge>
                         </td>

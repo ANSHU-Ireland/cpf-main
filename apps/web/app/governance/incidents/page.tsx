@@ -1,26 +1,26 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type {
-  BadgeTone,
-  Collection,
-  IncidentSeverity,
-  SeriousIncidentView,
-} from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, Collection, IncidentSeverity, SeriousIncidentView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 const SEVERITY_TONE: Record<string, BadgeTone> = {
-  minor: 'blue',
-  moderate: 'amber',
-  serious: 'red',
-  critical: 'red',
+  minor: 'info',
+  moderate: 'warning',
+  serious: 'danger',
+  critical: 'danger',
 };
 
 export default function GovernanceIncidentsPage() {
@@ -29,12 +29,12 @@ export default function GovernanceIncidentsPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getIncidents();
+    const collection = await apiClient.getIncidents();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<SeriousIncidentView>>(loader);
+  const { state, reload } = useAsync<Collection<SeriousIncidentView>>(loader);
 
   const handleEscalate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -45,9 +45,14 @@ export default function GovernanceIncidentsPage() {
     const contained = formData.get('contained') === 'on';
     const notified = formData.get('notified') === 'on';
     if (!title.trim() || !severity.trim()) return;
-    await api.escalateIncident(title.trim(), severity as IncidentSeverity, contained, notified);
+    await apiClient.escalateIncident(
+      title.trim(),
+      severity as IncidentSeverity,
+      contained,
+      notified,
+    );
     form.reset();
-    const updated = await api.getIncidents();
+    const updated = await apiClient.getIncidents();
     setData(updated);
   };
 
@@ -73,9 +78,9 @@ export default function GovernanceIncidentsPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Serious incidents"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No incidents"
         emptyBody="Escalate your first serious incident."
       >
@@ -173,20 +178,20 @@ export default function GovernanceIncidentsPage() {
                       <tr key={i.id}>
                         <td className="px-3 py-3 text-sm text-ink">{i.title}</td>
                         <td className="px-3 py-3">
-                          <Badge tone={SEVERITY_TONE[i.severity]}>{i.severity}</Badge>
+                          <StatusBadge tone={SEVERITY_TONE[i.severity]}>{i.severity}</StatusBadge>
                         </td>
                         <td className="px-3 py-3">
-                          <Badge tone={i.contained ? 'sage' : 'red'}>
+                          <StatusBadge tone={i.contained ? 'success' : 'danger'}>
                             {i.contained ? 'Yes' : 'No'}
-                          </Badge>
+                          </StatusBadge>
                         </td>
                         <td className="px-3 py-3">
-                          <Badge tone={i.notified ? 'sage' : 'amber'}>
+                          <StatusBadge tone={i.notified ? 'success' : 'warning'}>
                             {i.notified ? 'Yes' : 'No'}
-                          </Badge>
+                          </StatusBadge>
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[i.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[i.status] || 'neutral'}>
                             {i.status}
                           </StatusBadge>
                         </td>

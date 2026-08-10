@@ -1,21 +1,26 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
-import type { BadgeTone, Collection, RiskView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { BadgeTone, Collection, RiskView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 const RISK_TONE: Record<string, BadgeTone> = {
-  low: 'sage',
-  medium: 'amber',
-  high: 'red',
-  critical: 'red',
+  low: 'success',
+  medium: 'warning',
+  high: 'danger',
+  critical: 'danger',
 };
 
 export default function GovernanceRisksPage() {
@@ -24,12 +29,12 @@ export default function GovernanceRisksPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getRisks();
+    const collection = await apiClient.getRisks();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<RiskView>>(loader);
+  const { state, reload } = useAsync<Collection<RiskView>>(loader);
 
   const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -40,14 +45,14 @@ export default function GovernanceRisksPage() {
     const controls = (formData.get('controls') as string) || '';
     const residual = (formData.get('residual') as string) || '';
     if (!title.trim() || !riskLevel.trim() || !controls.trim() || !residual.trim()) return;
-    await api.updateRisk(
+    await apiClient.updateRisk(
       title.trim(),
       riskLevel as 'low' | 'medium' | 'high' | 'critical',
       controls.trim(),
       residual.trim(),
     );
     form.reset();
-    const updated = await api.getRisks();
+    const updated = await apiClient.getRisks();
     setData(updated);
   };
 
@@ -73,9 +78,9 @@ export default function GovernanceRisksPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Risks"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No risks registered"
         emptyBody="Add your first risk to establish control governance."
       >
@@ -176,12 +181,12 @@ export default function GovernanceRisksPage() {
                       <tr key={r.id}>
                         <td className="px-3 py-3 text-sm text-ink">{r.title}</td>
                         <td className="px-3 py-3">
-                          <Badge tone={RISK_TONE[r.riskLevel]}>{r.riskLevel}</Badge>
+                          <StatusBadge tone={RISK_TONE[r.riskLevel]}>{r.riskLevel}</StatusBadge>
                         </td>
                         <td className="px-3 py-3 text-sm text-muted">{r.controls}</td>
                         <td className="px-3 py-3 text-sm text-muted">{r.residual}</td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[r.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[r.status] || 'neutral'}>
                             {r.status}
                           </StatusBadge>
                         </td>

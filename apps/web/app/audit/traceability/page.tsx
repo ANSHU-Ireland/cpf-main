@@ -1,8 +1,12 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Badge, Card, PageHeader, useAsync } from '@cpf/ui';
-import type { Collection, TraceabilityView } from '../../../lib/types';
-import { api } from '../../../lib/api-client';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
+import type { Collection, TraceabilityView } from '../../lib/types';
+import { apiClient } from '../../lib/api-client';
 
 export default function AuditTraceabilityPage() {
   const headingId = useId();
@@ -10,12 +14,12 @@ export default function AuditTraceabilityPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getTraceability();
+    const collection = await apiClient.getTraceability();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<TraceabilityView>>(loader);
+  const { state, reload } = useAsync<Collection<TraceabilityView>>(loader);
 
   const filtered = data
     ? data.items.filter(
@@ -38,9 +42,9 @@ export default function AuditTraceabilityPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Traceability matrix"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No traceability records"
         emptyBody="The traceability matrix will appear when requirements are mapped to controls and evidence."
       >
@@ -65,7 +69,7 @@ export default function AuditTraceabilityPage() {
                 <div key={t.requirementId} className="border border-line rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <Badge tone="blue">{t.requirementId}</Badge>
+                      <StatusBadge tone="info">{t.requirementId}</StatusBadge>
                       <p className="text-sm text-ink mt-1">{t.description}</p>
                     </div>
                   </div>

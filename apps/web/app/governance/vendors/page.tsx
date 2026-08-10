@@ -1,15 +1,20 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { AsyncBoundary, Button, Card, PageHeader, StatusBadge, useAsync } from '@cpf/ui';
+import { Button } from '@cpf/ui';
+import { PageHeader } from '../../components/PageHeader';
+import { Card } from '../../components/Card';
+import { AsyncBoundary } from '../../components/AsyncBoundary';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useAsync } from '../../lib/useAsync';
 import type { BadgeTone, Collection, VendorEvidenceView } from '../../lib/types';
-import { api } from '../../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'amber',
-  ready: 'blue',
-  attention: 'red',
-  complete: 'sage',
-  archived: 'muted',
+  draft: 'warning',
+  ready: 'info',
+  attention: 'danger',
+  complete: 'success',
+  archived: 'neutral',
 };
 
 export default function GovernanceVendorsPage() {
@@ -18,12 +23,12 @@ export default function GovernanceVendorsPage() {
   const [filter, setFilter] = useState('');
 
   const loader = useCallback(async () => {
-    const collection = await api.getVendorEvidence();
+    const collection = await apiClient.getVendorEvidence();
     setData(collection);
     return collection;
   }, []);
 
-  const state = useAsync<Collection<VendorEvidenceView>>(loader);
+  const { state, reload } = useAsync<Collection<VendorEvidenceView>>(loader);
 
   const handleRequest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,9 +37,9 @@ export default function GovernanceVendorsPage() {
     const vendor = (formData.get('vendor') as string) || '';
     const obligation = (formData.get('obligation') as string) || '';
     if (!vendor.trim() || !obligation.trim()) return;
-    await api.requestVendorEvidence(vendor.trim(), obligation.trim());
+    await apiClient.requestVendorEvidence(vendor.trim(), obligation.trim());
     form.reset();
-    const updated = await api.getVendorEvidence();
+    const updated = await apiClient.getVendorEvidence();
     setData(updated);
   };
 
@@ -60,9 +65,9 @@ export default function GovernanceVendorsPage() {
 
       <AsyncBoundary
         state={state}
-        onRetry={loader}
+        onRetry={reload}
         label="Vendor evidence"
-        isEmpty={!data || data.total === 0}
+        isEmpty={() => !data || data.total === 0}
         emptyTitle="No vendor evidence requests"
         emptyBody="Request your first vendor evidence to track provider obligations."
       >
@@ -144,7 +149,7 @@ export default function GovernanceVendorsPage() {
                           {v.expiresAt ? new Date(v.expiresAt).toLocaleDateString() : '—'}
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={STATUS_TONE[v.status] || 'muted'}>
+                          <StatusBadge tone={STATUS_TONE[v.status] || 'neutral'}>
                             {v.status}
                           </StatusBadge>
                         </td>

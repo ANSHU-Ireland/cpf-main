@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'purple';
 
 const TONE: Record<BadgeTone, { bg: string; fg: string }> = {
@@ -10,8 +12,8 @@ const TONE: Record<BadgeTone, { bg: string; fg: string }> = {
 };
 
 export interface StatusBadgeProps {
-  readonly tone?: BadgeTone;
-  readonly children: string;
+  readonly tone?: BadgeTone | undefined;
+  readonly children: ReactNode;
 }
 
 /** Non-interactive status pill; colour is paired with a text label (never colour alone). */
