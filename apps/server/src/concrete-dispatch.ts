@@ -1,5 +1,7 @@
 import type { Pool } from 'pg';
 import {
+  createCampaignLifecycleService,
+  createCampaignService,
   createAttemptService,
   createScorecardService,
   handleAddAttemptArtifact,
@@ -11,19 +13,36 @@ import {
   handleDeleteAttemptArtifact,
   handleExecuteAttemptPlugin,
   handleFlagAttemptItem,
+  handleActivateCampaign,
+  handleArchiveCampaign,
+  handleCloseCampaign,
+  handleDuplicateCampaign,
+  handleGetCampaign,
+  handleGetCampaigns,
   handleGetAttempt,
   handleGetScorecard,
+  handlePatchCampaign,
+  handlePauseCampaign,
+  handlePostCampaign,
   handlePutScorecard,
   handleSaveAttemptResponse,
   handleStartAttempt,
   handleSubmitAttempt,
 } from '@cpf/api';
-import { PgAttemptRepository, PgScorecardRepository, type Actor } from '@cpf/org';
+import {
+  PgAttemptRepository,
+  PgCampaignRepository,
+  PgScorecardRepository,
+  type Actor,
+  type RawCampaignListQuery,
+} from '@cpf/org';
 import type { HttpResponse } from '@cpf/http';
 
 const CONCRETE_OPERATIONS = new Set([
   'delete_attempts_attemptId_artifacts_artifactId',
   'get_attempts_attemptId',
+  'get_campaigns',
+  'get_campaigns_campaignId',
   'get_review_assignments_assignmentId_scorecard',
   'post_attempts_attemptId_ai_messages',
   'post_attempts_attemptId_ai_reset',
@@ -34,6 +53,13 @@ const CONCRETE_OPERATIONS = new Set([
   'post_attempts_attemptId_prechecks',
   'post_attempts_attemptId_start',
   'post_attempts_attemptId_submit',
+  'post_campaigns',
+  'post_campaigns_campaignId_activate',
+  'post_campaigns_campaignId_archive',
+  'post_campaigns_campaignId_close',
+  'post_campaigns_campaignId_duplicate',
+  'post_campaigns_campaignId_pause',
+  'patch_campaigns_campaignId',
   'put_attempts_attemptId_item_flags_itemId',
   'put_attempts_attemptId_responses_itemId',
   'put_review_assignments_assignmentId_scorecard',
@@ -45,10 +71,15 @@ export function isConcreteOperation(operationId: string): boolean {
 
 export class ConcreteDispatcher {
   readonly #attempts;
+  readonly #campaigns;
+  readonly #campaignLifecycle;
   readonly #scorecards;
 
   constructor(pool: Pool, options: { role?: string } = {}) {
     this.#attempts = createAttemptService({ repository: new PgAttemptRepository(pool, options) });
+    const campaignRepository = new PgCampaignRepository(pool, options);
+    this.#campaigns = createCampaignService({ repository: campaignRepository });
+    this.#campaignLifecycle = createCampaignLifecycleService({ repository: campaignRepository });
     this.#scorecards = createScorecardService({
       repository: new PgScorecardRepository(pool, options),
     });
@@ -59,14 +90,34 @@ export class ConcreteDispatcher {
     actor: Actor,
     params: Readonly<Record<string, string>>,
     body: unknown,
+    query: RawCampaignListQuery = {},
   ): Promise<HttpResponse | null> {
     const attemptId = params['attemptId'] ?? '';
     const itemId = params['itemId'] ?? '';
     const assignmentId = params['assignmentId'] ?? '';
+    const campaignId = params['campaignId'] ?? '';
 
     switch (operationId) {
       case 'get_attempts_attemptId':
         return handleGetAttempt(this.#attempts, { actor, attemptId });
+      case 'get_campaigns':
+        return handleGetCampaigns(this.#campaigns, { actor, query });
+      case 'post_campaigns':
+        return handlePostCampaign(this.#campaigns, { actor, body });
+      case 'get_campaigns_campaignId':
+        return handleGetCampaign(this.#campaigns, { actor, campaignId });
+      case 'patch_campaigns_campaignId':
+        return handlePatchCampaign(this.#campaigns, { actor, campaignId, body });
+      case 'post_campaigns_campaignId_activate':
+        return handleActivateCampaign(this.#campaignLifecycle, { actor, campaignId });
+      case 'post_campaigns_campaignId_pause':
+        return handlePauseCampaign(this.#campaignLifecycle, { actor, campaignId });
+      case 'post_campaigns_campaignId_close':
+        return handleCloseCampaign(this.#campaignLifecycle, { actor, campaignId });
+      case 'post_campaigns_campaignId_archive':
+        return handleArchiveCampaign(this.#campaignLifecycle, { actor, campaignId });
+      case 'post_campaigns_campaignId_duplicate':
+        return handleDuplicateCampaign(this.#campaignLifecycle, { actor, campaignId, body });
       case 'post_attempts_attemptId_start':
         return handleStartAttempt(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_submit':

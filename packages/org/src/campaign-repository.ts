@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
+import type { Pool, PoolClient } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
 import { PgAuditWriter } from '@cpf/audit';
 import type { Actor } from './types.js';
@@ -71,6 +72,22 @@ function toRecord(row: CampaignRow): CampaignRecord {
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
+}
+
+async function appendCampaignOutbox(
+  client: PoolClient,
+  actor: Actor,
+  campaignId: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO audit.outbox_events
+       (tenant_id, aggregate_type, aggregate_id, event_type, event_version, payload,
+        data_classification, correlation_id, status)
+     VALUES ($1, 'campaign', $2, $3, 1, $4::jsonb, 'confidential', $5, 'pending')`,
+    [actor.tenantId, campaignId, eventType, JSON.stringify(payload), randomUUID()],
+  );
 }
 
 export class PgCampaignRepository implements CampaignRepository {
@@ -162,6 +179,10 @@ export class PgCampaignRepository implements CampaignRepository {
         outcome: 'success',
         metadata: { code: input.code, title: input.title },
       });
+      await appendCampaignOutbox(client, actor, row.id, 'campaign.created', {
+        code: input.code,
+        title: input.title,
+      });
 
       return toRecord(row);
     });
@@ -219,6 +240,13 @@ export class PgCampaignRepository implements CampaignRepository {
         outcome: 'success',
         metadata: input as unknown as Record<string, unknown>,
       });
+      await appendCampaignOutbox(
+        client,
+        actor,
+        row.id,
+        'campaign.updated',
+        input as unknown as Record<string, unknown>,
+      );
 
       return toRecord(row);
     });
@@ -250,6 +278,10 @@ export class PgCampaignRepository implements CampaignRepository {
           resourceId: row.id,
           outcome: 'success',
           metadata: { fromStatus: validFrom, toStatus },
+        });
+        await appendCampaignOutbox(client, actor, row.id, 'campaign.status_changed', {
+          fromStatus: validFrom,
+          toStatus,
         });
         return toRecord(row);
       }
@@ -303,6 +335,10 @@ export class PgCampaignRepository implements CampaignRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: { sourceId, newCode },
+      });
+      await appendCampaignOutbox(client, actor, row.id, 'campaign.created', {
+        sourceId,
+        newCode,
       });
 
       return toRecord(row);

@@ -169,6 +169,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         session.actor,
         params,
         body,
+        Object.fromEntries(url.searchParams.entries()),
       );
       if (response !== null) return sendHttpResponse(res, response);
     } catch (error) {

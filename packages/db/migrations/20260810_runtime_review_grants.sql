@@ -7,7 +7,7 @@ BEGIN
   END IF;
 END $$;
 
-GRANT USAGE ON SCHEMA iam, assessment, runtime, evidence, review, audit TO cpf_app;
+GRANT USAGE ON SCHEMA iam, assessment, hiring, runtime, evidence, review, audit TO cpf_app;
 
 GRANT SELECT ON
   iam.users,
@@ -28,6 +28,14 @@ TO cpf_app;
 
 GRANT SELECT, UPDATE ON
   runtime.attempts
+TO cpf_app;
+
+GRANT SELECT, INSERT, UPDATE ON
+  hiring.campaigns
+TO cpf_app;
+
+GRANT INSERT ON
+  audit.events
 TO cpf_app;
 
 GRANT SELECT ON

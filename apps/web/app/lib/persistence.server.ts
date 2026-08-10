@@ -4,6 +4,7 @@ import type {
   AttemptStatus,
   AttemptTaskView,
   AttemptView,
+  CampaignView,
   Collection,
   CriterionState,
   CriterionView,
@@ -12,11 +13,18 @@ import type {
 
 const API_BASE_URL = process.env.CPF_API_BASE_URL ?? 'http://127.0.0.1:3300';
 const PERSISTENCE_ENABLED = process.env.CPF_DEMO_PERSISTENCE === 'true';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CANDIDATE_TOKEN = process.env.CPF_DEMO_CANDIDATE_TOKEN ?? 'cpf-demo-candidate-token-2026';
 const REVIEWER_TOKEN = process.env.CPF_DEMO_REVIEWER_TOKEN ?? 'cpf-demo-reviewer-token-2026';
+const ADMIN_TOKEN = process.env.CPF_DEMO_ADMIN_TOKEN ?? 'cpf-demo-admin-token-2026';
 
 const DEMO_ATTEMPT_ID = '11111111-0000-4000-8000-000000000300';
 const DEMO_ASSIGNMENT_ID = '11111111-0000-4000-8000-000000000321';
+const DEMO_CAMPAIGN_ID = '11111111-0000-4000-8000-000000000200';
+
+const CAMPAIGN_IDS: Readonly<Record<string, string>> = {
+  cmp_frontend_demo: DEMO_CAMPAIGN_ID,
+};
 
 const TASK_IDS: Readonly<Record<string, string>> = {
   task_doc: '11111111-0000-4000-8000-000000000133',
@@ -78,6 +86,19 @@ interface BackendScorecard {
   readonly criteria?: readonly BackendCriterion[];
 }
 
+interface BackendCampaign {
+  readonly id: string;
+  readonly title: string;
+  readonly roleName: string;
+  readonly status: 'draft' | 'active' | 'paused' | 'closed' | 'archived';
+  readonly createdAt: string;
+}
+
+interface BackendCampaignPage {
+  readonly items: readonly BackendCampaign[];
+  readonly total: number;
+}
+
 export class DemoPersistenceError extends Error {
   readonly status: number;
 
@@ -134,7 +155,7 @@ async function persist(
 }
 
 function mappedId(map: Readonly<Record<string, string>>, id: string, label: string): string {
-  if (Object.values(map).includes(id)) return id;
+  if (Object.values(map).includes(id) || UUID_RE.test(id)) return id;
   const mapped = map[id];
   if (mapped === undefined)
     throw new DemoPersistenceError(404, `${label} is not in the demo fixture.`);
@@ -267,6 +288,29 @@ export function projectDemoScorecard(scorecard: BackendScorecard): Collection<Cr
   return { items, total: items.length };
 }
 
+function projectDemoCampaign(campaign: BackendCampaign): CampaignView {
+  const id = externalId(CAMPAIGN_IDS, campaign.id);
+  return {
+    id,
+    name: campaign.title,
+    roleTitle: campaign.roleName,
+    status: campaign.status,
+    candidateCount: campaign.id === DEMO_CAMPAIGN_ID ? 2 : 0,
+    openBlockers: 0,
+    createdAt: campaign.createdAt,
+  };
+}
+
+function campaignCode(name: string): string {
+  const slug = name
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toUpperCase()
+    .slice(0, 70);
+  return `${slug === '' ? 'CAMPAIGN' : slug}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 export const demoPersistence = {
   enabled: PERSISTENCE_ENABLED,
 
@@ -335,4 +379,46 @@ export const demoPersistence = {
         reviewerComment: rationale,
       },
     }),
+
+  getCampaigns: async (): Promise<Collection<CampaignView> | null> => {
+    const page = await requestJson<BackendCampaignPage>('/campaigns?limit=100', 'GET', ADMIN_TOKEN);
+    if (page === null) return null;
+    const items = page.items.map(projectDemoCampaign);
+    return { items, total: page.total };
+  },
+
+  getCampaign: async (campaignId: string): Promise<CampaignView | null> => {
+    const campaign = await requestJson<BackendCampaign>(
+      `/campaigns/${mappedId(CAMPAIGN_IDS, campaignId, 'Campaign')}`,
+      'GET',
+      ADMIN_TOKEN,
+    );
+    return campaign === null ? null : projectDemoCampaign(campaign);
+  },
+
+  createCampaign: async (name: string, roleTitle: string): Promise<CampaignView | null> => {
+    const campaign = await requestJson<BackendCampaign>('/campaigns', 'POST', ADMIN_TOKEN, {
+      code: campaignCode(name),
+      title: name,
+      roleName: roleTitle,
+      seniority: 'mid',
+    });
+    return campaign === null ? null : projectDemoCampaign(campaign);
+  },
+
+  setCampaignStatus: async (
+    campaignId: string,
+    status: CampaignView['status'],
+  ): Promise<CampaignView | null> => {
+    if (status === 'draft' || status === 'blocked') {
+      throw new DemoPersistenceError(422, 'The campaign cannot return to that status.');
+    }
+    const campaign = await requestJson<BackendCampaign>(
+      `/campaigns/${mappedId(CAMPAIGN_IDS, campaignId, 'Campaign')}/${status === 'active' ? 'activate' : status === 'paused' ? 'pause' : status === 'closed' ? 'close' : 'archive'}`,
+      'POST',
+      ADMIN_TOKEN,
+      {},
+    );
+    return campaign === null ? null : projectDemoCampaign(campaign);
+  },
 };

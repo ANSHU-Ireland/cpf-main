@@ -1,14 +1,19 @@
 import {
+  createCampaign,
+  getCampaign,
+  listCampaigns,
   parseCampaignCreate,
   parseCampaignId,
   parseCampaignListQuery,
   parseCampaignUpdate,
+  updateCampaign,
   type Actor,
   type CampaignCreate,
   type CampaignDto,
   type CampaignListQuery,
   type CampaignPageDto,
   type CampaignUpdate,
+  type CampaignDeps,
   type CreateCampaignResult,
   type GetCampaignResult,
   type ListCampaignsResult,
@@ -28,6 +33,15 @@ export interface CampaignService {
   getCampaign(actor: Actor, id: string): Promise<GetCampaignResult>;
   createCampaign(actor: Actor, input: CampaignCreate): Promise<CreateCampaignResult>;
   updateCampaign(actor: Actor, id: string, input: CampaignUpdate): Promise<UpdateCampaignResult>;
+}
+
+export function createCampaignService(deps: CampaignDeps): CampaignService {
+  return {
+    listCampaigns: (actor, query) => listCampaigns(deps, actor, query),
+    getCampaign: (actor, id) => getCampaign(deps, actor, id),
+    createCampaign: (actor, input) => createCampaign(deps, actor, input),
+    updateCampaign: (actor, id, input) => updateCampaign(deps, actor, id, input),
+  };
 }
 
 export interface GetCampaignsRequest {

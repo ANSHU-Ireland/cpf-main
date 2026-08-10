@@ -1,5 +1,6 @@
 import type { CampaignStatus } from '../../../../lib/types';
 import { employerStore } from '../../../../lib/synthetic.server';
+import { DemoPersistenceError, demoPersistence } from '../../../../lib/persistence.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,18 +21,26 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  const campaign = employerStore.getCampaign(params.id);
-  if (campaign === null) {
-    return Response.json({ error: 'Campaign not found.' }, { status: 404 });
+  try {
+    const persisted = await demoPersistence.getCampaign(params.id);
+    const campaign = persisted ?? employerStore.getCampaign(params.id);
+    if (campaign === null) {
+      return Response.json({ error: 'Campaign not found.' }, { status: 404 });
+    }
+    return Response.json(campaign);
+  } catch (error) {
+    if (error instanceof DemoPersistenceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
   }
-  return Response.json(campaign);
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (employerStore.getCampaign(params.id) === null) {
+  if (!demoPersistence.enabled && employerStore.getCampaign(params.id) === null) {
     return Response.json({ error: 'Campaign not found.' }, { status: 404 });
   }
   let payload: StatusBody;
@@ -43,6 +52,23 @@ export async function POST(
   const status = payload.status;
   if (typeof status !== 'string' || !STATUSES.includes(status as CampaignStatus)) {
     return Response.json({ error: 'A valid status is required.' }, { status: 422 });
+  }
+  if (demoPersistence.enabled) {
+    try {
+      const persisted = await demoPersistence.setCampaignStatus(
+        params.id,
+        status as CampaignStatus,
+      );
+      if (persisted === null) {
+        return Response.json({ error: 'Campaign not found.' }, { status: 404 });
+      }
+      return Response.json(persisted);
+    } catch (error) {
+      if (error instanceof DemoPersistenceError) {
+        return Response.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
   }
   const updated = employerStore.setCampaignStatus(params.id, status as CampaignStatus);
   if (updated === null) {

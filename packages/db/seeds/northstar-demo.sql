@@ -218,6 +218,13 @@ VALUES
   ('11111111-0000-4000-8000-000000000200', '11111111-0000-4000-8000-000000000001',
    '11111111-0000-4000-8000-000000000010', 'OPS-LEAD-AUG26',
    'Operations Lead — August 2026', 'Operations Lead', 'senior', 'active', 3)
+,
+  ('11111111-0000-4000-8000-000000000208', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000010', 'WAREHOUSE-SYSTEMS-AUT26',
+   'Warehouse Systems Engineers — Autumn 2026', 'Warehouse Systems Engineer', 'mid', 'draft', 1),
+  ('11111111-0000-4000-8000-000000000209', '11111111-0000-4000-8000-000000000001',
+   '11111111-0000-4000-8000-000000000010', 'DATA-ANALYST-ROLLING',
+   'Data Analysts — Rolling', 'Data Analyst', 'mid', 'paused', 2)
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status, updated_at = now();
 
 INSERT INTO hiring.campaign_versions
