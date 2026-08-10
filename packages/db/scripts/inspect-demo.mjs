@@ -16,34 +16,47 @@ const campaignId = '11111111-0000-4000-8000-000000000208';
 
 const pool = new Pool({ connectionString });
 try {
-  const [response, flag, criterion, campaign, sessions, audit, outbox] = await Promise.all([
-    pool.query(
-      `SELECT response_json, state, row_version, updated_at
+  const [response, flag, criterion, campaign, invitations, sessions, audit, outbox] =
+    await Promise.all([
+      pool.query(
+        `SELECT response_json, state, row_version, updated_at
          FROM runtime.responses
         WHERE tenant_id = $1 AND attempt_id = $2 AND assessment_item_id = $3`,
-      [tenantId, attemptId, taskId],
-    ),
-    pool.query(
-      `SELECT flagged, updated_at
+        [tenantId, attemptId, taskId],
+      ),
+      pool.query(
+        `SELECT flagged, updated_at
          FROM runtime.item_flags
         WHERE tenant_id = $1 AND attempt_id = $2 AND assessment_item_id = $3`,
-      [tenantId, attemptId, taskId],
-    ),
-    pool.query(
-      `SELECT human_score, confidence, insufficient_evidence, evidence_links,
+        [tenantId, attemptId, taskId],
+      ),
+      pool.query(
+        `SELECT human_score, confidence, insufficient_evidence, evidence_links,
               reviewer_comment, ai_observation_id, updated_at
          FROM review.criterion_scores
         WHERE tenant_id = $1 AND scorecard_id = $2 AND criterion_id = $3`,
-      [tenantId, scorecardId, criterionId],
-    ),
-    pool.query(
-      `SELECT code, title, role_name, status, updated_at
+        [tenantId, scorecardId, criterionId],
+      ),
+      pool.query(
+        `SELECT code, title, role_name, status, updated_at
          FROM hiring.campaigns
         WHERE tenant_id = $1 AND id = $2`,
-      [tenantId, campaignId],
-    ),
-    pool.query(
-      `SELECT app_user.display_name, role.code AS role, membership_role.scope_type,
+        [tenantId, campaignId],
+      ),
+      pool.query(
+        `SELECT invitation.id, candidate.external_reference, campaign.title AS campaign,
+              application.status AS application_status, invitation.status,
+              invitation.sent_at, invitation.expires_at
+         FROM hiring.invitations AS invitation
+         JOIN hiring.applications AS application ON application.id = invitation.application_id
+         JOIN hiring.candidates AS candidate ON candidate.id = application.candidate_id
+         JOIN hiring.campaigns AS campaign ON campaign.id = application.campaign_id
+        WHERE invitation.tenant_id = $1
+        ORDER BY invitation.created_at, invitation.id`,
+        [tenantId],
+      ),
+      pool.query(
+        `SELECT app_user.display_name, role.code AS role, membership_role.scope_type,
               membership_role.scope_id, session.expires_at, session.revoked_at
          FROM iam.user_sessions AS session
          JOIN iam.users AS app_user ON app_user.id = session.user_id
@@ -53,25 +66,25 @@ try {
          JOIN iam.roles AS role ON role.id = membership_role.role_id
         WHERE membership.tenant_id = $1
         ORDER BY role.code`,
-      [tenantId],
-    ),
-    pool.query(
-      `SELECT action, resource_type, resource_id, outcome, occurred_at
+        [tenantId],
+      ),
+      pool.query(
+        `SELECT action, resource_type, resource_id, outcome, occurred_at
          FROM audit.events
         WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])
         ORDER BY occurred_at DESC
         LIMIT 6`,
-      [tenantId, [attemptId, scorecardId, campaignId]],
-    ),
-    pool.query(
-      `SELECT aggregate_type, aggregate_id, event_type, status, created_at
+        [tenantId, [attemptId, scorecardId, campaignId]],
+      ),
+      pool.query(
+        `SELECT aggregate_type, aggregate_id, event_type, status, created_at
          FROM audit.outbox_events
         WHERE tenant_id = $1 AND aggregate_id = ANY($2::uuid[])
         ORDER BY created_at DESC
         LIMIT 6`,
-      [tenantId, [attemptId, scorecardId, campaignId]],
-    ),
-  ]);
+        [tenantId, [attemptId, scorecardId, campaignId]],
+      ),
+    ]);
 
   process.stdout.write(
     `${JSON.stringify(
@@ -80,6 +93,7 @@ try {
         flag: flag.rows[0] ?? null,
         criterion: criterion.rows[0] ?? null,
         campaign: campaign.rows[0] ?? null,
+        invitations: invitations.rows,
         sessions: sessions.rows,
         audit: audit.rows,
         outbox: outbox.rows,

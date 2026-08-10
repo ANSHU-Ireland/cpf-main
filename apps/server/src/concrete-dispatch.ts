@@ -2,6 +2,8 @@ import type { Pool } from 'pg';
 import {
   createCampaignLifecycleService,
   createCampaignService,
+  createCandidateService,
+  createInvitationService,
   createAttemptService,
   createScorecardService,
   handleAddAttemptArtifact,
@@ -19,12 +21,17 @@ import {
   handleDuplicateCampaign,
   handleGetCampaign,
   handleGetCampaigns,
+  handleGetCandidate,
   handleGetAttempt,
   handleGetScorecard,
   handlePatchCampaign,
   handlePauseCampaign,
   handlePostCampaign,
+  handlePostInvitation,
   handlePutScorecard,
+  handleResendInvitation,
+  handleRevokeInvitation,
+  handleExtendInvitation,
   handleSaveAttemptResponse,
   handleStartAttempt,
   handleSubmitAttempt,
@@ -32,6 +39,8 @@ import {
 import {
   PgAttemptRepository,
   PgCampaignRepository,
+  PgCandidateRepository,
+  PgInvitationRepository,
   PgScorecardRepository,
   type Actor,
   type RawCampaignListQuery,
@@ -40,9 +49,11 @@ import type { HttpResponse } from '@cpf/http';
 
 const CONCRETE_OPERATIONS = new Set([
   'delete_attempts_attemptId_artifacts_artifactId',
+  'delete_invitations_invitationId',
   'get_attempts_attemptId',
   'get_campaigns',
   'get_campaigns_campaignId',
+  'get_candidates_candidateId',
   'get_review_assignments_assignmentId_scorecard',
   'post_attempts_attemptId_ai_messages',
   'post_attempts_attemptId_ai_reset',
@@ -59,6 +70,9 @@ const CONCRETE_OPERATIONS = new Set([
   'post_campaigns_campaignId_close',
   'post_campaigns_campaignId_duplicate',
   'post_campaigns_campaignId_pause',
+  'post_applications_applicationId_invitations',
+  'post_invitations_invitationId_extend',
+  'post_invitations_invitationId_resend',
   'patch_campaigns_campaignId',
   'put_attempts_attemptId_item_flags_itemId',
   'put_attempts_attemptId_responses_itemId',
@@ -73,6 +87,8 @@ export class ConcreteDispatcher {
   readonly #attempts;
   readonly #campaigns;
   readonly #campaignLifecycle;
+  readonly #candidates;
+  readonly #invitations;
   readonly #scorecards;
 
   constructor(pool: Pool, options: { role?: string } = {}) {
@@ -80,6 +96,12 @@ export class ConcreteDispatcher {
     const campaignRepository = new PgCampaignRepository(pool, options);
     this.#campaigns = createCampaignService({ repository: campaignRepository });
     this.#campaignLifecycle = createCampaignLifecycleService({ repository: campaignRepository });
+    this.#candidates = createCandidateService({
+      repository: new PgCandidateRepository(pool, options),
+    });
+    this.#invitations = createInvitationService({
+      repository: new PgInvitationRepository(pool, options),
+    });
     this.#scorecards = createScorecardService({
       repository: new PgScorecardRepository(pool, options),
     });
@@ -96,6 +118,9 @@ export class ConcreteDispatcher {
     const itemId = params['itemId'] ?? '';
     const assignmentId = params['assignmentId'] ?? '';
     const campaignId = params['campaignId'] ?? '';
+    const candidateId = params['candidateId'] ?? '';
+    const applicationId = params['applicationId'] ?? '';
+    const invitationId = params['invitationId'] ?? '';
 
     switch (operationId) {
       case 'get_attempts_attemptId':
@@ -106,6 +131,8 @@ export class ConcreteDispatcher {
         return handlePostCampaign(this.#campaigns, { actor, body });
       case 'get_campaigns_campaignId':
         return handleGetCampaign(this.#campaigns, { actor, campaignId });
+      case 'get_candidates_candidateId':
+        return handleGetCandidate(this.#candidates, { actor, candidateId });
       case 'patch_campaigns_campaignId':
         return handlePatchCampaign(this.#campaigns, { actor, campaignId, body });
       case 'post_campaigns_campaignId_activate':
@@ -118,6 +145,19 @@ export class ConcreteDispatcher {
         return handleArchiveCampaign(this.#campaignLifecycle, { actor, campaignId });
       case 'post_campaigns_campaignId_duplicate':
         return handleDuplicateCampaign(this.#campaignLifecycle, { actor, campaignId, body });
+      case 'post_applications_applicationId_invitations':
+        return handlePostInvitation(this.#invitations, { actor, applicationId, body });
+      case 'post_invitations_invitationId_resend':
+        return handleResendInvitation(this.#invitations, { actor, invitationId });
+      case 'post_invitations_invitationId_extend':
+        return handleExtendInvitation(this.#invitations, {
+          actor,
+          applicationId: '',
+          invitationId,
+          body,
+        });
+      case 'delete_invitations_invitationId':
+        return handleRevokeInvitation(this.#invitations, { actor, invitationId });
       case 'post_attempts_attemptId_start':
         return handleStartAttempt(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_submit':

@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
+import type { Pool, PoolClient } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
 import { PgAuditWriter } from '@cpf/audit';
 import type { Actor } from './types.js';
@@ -64,6 +65,22 @@ function toRecord(row: InvitationRow): InvitationRecord {
     createdBy: row.created_by,
     createdAt: row.created_at.toISOString(),
   };
+}
+
+async function appendInvitationOutbox(
+  client: PoolClient,
+  actor: Actor,
+  invitationId: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO audit.outbox_events
+       (tenant_id, aggregate_type, aggregate_id, event_type, event_version, payload,
+        data_classification, correlation_id, status)
+     VALUES ($1, 'invitation', $2, $3, 1, $4::jsonb, 'confidential', $5, 'pending')`,
+    [actor.tenantId, invitationId, eventType, JSON.stringify(payload), randomUUID()],
+  );
 }
 
 export class PgInvitationRepository implements InvitationRepository {
@@ -163,6 +180,11 @@ export class PgInvitationRepository implements InvitationRepository {
         outcome: 'success',
         metadata: { applicationId, expiresAt: input.expiresAt },
       });
+      await appendInvitationOutbox(client, actor, row.id, 'invitation.created', {
+        applicationId,
+        expiresAt: input.expiresAt,
+        maxAttempts: input.maxAttempts ?? 1,
+      });
 
       return toRecord(row);
     });
@@ -191,6 +213,10 @@ export class PgInvitationRepository implements InvitationRepository {
         outcome: 'success',
         metadata: {},
       });
+      await appendInvitationOutbox(client, actor, row.id, 'invitation.revoked', {
+        applicationId: row.application_id,
+        revokedAt: row.revoked_at?.toISOString() ?? null,
+      });
 
       return toRecord(row);
     });
@@ -218,6 +244,10 @@ export class PgInvitationRepository implements InvitationRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: {},
+      });
+      await appendInvitationOutbox(client, actor, row.id, 'invitation.resent', {
+        applicationId: row.application_id,
+        sentAt: row.sent_at?.toISOString() ?? null,
       });
 
       return toRecord(row);
@@ -250,6 +280,10 @@ export class PgInvitationRepository implements InvitationRepository {
         resourceId: row.id,
         outcome: 'success',
         metadata: { expiresAt },
+      });
+      await appendInvitationOutbox(client, actor, row.id, 'invitation.extended', {
+        applicationId: row.application_id,
+        expiresAt,
       });
 
       return toRecord(row);

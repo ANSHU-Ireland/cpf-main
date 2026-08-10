@@ -31,7 +31,13 @@ GRANT SELECT, UPDATE ON
 TO cpf_app;
 
 GRANT SELECT, INSERT, UPDATE ON
-  hiring.campaigns
+  hiring.campaigns,
+  hiring.invitations
+TO cpf_app;
+
+GRANT SELECT ON
+  hiring.applications,
+  hiring.candidates
 TO cpf_app;
 
 GRANT INSERT ON

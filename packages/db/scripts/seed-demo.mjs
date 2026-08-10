@@ -33,6 +33,9 @@ try {
       (SELECT count(*)::int FROM review.reviewer_assignments WHERE tenant_id = '11111111-0000-4000-8000-000000000001') AS assignments,
       (SELECT count(*)::int FROM review.criterion_scores WHERE tenant_id = '11111111-0000-4000-8000-000000000001') AS criterion_scores,
       (SELECT count(*)::int FROM hiring.campaigns WHERE tenant_id = '11111111-0000-4000-8000-000000000001') AS campaigns,
+      (SELECT count(*)::int FROM hiring.candidates WHERE tenant_id = '11111111-0000-4000-8000-000000000001') AS candidates,
+      (SELECT count(*)::int FROM hiring.applications WHERE tenant_id = '11111111-0000-4000-8000-000000000001') AS applications,
+      (SELECT count(*)::int FROM hiring.invitations WHERE tenant_id = '11111111-0000-4000-8000-000000000001') AS invitations,
       (SELECT count(*)::int
          FROM iam.user_sessions AS session
          JOIN iam.memberships AS membership ON membership.user_id = session.user_id

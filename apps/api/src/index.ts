@@ -17,6 +17,8 @@ export * from './campaign/campaigns.handler.js';
 export * from './campaign/campaign-lifecycle.handler.js';
 export * from './campaign/campaign-reviewers.handler.js';
 export * from './campaign/applications.handler.js';
+export * from './campaign/candidates.handler.js';
+export * from './campaign/invitations.handler.js';
 export * from './campaign/reviewer-profiles.handler.js';
 export * from './campaign/attempts.handler.js';
 export * from './campaign/scorecards.handler.js';

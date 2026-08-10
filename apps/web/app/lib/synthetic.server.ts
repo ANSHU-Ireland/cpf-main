@@ -1430,6 +1430,22 @@ function freshEmployer(): EmployerState {
         campaignName: 'Data analysts — rolling',
         applicationCount: 1,
       },
+      {
+        id: '11111111-0000-4000-8000-000000000210',
+        reference: 'CND-8D42',
+        displayName: 'Morgan Candidate',
+        status: 'invited',
+        campaignName: 'Warehouse Systems Engineers — Autumn 2026',
+        applicationCount: 1,
+      },
+      {
+        id: '11111111-0000-4000-8000-000000000213',
+        reference: 'CND-4C18',
+        displayName: 'Taylor Candidate',
+        status: 'withdrawn',
+        campaignName: 'Data Analysts — Rolling',
+        applicationCount: 1,
+      },
     ],
     invitations: [
       {
@@ -1445,6 +1461,20 @@ function freshEmployer(): EmployerState {
         campaignName: 'Data analysts — rolling',
         status: 'sent',
         sentAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      },
+      {
+        id: '11111111-0000-4000-8000-000000000212',
+        email: 'morgan@example.test',
+        campaignName: 'Warehouse Systems Engineers — Autumn 2026',
+        status: 'sent',
+        sentAt: new Date(Date.now() - 86400000).toISOString(),
+      },
+      {
+        id: '11111111-0000-4000-8000-000000000215',
+        email: 'taylor@example.test',
+        campaignName: 'Data Analysts — Rolling',
+        status: 'expired',
+        sentAt: new Date(Date.now() - 12 * 86400000).toISOString(),
       },
     ],
     windows: [
