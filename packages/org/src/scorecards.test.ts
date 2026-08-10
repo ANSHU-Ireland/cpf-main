@@ -48,6 +48,31 @@ describe('parseScorecardUpdate', () => {
   it('accepts summary', () => expect(parseScorecardUpdate({ summary: 'x' }).ok).toBe(true));
   it('rejects empty', () => expect(parseScorecardUpdate({}).ok).toBe(false));
   it('rejects bad status', () => expect(parseScorecardUpdate({ status: 'bad' }).ok).toBe(false));
+  it('accepts an evidence-linked criterion draft', () =>
+    expect(
+      parseScorecardUpdate({
+        criterion: {
+          criterionId: TENANT,
+          humanScore: 3,
+          confidence: 0.8,
+          insufficientEvidence: false,
+          evidenceLinks: [{ responseId: USER, locator: 'paragraph 2' }],
+          reviewerComment: 'The cited passage supports this score.',
+        },
+      }).ok,
+    ).toBe(true));
+  it('rejects an out-of-range criterion score', () =>
+    expect(
+      parseScorecardUpdate({
+        criterion: {
+          criterionId: TENANT,
+          humanScore: 5,
+          insufficientEvidence: false,
+          evidenceLinks: [],
+          reviewerComment: 'Invalid score.',
+        },
+      }).ok,
+    ).toBe(false));
 });
 
 describe('getScorecard', () => {

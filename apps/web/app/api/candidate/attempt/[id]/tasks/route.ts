@@ -1,4 +1,5 @@
 import { runtimeStore } from '../../../../../lib/synthetic.server';
+import { DemoPersistenceError, demoPersistence } from '../../../../../lib/persistence.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,5 +26,13 @@ export async function POST(
     return Response.json({ error: 'A task id is required.' }, { status: 422 });
   }
   const response = typeof body.response === 'string' ? body.response : '';
+  try {
+    await demoPersistence.saveTask(taskId, response);
+  } catch (error) {
+    if (error instanceof DemoPersistenceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
   return Response.json(runtimeStore.saveTask(taskId, response));
 }

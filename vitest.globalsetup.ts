@@ -1,5 +1,13 @@
 import 'dotenv/config';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { createPool, ensureBaselineApplied, isDatabaseConfigured } from '@cpf/db';
+
+const runtimeGrantMigration = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'packages/db/migrations/20260810_runtime_review_grants.sql',
+);
 
 /**
  * One-time database provisioning for integration tests.
@@ -69,6 +77,7 @@ export async function setup(): Promise<void> {
     await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.assessment_bookings TO cpf_app');
     await pool.query('GRANT SELECT, INSERT, UPDATE ON review.progression_decisions TO cpf_app');
     await pool.query('GRANT SELECT, INSERT, UPDATE ON hiring.decision_approvals TO cpf_app');
+    await pool.query(await readFile(runtimeGrantMigration, 'utf8'));
   } finally {
     await pool.end();
   }

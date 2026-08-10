@@ -1,15 +1,26 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { ensureCorrelationId, CORRELATION_HEADER } from '@cpf/http';
+import type { HttpResponse } from '@cpf/http';
 import { OPERATIONS } from '@cpf/contracts';
+import { createPool, isDatabaseConfigured } from '@cpf/db';
 import { Store, type Record_ } from './store.js';
 import { Router, classify } from './router.js';
+import { ConcreteDispatcher, isConcreteOperation } from './concrete-dispatch.js';
+import { resolveDemoActor } from './demo-actor.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '127.0.0.1';
 
 const store = new Store();
 const router = new Router();
+const demoActor = resolveDemoActor();
+const pool = demoActor !== null && isDatabaseConfigured() ? createPool() : null;
+const concreteDispatcher =
+  pool === null
+    ? null
+    : new ConcreteDispatcher(pool, { role: process.env.CPF_DB_ROLE ?? 'cpf_app' });
+const allowedOrigin = process.env.CPF_ALLOWED_ORIGIN ?? 'http://127.0.0.1:4300';
 
 /** Turns a collection key like 'campaigns/:id/reviewers' into a singular type label. */
 function typeLabel(collectionKey: string): string {
@@ -51,8 +62,19 @@ function send(res: ServerResponse, status: number, correlationId: string, body: 
   res.writeHead(status, {
     'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json',
     [CORRELATION_HEADER]: correlationId,
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'Content-Type, X-Correlation-Id',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+  });
+  res.end(payload);
+}
+
+function sendHttpResponse(res: ServerResponse, response: HttpResponse): void {
+  const payload = response.status === 204 ? '' : JSON.stringify(response.body, null, 2);
+  res.writeHead(response.status, {
+    ...response.headers,
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'Content-Type, X-Correlation-Id',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
   });
   res.end(payload);
@@ -80,9 +102,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
   if (method === 'GET' && pathname === '/') {
     return send(res, 200, correlationId, {
-      name: 'CPF in-memory demo server',
+      name: 'CPF service',
       operations: OPERATIONS.length,
-      note: 'All endpoints are backed by a generic in-memory store. Data does not persist across restarts.',
+      concretePersistence: concreteDispatcher === null ? 'disabled' : 'postgresql-demo',
+      note: 'Runtime attempts and reviewer scorecards use PostgreSQL only when CPF_DEMO_MODE=true. Remaining endpoints retain the compatibility store while their vertical slices are completed.',
       routes: '/__routes',
       health: '/health',
     });
@@ -109,6 +132,37 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   const { route, params } = matched;
+  if (isConcreteOperation(route.op.operationId)) {
+    if (concreteDispatcher === null || demoActor === null) {
+      return send(res, 503, correlationId, {
+        type: 'about:blank',
+        title: 'Concrete persistence disabled',
+        status: 503,
+        correlationId,
+        detail: 'Set CPF_DEMO_MODE=true with DATABASE_URL for the isolated synthetic demo service.',
+      });
+    }
+    try {
+      const body = await readBody(req);
+      const response = await concreteDispatcher.dispatch(
+        route.op.operationId,
+        demoActor,
+        params,
+        body,
+      );
+      if (response !== null) return sendHttpResponse(res, response);
+    } catch (error) {
+      process.stderr.write(
+        `Concrete operation ${route.op.operationId} failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      return send(res, 500, correlationId, {
+        type: 'about:blank',
+        title: 'Internal Server Error',
+        status: 500,
+        correlationId,
+      });
+    }
+  }
   const { kind, collectionKey, targetId } = classify(route, params);
   const limit = Math.max(1, Math.min(100, Number(url.searchParams.get('limit') ?? 20)));
 

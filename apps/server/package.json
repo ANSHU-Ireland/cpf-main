@@ -5,15 +5,20 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node --env-file-if-exists=../../.env --import tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cpf/api": "workspace:*",
     "@cpf/contracts": "workspace:*",
-    "@cpf/http": "workspace:*"
+    "@cpf/db": "workspace:*",
+    "@cpf/http": "workspace:*",
+    "@cpf/org": "workspace:*",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
     "tsx": "^4.19.2"
   }
 }

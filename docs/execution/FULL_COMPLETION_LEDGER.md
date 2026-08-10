@@ -16,23 +16,23 @@ This ledger is the executable completion record for the v2.0 handover. It reconc
 
 ## Programme status
 
-| Stage  | Scope                                                         | Status      | Exit evidence                                                                                       |
-| ------ | ------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
-| CPF-01 | Source reconciliation and canonical route inventory           | Complete    | 125/125 canonical routes asserted from the live handoff CSV                                         |
-| CPF-02 | Shared shell, tokens and canonical account/auth routes        | Complete    | typecheck, build, browser QA and `design-qa.md`                                                     |
-| CPF-03 | Candidate runtime RUN-02 vertical slice                       | Complete    | five realistic tasks; timer, save, version/checksum, flag and next-task interaction                 |
-| CPF-04 | Reviewer scorecard REV-08 vertical slice                      | Complete    | evidence-led human scoring, citation, insufficient-evidence rationale and concealed AI observations |
-| CPF-05 | Remaining interface fidelity and interaction closure          | In progress | all 125 routes require route-specific ready/empty/error/denied and primary interaction evidence     |
-| CPF-06 | Replace web process-local stores with authenticated API calls | Not started | all web mutations survive process restart and are tenant-scoped                                     |
-| CPF-07 | Wire 244 OpenAPI operations to concrete handlers              | Not started | no generic catch-all response; contract conformance suite passes                                    |
-| CPF-08 | PostgreSQL repositories and transaction/outbox coverage       | In progress | current repositories cover a subset; all material writes require atomic audit/outbox                |
-| CPF-09 | Identity, sessions, MFA, RBAC/ABAC and tenant isolation       | In progress | negative auth, IDOR, stale-token, cross-tenant and privilege tests pass                             |
-| CPF-10 | Worker, integration, notification and webhook runtime         | Not started | retry/idempotency/dead-letter/replay protection evidence                                            |
-| CPF-11 | Governed AI/tool gateway and evidence ledger                  | Not started | disabled-by-default gateway, provenance, budget, safety, version and outage gates                   |
-| CPF-12 | Desktop companion and governed telemetry                      | Not started | signed/version-gated client, allow-list, recovery and privacy evidence                              |
-| CPF-13 | Deterministic PostgreSQL demo seed                            | Not started | one command creates all demo roles and key lifecycle states without real PII                        |
-| CPF-14 | Security, privacy, accessibility and resilience closure       | Not started | release-gate suite, evidence references and independent findings resolved                           |
-| CPF-15 | Deployment/IaC/operations and controlled-pilot package        | Not started | reproducible deployment, backup/restore, rollback, monitoring and runbooks                          |
+| Stage  | Scope                                                         | Status      | Exit evidence                                                                                                                     |
+| ------ | ------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| CPF-01 | Source reconciliation and canonical route inventory           | Complete    | 125/125 canonical routes asserted from the live handoff CSV                                                                       |
+| CPF-02 | Shared shell, tokens and canonical account/auth routes        | Complete    | typecheck, build, browser QA and `design-qa.md`                                                                                   |
+| CPF-03 | Candidate runtime RUN-02 vertical slice                       | Complete    | five realistic tasks; timer, save, version/checksum, flag and next-task interaction                                               |
+| CPF-04 | Reviewer scorecard REV-08 vertical slice                      | Complete    | evidence-led human scoring, citation, insufficient-evidence rationale and concealed AI observations                               |
+| CPF-05 | Remaining interface fidelity and interaction closure          | In progress | all 125 routes require route-specific ready/empty/error/denied and primary interaction evidence                                   |
+| CPF-06 | Replace web process-local stores with authenticated API calls | In progress | RUN-02 and REV-08 writes now reach tenant-scoped PostgreSQL repositories; remaining routes and authenticated reads are pending    |
+| CPF-07 | Wire 244 OpenAPI operations to concrete handlers              | Not started | no generic catch-all response; contract conformance suite passes                                                                  |
+| CPF-08 | PostgreSQL repositories and transaction/outbox coverage       | In progress | current repositories cover a subset; all material writes require atomic audit/outbox                                              |
+| CPF-09 | Identity, sessions, MFA, RBAC/ABAC and tenant isolation       | In progress | negative auth, IDOR, stale-token, cross-tenant and privilege tests pass                                                           |
+| CPF-10 | Worker, integration, notification and webhook runtime         | Not started | retry/idempotency/dead-letter/replay protection evidence                                                                          |
+| CPF-11 | Governed AI/tool gateway and evidence ledger                  | Not started | disabled-by-default gateway, provenance, budget, safety, version and outage gates                                                 |
+| CPF-12 | Desktop companion and governed telemetry                      | Not started | signed/version-gated client, allow-list, recovery and privacy evidence                                                            |
+| CPF-13 | Deterministic PostgreSQL demo seed                            | In progress | `pnpm --filter @cpf/db seed:demo` idempotently creates the Northstar runtime/review scenario; remaining role journeys are pending |
+| CPF-14 | Security, privacy, accessibility and resilience closure       | Not started | release-gate suite, evidence references and independent findings resolved                                                         |
+| CPF-15 | Deployment/IaC/operations and controlled-pilot package        | Not started | reproducible deployment, backup/restore, rollback, monitoring and runbooks                                                        |
 
 ## Current deterministic demo scenario
 
@@ -46,12 +46,14 @@ All visible identities and records are synthetic. The web scenario now includes:
 - Employer campaigns, candidates, invitations, scheduling, accommodations, review allocation, decisions and reports.
 - Platform tenants, releases, jobs, flags, support access, governance registers, risks, incidents and evidence collections.
 
-This process-local scenario is suitable for product demonstration only. CPF-06 and CPF-13 remain release blockers until the same lifecycle is persisted through the authenticated API and PostgreSQL seed.
+The canonical RUN-02 candidate mutations and REV-08 human criterion scoring now persist through the explicit demo API into PostgreSQL. The repositories apply tenant context, write audit records and enqueue transactional outbox events atomically. Browser verification proves the saved response, task flag and human score can be read back from PostgreSQL, with `ai_observation_id` remaining null. The Northstar seed is idempotent at two attempts, six responses, one reviewer assignment and three criterion scores.
+
+The remaining role journeys still use process-local synthetic state and the current browser reads are not yet fully rehydrated from PostgreSQL. CPF-06 and CPF-13 therefore remain active release blockers rather than completed programme stages.
 
 ## Release blockers
 
-1. The generic server dispatcher still returns in-memory responses instead of invoking every concrete `apps/api` handler.
-2. The web application still reads and mutates process-local synthetic stores.
+1. The generic server dispatcher now has concrete runtime and scorecard operations, but the remaining OpenAPI operations still return compatibility responses instead of invoking every `apps/api` handler.
+2. RUN-02 and REV-08 mutations are persistent; the remaining web routes and read models still use process-local synthetic stores.
 3. Authentication/session, tenant context and resource ABAC are not enforced end-to-end in the browser journey.
 4. Worker/outbox publishing, integrations, governed AI/tool adapters and desktop companion are incomplete.
 5. Traceability rows still require executable evidence for every Must requirement.

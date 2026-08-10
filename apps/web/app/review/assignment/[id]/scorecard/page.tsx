@@ -25,7 +25,7 @@ const RUBRIC_LEVELS = [
   { label: 'Insufficient evidence', score: 0, insufficient: true },
   { label: 'Developing', score: 1, insufficient: false },
   { label: 'Meets expectation', score: 3, insufficient: false },
-  { label: 'Exceeds expectation', score: 5, insufficient: false },
+  { label: 'Exceeds expectation', score: 4, insufficient: false },
 ] as const;
 
 export default function ScorecardPage({ params }: { params: { id: string } }): React.JSX.Element {

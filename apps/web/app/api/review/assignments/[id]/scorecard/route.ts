@@ -1,4 +1,5 @@
 import { reviewStore } from '../../../../../lib/synthetic.server';
+import { DemoPersistenceError, demoPersistence } from '../../../../../lib/persistence.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,20 @@ export async function POST(
       { error: 'Link the source evidence or choose insufficient evidence.' },
       { status: 422 },
     );
+  }
+  try {
+    await demoPersistence.saveCriterion(
+      criterionId,
+      payload.score,
+      rationale,
+      evidenceLink,
+      insufficientEvidence,
+    );
+  } catch (error) {
+    if (error instanceof DemoPersistenceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
   }
   const updated = reviewStore.saveCriterion(
     criterionId,

@@ -1,4 +1,5 @@
 import { runtimeStore } from '../../../../lib/synthetic.server';
+import { DemoPersistenceError, demoPersistence } from '../../../../lib/persistence.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,5 +31,13 @@ export async function POST(
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
   if (body.action === 'reset') return Response.json(runtimeStore.resetAttempt());
+  try {
+    await demoPersistence.startAttempt();
+  } catch (error) {
+    if (error instanceof DemoPersistenceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
   return Response.json(runtimeStore.startAttempt());
 }
