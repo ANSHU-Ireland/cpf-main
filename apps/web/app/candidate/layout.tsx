@@ -1,4 +1,7 @@
+'use client';
+
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { AppShell } from '../components/AppShell';
 import type { NavItem } from '../components/SidebarNav';
 
@@ -18,10 +21,21 @@ const NAV_ITEMS: readonly NavItem[] = [
 ];
 
 export default function CandidateLayout({ children }: { children: ReactNode }): React.JSX.Element {
+  const pathname = usePathname();
+  const attemptBase = pathname.match(/^\/candidate\/attempt\/[^/]+/)?.[0];
+  const navItems: readonly NavItem[] =
+    attemptBase === undefined
+      ? NAV_ITEMS
+      : [
+          { href: attemptBase, label: 'Overview', exact: true },
+          { href: `${attemptBase}/task/document`, label: 'Tasks' },
+          { href: `${attemptBase}/artifacts`, label: 'Resources' },
+          { href: `${attemptBase}/recovery`, label: 'Support' },
+        ];
   return (
     <AppShell
-      navLabel="Candidate"
-      navItems={NAV_ITEMS}
+      navLabel={attemptBase === undefined ? 'Candidate' : 'Assessment runtime'}
+      navItems={navItems}
       homeHref="/candidate"
       workspaceLabel="Candidate"
     >

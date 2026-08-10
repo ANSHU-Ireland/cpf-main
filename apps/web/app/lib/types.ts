@@ -160,6 +160,10 @@ export interface AttemptTaskView {
   readonly response: string;
   readonly savedAt: string | null;
   readonly flagged: boolean;
+  /** Optimistic-concurrency revision returned by the server. */
+  readonly version: number;
+  /** Short, display-safe projection of the authoritative response checksum. */
+  readonly checksum: string;
 }
 
 export interface AttemptSectionView {
@@ -277,6 +281,8 @@ export interface EvidenceItemView {
   readonly kind: TaskKind;
   readonly excerpt: string;
   readonly status: EvidenceItemStatus;
+  readonly version: number;
+  readonly sourceLabel: string;
 }
 
 export type CriterionState = 'draft' | 'saved' | 'submitted';
@@ -293,6 +299,8 @@ export interface CriterionView {
   readonly score: number | null;
   readonly rationale: string;
   readonly state: CriterionState;
+  readonly evidenceLink: string;
+  readonly insufficientEvidence: boolean;
 }
 
 export type ObservationsRevealState = 'concealed' | 'revealed';

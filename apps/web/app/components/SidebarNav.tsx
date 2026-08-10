@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Square } from '@phosphor-icons/react';
 
 export interface NavItem {
   readonly href: string;
@@ -20,6 +21,18 @@ export function SidebarNav({ items, label }: SidebarNavProps): React.JSX.Element
   const pathname = usePathname();
   return (
     <nav aria-label={label}>
+      <p
+        style={{
+          margin: '14px 8px 16px',
+          color: 'var(--color-muted)',
+          fontSize: 10,
+          fontWeight: 750,
+          letterSpacing: '0.02em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </p>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '2px' }}>
         {items.map((item) => {
           const active =
@@ -32,15 +45,22 @@ export function SidebarNav({ items, label }: SidebarNavProps): React.JSX.Element
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  minBlockSize: 'var(--target-min)',
+                  minBlockSize: 38,
+                  gap: 10,
                   paddingInline: 'calc(var(--space-unit) * 3)',
                   borderRadius: 'var(--radius-control)',
                   textDecoration: 'none',
                   fontWeight: active ? 600 : 400,
                   color: active ? 'var(--color-blue)' : 'var(--color-ink)',
-                  background: active ? 'var(--color-blue-soft)' : 'transparent',
+                  background: active ? 'var(--color-paper)' : 'transparent',
                 }}
               >
+                <Square
+                  size={11}
+                  weight="fill"
+                  color={active ? 'var(--color-blue)' : 'var(--color-line)'}
+                  aria-hidden
+                />
                 {item.label}
               </Link>
             </li>

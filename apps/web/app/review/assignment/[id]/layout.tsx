@@ -76,6 +76,8 @@ export default function AssignmentLayout({
   const { state } = useAsync(loader);
   const pathname = usePathname();
 
+  if (pathname === `/review/assignment/${id}/scorecard`) return <>{children}</>;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--space-unit) * 4)' }}>
       <header

@@ -340,10 +340,18 @@ export const apiClient = {
     criterionId: string,
     score: number,
     rationale: string,
+    evidenceLink: string,
+    insufficientEvidence: boolean,
   ): Promise<CriterionView> =>
     request<CriterionView>(`/api/review/assignments/${encodeURIComponent(id)}/scorecard`, {
       method: 'POST',
-      body: JSON.stringify({ criterionId, score, rationale }),
+      body: JSON.stringify({
+        criterionId,
+        score,
+        rationale,
+        evidenceLink,
+        insufficientEvidence,
+      }),
     }),
   getObservations: (id: string): Promise<ObservationsView> =>
     request<ObservationsView>(`/api/review/assignments/${encodeURIComponent(id)}/observations`),

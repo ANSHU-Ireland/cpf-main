@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Clock } from '@phosphor-icons/react';
 import type { AttemptStatus } from '../../../lib/types';
 
 /**
@@ -48,7 +49,7 @@ export function RuntimeTimer({
         color: expired ? 'var(--color-red)' : low ? 'var(--color-amber)' : 'var(--color-ink)',
       }}
     >
-      <span aria-hidden="true">⏱</span>
+      <Clock size={16} weight="bold" aria-hidden />
       {expired ? 'Time up' : `${mm}:${ss}`}
     </span>
   );

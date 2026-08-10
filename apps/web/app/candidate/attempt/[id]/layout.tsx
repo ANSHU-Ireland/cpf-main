@@ -93,6 +93,8 @@ export default function AttemptLayout({
   const { state } = useAsync(loader);
   const pathname = usePathname();
 
+  if (pathname === `/candidate/attempt/${id}`) return <>{children}</>;
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <header

@@ -678,7 +678,7 @@ interface RuntimeState {
 function freshRuntime(): RuntimeState {
   return {
     status: 'in_progress',
-    deadlineAt: Date.now() + 55 * 60 * 1000,
+    deadlineAt: Date.now() + (82 * 60 + 16) * 1000,
     autosave: 'saved',
     submittedAt: null,
     receiptRef: null,
@@ -687,37 +687,73 @@ function freshRuntime(): RuntimeState {
         id: 'task_doc',
         sectionId: 'sec_written',
         kind: 'document',
-        title: 'Design rationale',
+        title: 'Task 1 · Design rationale',
         prompt:
           'Explain how you would structure a reusable component library for a design system. Cover tokens, theming and accessibility.',
-        status: 'in_progress',
-        response: '',
-        savedAt: null,
+        status: 'saved',
+        response:
+          'The token layer is the stable contract. Components consume semantic variables so theme changes never alter interaction or accessibility behaviour.',
+        savedAt: '2026-08-10T13:52:00.000Z',
         flagged: false,
+        version: 2,
+        checksum: '9b84c1a2',
+      },
+      {
+        id: 'task_applied',
+        sectionId: 'sec_practical',
+        kind: 'document',
+        title: 'Task 2 · Applied task',
+        prompt:
+          'Identify the operational constraint, separate verified facts from assumptions, then propose a reversible first step.',
+        status: 'in_progress',
+        response:
+          'The confirmed constraint is the four-hour recovery window. I would first isolate the affected queue, preserve the current evidence, and validate capacity before changing the wider workflow.',
+        savedAt: '2026-08-10T14:18:00.000Z',
+        flagged: false,
+        version: 3,
+        checksum: '72d6f4c9',
       },
       {
         id: 'task_code',
         sectionId: 'sec_practical',
         kind: 'code',
-        title: 'Debounce utility',
+        title: 'Task 3 · Recovery utility',
         prompt:
           'Implement a typed `debounce(fn, waitMs)` helper and describe how you would test it. Run the sample tests when ready.',
         status: 'not_started',
         response: '',
         savedAt: null,
         flagged: false,
+        version: 1,
+        checksum: 'e3b0c442',
       },
       {
         id: 'task_sheet',
         sectionId: 'sec_practical',
         kind: 'sheet',
-        title: 'Data reconciliation',
+        title: 'Task 4 · Data reconciliation',
         prompt:
           'Using the provided workbook, reconcile the two ledgers and summarise the discrepancies. Validate before saving.',
         status: 'not_started',
         response: '',
         savedAt: null,
         flagged: false,
+        version: 1,
+        checksum: 'e3b0c442',
+      },
+      {
+        id: 'task_playbook',
+        sectionId: 'sec_practical',
+        kind: 'document',
+        title: 'Task 5 · Incident playbook',
+        prompt:
+          'Write a concise escalation playbook covering owner, evidence, rollback, communication and follow-up.',
+        status: 'not_started',
+        response: '',
+        savedAt: null,
+        flagged: false,
+        version: 1,
+        checksum: 'e3b0c442',
       },
     ],
     aiMessages: [],
@@ -732,7 +768,11 @@ let runtime = freshRuntime();
 
 const SECTIONS: AttemptView['sections'] = [
   { id: 'sec_written', title: 'Written', taskIds: ['task_doc'] },
-  { id: 'sec_practical', title: 'Practical', taskIds: ['task_code', 'task_sheet'] },
+  {
+    id: 'sec_practical',
+    title: 'Section 2 · Applied task',
+    taskIds: ['task_applied', 'task_code', 'task_sheet', 'task_playbook'],
+  },
 ];
 
 function projectAttempt(): AttemptView {
@@ -744,7 +784,7 @@ function projectAttempt(): AttemptView {
   }
   return {
     id: ATTEMPT_ID,
-    assessmentTitle: 'Frontend Practical (Demo, not validated)',
+    assessmentTitle: 'Operational judgement exercise (Synthetic demo)',
     status,
     deadlineAt: new Date(runtime.deadlineAt).toISOString(),
     serverNow: new Date(now).toISOString(),
@@ -777,6 +817,12 @@ export const runtimeStore = {
           response,
           status: current.flagged ? 'flagged' : 'saved',
           savedAt: new Date().toISOString(),
+          version: current.version + 1,
+          checksum: `${response.length.toString(16).padStart(4, '0')}${(
+            response.length * 2654435761
+          )
+            .toString(16)
+            .slice(-4)}`,
         };
       }
       runtime.autosave = 'saved';
@@ -948,7 +994,7 @@ function freshReview(): ReviewState {
         candidateRef: 'Candidate 7F3A',
         status: 'accepted',
         dueAt: new Date(Date.now() + 36 * 3600 * 1000).toISOString(),
-        criterionCount: 3,
+        criterionCount: 5,
         evidenceCount: 3,
         assignedAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
       },
@@ -966,10 +1012,12 @@ function freshReview(): ReviewState {
     evidence: [
       {
         id: 'ev_doc',
-        title: 'Design write-up',
+        title: 'Task 2 · Candidate response',
         kind: 'document',
         excerpt: 'The service is partitioned by tenant with row-level security enforced at the…',
-        status: 'unreviewed',
+        status: 'reviewed',
+        version: 3,
+        sourceLabel: 'Task 2 · paragraph 2',
       },
       {
         id: 'ev_code',
@@ -977,6 +1025,8 @@ function freshReview(): ReviewState {
         kind: 'code',
         excerpt: 'export function debounce(fn, wait) { let t; return (...args) => { … } }',
         status: 'unreviewed',
+        version: 2,
+        sourceLabel: 'Task 3 · code lines 1–18',
       },
       {
         id: 'ev_sheet',
@@ -984,17 +1034,22 @@ function freshReview(): ReviewState {
         kind: 'sheet',
         excerpt: 'Peak RPS = concurrent_users × requests_per_min ÷ 60 …',
         status: 'unreviewed',
+        version: 1,
+        sourceLabel: 'Task 4 · reconciliation summary',
       },
     ],
     criteria: [
       {
         id: 'cri_correctness',
-        label: 'Correctness',
+        label: 'Evidence-led judgement',
         descriptor: 'Solution meets the stated requirements and handles edge cases.',
         maxScore: 5,
-        score: null,
-        rationale: '',
-        state: 'draft',
+        score: 3,
+        rationale:
+          'The response proposes a reversible first step and separates verified facts from assumptions.',
+        state: 'saved',
+        evidenceLink: 'Task 2 · paragraph 2',
+        insufficientEvidence: false,
       },
       {
         id: 'cri_design',
@@ -1004,6 +1059,8 @@ function freshReview(): ReviewState {
         score: null,
         rationale: '',
         state: 'draft',
+        evidenceLink: 'Task 3 · code lines 1–18',
+        insufficientEvidence: false,
       },
       {
         id: 'cri_communication',
@@ -1013,6 +1070,30 @@ function freshReview(): ReviewState {
         score: null,
         rationale: '',
         state: 'draft',
+        evidenceLink: 'Task 2 · paragraph 2',
+        insufficientEvidence: false,
+      },
+      {
+        id: 'cri_risk',
+        label: 'Risk awareness',
+        descriptor: 'Operational risk, rollback and escalation are treated proportionately.',
+        maxScore: 5,
+        score: null,
+        rationale: '',
+        state: 'draft',
+        evidenceLink: 'Task 2 · paragraph 2',
+        insufficientEvidence: false,
+      },
+      {
+        id: 'cri_delivery',
+        label: 'Delivery judgement',
+        descriptor: 'The proposed sequence is practical, reversible and clearly owned.',
+        maxScore: 5,
+        score: null,
+        rationale: '',
+        state: 'draft',
+        evidenceLink: 'Task 4 · reconciliation summary',
+        insufficientEvidence: false,
       },
     ],
     observations: [
@@ -1101,12 +1182,25 @@ export const reviewStore = {
   getScorecard(): Collection<CriterionView> {
     return { items: review.criteria, total: review.criteria.length };
   },
-  saveCriterion(criterionId: string, score: number, rationale: string): CriterionView | null {
+  saveCriterion(
+    criterionId: string,
+    score: number,
+    rationale: string,
+    evidenceLink: string,
+    insufficientEvidence: boolean,
+  ): CriterionView | null {
     const index = review.criteria.findIndex((c) => c.id === criterionId);
     if (index === -1) return null;
     const current = review.criteria[index];
     if (current === undefined) return null;
-    const next: CriterionView = { ...current, score, rationale, state: 'saved' };
+    const next: CriterionView = {
+      ...current,
+      score,
+      rationale,
+      evidenceLink,
+      insufficientEvidence,
+      state: 'saved',
+    };
     review.criteria[index] = next;
     return next;
   },

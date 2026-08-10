@@ -1,4 +1,4 @@
-# Design QA — shared UI contract repair
+# Design QA — shared UI contract and production journey repair
 
 Date: 2026-08-10
 
@@ -10,6 +10,8 @@ Source visual truth:
 - `cpf-penpot-handoff/interfaces/acc-04.svg`
 - `cpf-penpot-handoff/interfaces/acc-05.svg`
 - `cpf-penpot-handoff/interfaces/ds-01.svg`
+- `cpf-penpot-handoff/interfaces/run-02.svg`
+- `cpf-penpot-handoff/interfaces/rev-08.svg`
 
 Browser-rendered implementation evidence:
 
@@ -17,6 +19,8 @@ Browser-rendered implementation evidence:
 - `docs/execution/evidence/screenshots/acc-04-implementation.png`
 - `docs/execution/evidence/screenshots/acc-05-implementation.png`
 - `docs/execution/evidence/screenshots/ds-01-implementation.png`
+- `docs/execution/evidence/screenshots/run-02-implementation.png`
+- `docs/execution/evidence/screenshots/rev-08-implementation.png`
 
 Normalized source captures:
 
@@ -24,6 +28,8 @@ Normalized source captures:
 - `docs/execution/evidence/screenshots/acc-04-source.png`
 - `docs/execution/evidence/screenshots/acc-05-source.png`
 - `docs/execution/evidence/screenshots/ds-01-source.png`
+- `docs/execution/evidence/screenshots/run-02-source.png`
+- `docs/execution/evidence/screenshots/rev-08-source.png`
 
 ## Capture normalization
 
@@ -34,6 +40,7 @@ Normalized source captures:
 - State: initial ready state, light theme, desktop layout.
 - The source SVG's developer-handoff metadata column is specification annotation, not product UI, and is excluded from runtime fidelity findings.
 - The persistent synthetic-environment banner is an established CPF safety constraint and is retained intentionally.
+- RUN-02 and REV-08 were additionally compared at the handoff desktop target. Their 330 px developer annotation rail is handoff-only and is not rendered in product UI.
 
 ## Findings
 
@@ -55,6 +62,8 @@ The implementation preserves the source hierarchy, CPF navigation/main-content s
 - ACC-04: matching four-step wizard structure, active-step treatment and primary continuation action; all four steps are functional.
 - ACC-05: matching record summary and export action; export lifecycle and guarded deactivation are functional.
 - DS-01: matching overview navigation, title, action placement, tall state surface, amber warning mark and state matrix.
+- RUN-02: matching 196 px assessment navigation, title/route/badges, dark runtime header, server timer, two-pane task workspace, five-step navigator, selected task, save checksum and bottom actions.
+- REV-08: matching reviewer navigation, title/route/badges, evidence/judgement split, source-linked evidence, Criterion 1 of 5, selected human rubric level, evidence citation, concealed AI observations and bottom save flow.
 
 Focused region captures were not required: at 1280 × 720 the primary headings, labels, controls, state text and icon treatment are legible in the full-view pairs. Interaction state was verified separately through semantic browser controls.
 
@@ -64,6 +73,9 @@ Focused region captures were not required: at 1280 × 720 the primary headings, 
 2. First DS-01 comparison found a P2 composition mismatch: the state card was compressed and component samples appeared above the fold. The card now restores the tall reference composition, state matrix and top/bottom component-spec actions.
 3. The revised DS-01 comparison found the warning asset missing. A reusable Phosphor warning icon was added using CPF amber tokens, and the final browser capture shows the icon with no console errors.
 4. Final comparison found no remaining actionable P0/P1/P2 differences.
+5. RUN-02 initially inherited the generic candidate shell and a second runtime toolbar. The role shell now follows the handoff's 196 px navigation and the overview renders as the task-led workspace.
+6. REV-08 initially rendered generic stacked score cards without linked source evidence. The route now composes evidence, human rubric choice, source citation, insufficient-evidence rationale and the independent-review AI gate.
+7. A fresh-browser pass after the shared-shell update reported no console errors on either production journey.
 
 ## Interaction and browser checks
 
@@ -73,6 +85,8 @@ Focused region captures were not required: at 1280 × 720 the primary headings, 
 - Design system: component-spec links resolve to the component catalogue anchor.
 - Browser console: no errors on the verified routes.
 - Horizontal overflow: none in the implementation viewport.
+- Candidate runtime: edited and saved Task 2, received version 4 plus a verified checksum, flagged the task and advanced to Task 3.
+- Reviewer workspace: saved a human rubric level, advanced to Criterion 2, selected insufficient evidence, entered its required rationale and received the autosave acknowledgement.
 
 ## Follow-up polish
 

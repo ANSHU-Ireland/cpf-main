@@ -6,6 +6,8 @@ interface ScorecardBody {
   readonly criterionId?: unknown;
   readonly score?: unknown;
   readonly rationale?: unknown;
+  readonly evidenceLink?: unknown;
+  readonly insufficientEvidence?: unknown;
 }
 
 export async function GET(
@@ -45,7 +47,21 @@ export async function POST(
       { status: 422 },
     );
   }
-  const updated = reviewStore.saveCriterion(criterionId, payload.score, rationale);
+  const evidenceLink = typeof payload.evidenceLink === 'string' ? payload.evidenceLink.trim() : '';
+  const insufficientEvidence = payload.insufficientEvidence === true;
+  if (!insufficientEvidence && evidenceLink.length < 3) {
+    return Response.json(
+      { error: 'Link the source evidence or choose insufficient evidence.' },
+      { status: 422 },
+    );
+  }
+  const updated = reviewStore.saveCriterion(
+    criterionId,
+    payload.score,
+    rationale,
+    evidenceLink,
+    insufficientEvidence,
+  );
   if (updated === null) {
     return Response.json({ error: 'Criterion not found.' }, { status: 404 });
   }
