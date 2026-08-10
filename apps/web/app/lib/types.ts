@@ -459,11 +459,26 @@ export interface ImportRowError {
   readonly row: number;
   readonly message: string;
 }
+export type ImportRowActionView = 'include' | 'exclude' | 'merge' | 'keep_separate';
+export type ImportRowStatusView = 'valid' | 'invalid' | 'excluded' | 'committed' | 'failed';
+export interface ImportRowView {
+  readonly id: string;
+  readonly row: number;
+  readonly displayValue: string;
+  readonly status: ImportRowStatusView;
+  readonly action: ImportRowActionView;
+  readonly errors: readonly string[];
+  readonly duplicateCandidateId: string | null;
+}
 export interface ImportResultView {
+  readonly importId: string;
   readonly stage: 'validated' | 'committed';
+  readonly status: string;
+  readonly fileName: string;
   readonly totalRows: number;
   readonly validRows: number;
   readonly errors: readonly ImportRowError[];
+  readonly rows: readonly ImportRowView[];
 }
 
 export type InvitationStatus = 'draft' | 'sent' | 'accepted' | 'expired' | 'revoked';

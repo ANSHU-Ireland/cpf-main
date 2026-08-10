@@ -47,6 +47,7 @@ import type {
   EmployerDashboardView,
   EmployerOrgProfileView,
   ImportResultView,
+  ImportRowActionView,
   IntegrationView,
   InvitationView,
   MemberView,
@@ -473,15 +474,34 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ duplicateId }),
     }),
-  validateImport: (rowText: string): Promise<ImportResultView> =>
+  validateImport: (
+    rowText: string,
+    campaignId: string,
+    fileName: string,
+  ): Promise<ImportResultView> =>
     request<ImportResultView>('/api/employer/candidates/import', {
       method: 'POST',
-      body: JSON.stringify({ stage: 'validate', rowText }),
+      body: JSON.stringify({ stage: 'validate', rowText, campaignId, fileName }),
     }),
-  commitImport: (rowText: string): Promise<ImportResultView> =>
+  updateImportRow: (
+    importId: string,
+    rowId: string,
+    action: ImportRowActionView,
+    value?: string,
+  ): Promise<ImportResultView> =>
     request<ImportResultView>('/api/employer/candidates/import', {
       method: 'POST',
-      body: JSON.stringify({ stage: 'commit', rowText }),
+      body: JSON.stringify({ stage: 'update', importId, rowId, action, value }),
+    }),
+  commitImport: (importId: string): Promise<ImportResultView> =>
+    request<ImportResultView>('/api/employer/candidates/import', {
+      method: 'POST',
+      body: JSON.stringify({ stage: 'commit', importId }),
+    }),
+  cancelImport: (importId: string): Promise<void> =>
+    request<void>('/api/employer/candidates/import', {
+      method: 'POST',
+      body: JSON.stringify({ stage: 'cancel', importId }),
     }),
   getInvitations: (): Promise<Collection<InvitationView>> =>
     request<Collection<InvitationView>>('/api/employer/invitations'),

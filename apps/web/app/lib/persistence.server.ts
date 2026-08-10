@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import type {
   AttemptStatus,
   AttemptTaskView,
@@ -8,6 +10,7 @@ import type {
   Collection,
   CriterionState,
   CriterionView,
+  ImportResultView,
   TaskKind,
 } from './types';
 
@@ -99,6 +102,33 @@ interface BackendCampaignPage {
   readonly total: number;
 }
 
+interface BackendImportJob {
+  readonly id: string;
+  readonly campaignId: string;
+  readonly status: string;
+  readonly fileName: string;
+  readonly totalRows: number;
+  readonly validRows: number;
+  readonly errorRows: number;
+  readonly createdAt: string;
+  readonly completedAt: string | null;
+}
+
+interface BackendImportRow {
+  readonly id: string;
+  readonly rowNumber: number;
+  readonly displayValue: string;
+  readonly validationErrors: readonly string[];
+  readonly action: 'include' | 'exclude' | 'merge' | 'keep_separate';
+  readonly duplicateCandidateId: string | null;
+  readonly status: 'valid' | 'invalid' | 'excluded' | 'committed' | 'failed';
+}
+
+interface BackendImportRows {
+  readonly items: readonly BackendImportRow[];
+  readonly total: number;
+}
+
 export class DemoPersistenceError extends Error {
   readonly status: number;
 
@@ -111,9 +141,10 @@ export class DemoPersistenceError extends Error {
 
 async function requestJson<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH',
   token: string,
   body?: unknown,
+  extraHeaders: Readonly<Record<string, string>> = {},
 ): Promise<T | null> {
   if (!PERSISTENCE_ENABLED) return null;
   let response: Response;
@@ -123,6 +154,7 @@ async function requestJson<T>(
       headers: {
         authorization: `Bearer ${token}`,
         'content-type': 'application/json',
+        ...extraHeaders,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       cache: 'no-store',
@@ -311,6 +343,44 @@ function campaignCode(name: string): string {
   return `${slug === '' ? 'CAMPAIGN' : slug}-${Date.now().toString(36).toUpperCase()}`;
 }
 
+function projectImportResult(job: BackendImportJob, page: BackendImportRows): ImportResultView {
+  const rows = page.items.map((row) => ({
+    id: row.id,
+    row: row.rowNumber,
+    displayValue: row.displayValue,
+    status: row.status,
+    action: row.action,
+    errors: row.validationErrors,
+    duplicateCandidateId: row.duplicateCandidateId,
+  }));
+  return {
+    importId: job.id,
+    stage: job.status === 'completed' || job.status === 'partial' ? 'committed' : 'validated',
+    status: job.status,
+    fileName: job.fileName,
+    totalRows: job.totalRows,
+    validRows: job.validRows,
+    errors: rows.flatMap((row) => row.errors.map((message) => ({ row: row.row, message }))),
+    rows,
+  };
+}
+
+async function readImportResult(importId: string): Promise<ImportResultView | null> {
+  const [job, rows] = await Promise.all([
+    requestJson<BackendImportJob>(
+      `/candidate-imports/${encodeURIComponent(importId)}`,
+      'GET',
+      ADMIN_TOKEN,
+    ),
+    requestJson<BackendImportRows>(
+      `/candidate-imports/${encodeURIComponent(importId)}/rows?limit=100`,
+      'GET',
+      ADMIN_TOKEN,
+    ),
+  ]);
+  return job === null || rows === null ? null : projectImportResult(job, rows);
+}
+
 export const demoPersistence = {
   enabled: PERSISTENCE_ENABLED,
 
@@ -420,5 +490,61 @@ export const demoPersistence = {
       {},
     );
     return campaign === null ? null : projectDemoCampaign(campaign);
+  },
+
+  validateCandidateImport: async (
+    campaignId: string,
+    fileName: string,
+    rowText: string,
+  ): Promise<ImportResultView | null> => {
+    const rows = rowText
+      .split(/\r?\n/)
+      .map((row) => row.trim())
+      .filter((row) => row.length > 0);
+    const job = await requestJson<BackendImportJob>(
+      `/campaigns/${mappedId(CAMPAIGN_IDS, campaignId, 'Campaign')}/candidate-imports`,
+      'POST',
+      ADMIN_TOKEN,
+      { data: { fileName, rows } },
+      { 'idempotency-key': `candidate-import-${randomUUID()}` },
+    );
+    return job === null ? null : readImportResult(job.id);
+  },
+
+  updateCandidateImportRow: async (
+    importId: string,
+    rowId: string,
+    action: BackendImportRow['action'],
+    value?: string,
+  ): Promise<ImportResultView | null> => {
+    await requestJson(
+      `/candidate-imports/${encodeURIComponent(importId)}/rows/${encodeURIComponent(rowId)}`,
+      'PATCH',
+      ADMIN_TOKEN,
+      { data: { action, ...(value === undefined ? {} : { value }) } },
+      { 'idempotency-key': `candidate-import-row-${randomUUID()}` },
+    );
+    return readImportResult(importId);
+  },
+
+  commitCandidateImport: async (importId: string): Promise<ImportResultView | null> => {
+    await requestJson(
+      `/candidate-imports/${encodeURIComponent(importId)}/commit`,
+      'POST',
+      ADMIN_TOKEN,
+      { data: {} },
+      { 'idempotency-key': `candidate-import-commit-${randomUUID()}` },
+    );
+    return readImportResult(importId);
+  },
+
+  cancelCandidateImport: async (importId: string): Promise<void> => {
+    await requestJson(
+      `/candidate-imports/${encodeURIComponent(importId)}/cancel`,
+      'POST',
+      ADMIN_TOKEN,
+      { data: {} },
+      { 'idempotency-key': `candidate-import-cancel-${randomUUID()}` },
+    );
   },
 };

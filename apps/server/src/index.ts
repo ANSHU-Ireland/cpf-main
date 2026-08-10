@@ -19,7 +19,10 @@ const pool = demoMode && isDatabaseConfigured() ? createPool() : null;
 const concreteDispatcher =
   pool === null
     ? null
-    : new ConcreteDispatcher(pool, { role: process.env.CPF_DB_ROLE ?? 'cpf_app' });
+    : new ConcreteDispatcher(pool, {
+        role: process.env.CPF_DB_ROLE ?? 'cpf_app',
+        importDataKey: process.env.CPF_DEMO_DATA_KEY ?? 'cpf-synthetic-demo-import-key-v1',
+      });
 const sessionResolver = pool === null ? null : new DemoSessionResolver(pool);
 const allowedOrigin = process.env.CPF_ALLOWED_ORIGIN ?? 'http://127.0.0.1:4300';
 
@@ -64,7 +67,8 @@ function send(res: ServerResponse, status: number, correlationId: string, body: 
     'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json',
     [CORRELATION_HEADER]: correlationId,
     'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Correlation-Id',
+    'Access-Control-Allow-Headers':
+      'Authorization, Content-Type, X-Correlation-Id, Idempotency-Key',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
   });
   res.end(payload);
@@ -75,7 +79,8 @@ function sendHttpResponse(res: ServerResponse, response: HttpResponse): void {
   res.writeHead(response.status, {
     ...response.headers,
     'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Correlation-Id',
+    'Access-Control-Allow-Headers':
+      'Authorization, Content-Type, X-Correlation-Id, Idempotency-Key',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
   });
   res.end(payload);
@@ -106,7 +111,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       name: 'CPF service',
       operations: OPERATIONS.length,
       concretePersistence: concreteDispatcher === null ? 'disabled' : 'postgresql-demo',
-      note: 'Runtime attempts and reviewer scorecards use PostgreSQL only when CPF_DEMO_MODE=true. Remaining endpoints retain the compatibility store while their vertical slices are completed.',
+      note: 'Completed runtime, review, campaign, invitation and candidate-import slices use PostgreSQL when CPF_DEMO_MODE=true. Remaining endpoints retain the compatibility store while their vertical slices are completed.',
       routes: '/__routes',
       health: '/health',
     });
@@ -170,6 +175,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         params,
         body,
         Object.fromEntries(url.searchParams.entries()),
+        typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : '',
       );
       if (response !== null) return sendHttpResponse(res, response);
     } catch (error) {

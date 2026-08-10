@@ -76,6 +76,7 @@ export * from './admin-privileged-access.js';
 export * from './plugins.js';
 export * from './integrations.js';
 export * from './candidate-imports.js';
+export * from './candidate-import-repository.js';
 export * from './bookings.js';
 export * from './data-rights.js';
 export * from './decisions.js';

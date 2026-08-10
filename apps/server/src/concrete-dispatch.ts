@@ -3,6 +3,7 @@ import {
   createCampaignLifecycleService,
   createCampaignService,
   createCandidateService,
+  createCandidateImportService,
   createInvitationService,
   createAttemptService,
   createScorecardService,
@@ -22,12 +23,18 @@ import {
   handleGetCampaign,
   handleGetCampaigns,
   handleGetCandidate,
+  handleGetImportJob,
+  handleGetImportRows,
   handleGetAttempt,
   handleGetScorecard,
   handlePatchCampaign,
   handlePauseCampaign,
   handlePostCampaign,
   handlePostInvitation,
+  handleCreateImportJob,
+  handleCommitImportJob,
+  handleCancelImportJob,
+  handlePatchImportRow,
   handlePutScorecard,
   handleResendInvitation,
   handleRevokeInvitation,
@@ -40,6 +47,7 @@ import {
   PgAttemptRepository,
   PgCampaignRepository,
   PgCandidateRepository,
+  PgCandidateImportRepository,
   PgInvitationRepository,
   PgScorecardRepository,
   type Actor,
@@ -50,6 +58,8 @@ import type { HttpResponse } from '@cpf/http';
 const CONCRETE_OPERATIONS = new Set([
   'delete_attempts_attemptId_artifacts_artifactId',
   'delete_invitations_invitationId',
+  'get_candidate_imports_importId',
+  'get_candidate_imports_importId_rows',
   'get_attempts_attemptId',
   'get_campaigns',
   'get_campaigns_campaignId',
@@ -65,6 +75,7 @@ const CONCRETE_OPERATIONS = new Set([
   'post_attempts_attemptId_start',
   'post_attempts_attemptId_submit',
   'post_campaigns',
+  'post_campaigns_campaignId_candidate_imports',
   'post_campaigns_campaignId_activate',
   'post_campaigns_campaignId_archive',
   'post_campaigns_campaignId_close',
@@ -73,7 +84,10 @@ const CONCRETE_OPERATIONS = new Set([
   'post_applications_applicationId_invitations',
   'post_invitations_invitationId_extend',
   'post_invitations_invitationId_resend',
+  'post_candidate_imports_importId_cancel',
+  'post_candidate_imports_importId_commit',
   'patch_campaigns_campaignId',
+  'patch_candidate_imports_importId_rows_rowId',
   'put_attempts_attemptId_item_flags_itemId',
   'put_attempts_attemptId_responses_itemId',
   'put_review_assignments_assignmentId_scorecard',
@@ -88,16 +102,23 @@ export class ConcreteDispatcher {
   readonly #campaigns;
   readonly #campaignLifecycle;
   readonly #candidates;
+  readonly #candidateImports;
   readonly #invitations;
   readonly #scorecards;
 
-  constructor(pool: Pool, options: { role?: string } = {}) {
+  constructor(pool: Pool, options: { role?: string; importDataKey?: string } = {}) {
     this.#attempts = createAttemptService({ repository: new PgAttemptRepository(pool, options) });
     const campaignRepository = new PgCampaignRepository(pool, options);
     this.#campaigns = createCampaignService({ repository: campaignRepository });
     this.#campaignLifecycle = createCampaignLifecycleService({ repository: campaignRepository });
     this.#candidates = createCandidateService({
       repository: new PgCandidateRepository(pool, options),
+    });
+    this.#candidateImports = createCandidateImportService({
+      repository: new PgCandidateImportRepository(pool, {
+        ...(options.role === undefined ? {} : { role: options.role }),
+        dataKey: options.importDataKey ?? 'cpf-synthetic-demo-import-key-v1',
+      }),
     });
     this.#invitations = createInvitationService({
       repository: new PgInvitationRepository(pool, options),
@@ -113,6 +134,7 @@ export class ConcreteDispatcher {
     params: Readonly<Record<string, string>>,
     body: unknown,
     query: RawCampaignListQuery = {},
+    idempotencyKey = '',
   ): Promise<HttpResponse | null> {
     const attemptId = params['attemptId'] ?? '';
     const itemId = params['itemId'] ?? '';
@@ -121,6 +143,8 @@ export class ConcreteDispatcher {
     const candidateId = params['candidateId'] ?? '';
     const applicationId = params['applicationId'] ?? '';
     const invitationId = params['invitationId'] ?? '';
+    const importId = params['importId'] ?? '';
+    const rowId = params['rowId'] ?? '';
 
     switch (operationId) {
       case 'get_attempts_attemptId':
@@ -133,6 +157,41 @@ export class ConcreteDispatcher {
         return handleGetCampaign(this.#campaigns, { actor, campaignId });
       case 'get_candidates_candidateId':
         return handleGetCandidate(this.#candidates, { actor, candidateId });
+      case 'post_campaigns_campaignId_candidate_imports':
+        return handleCreateImportJob(this.#candidateImports, {
+          actor,
+          campaignId,
+          idempotencyKey,
+          body,
+        });
+      case 'get_candidate_imports_importId':
+        return handleGetImportJob(this.#candidateImports, { actor, jobId: importId });
+      case 'get_candidate_imports_importId_rows':
+        return handleGetImportRows(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          limit: Number(query['limit'] ?? 25),
+        });
+      case 'patch_candidate_imports_importId_rows_rowId':
+        return handlePatchImportRow(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          rowId,
+          idempotencyKey,
+          body,
+        });
+      case 'post_candidate_imports_importId_commit':
+        return handleCommitImportJob(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          idempotencyKey,
+        });
+      case 'post_candidate_imports_importId_cancel':
+        return handleCancelImportJob(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          idempotencyKey,
+        });
       case 'patch_campaigns_campaignId':
         return handlePatchCampaign(this.#campaigns, { actor, campaignId, body });
       case 'post_campaigns_campaignId_activate':

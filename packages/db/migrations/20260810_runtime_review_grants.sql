@@ -32,7 +32,14 @@ TO cpf_app;
 
 GRANT SELECT, INSERT, UPDATE ON
   hiring.campaigns,
-  hiring.invitations
+  hiring.invitations,
+  hiring.candidate_import_jobs,
+  hiring.candidate_import_rows
+TO cpf_app;
+
+GRANT INSERT ON
+  hiring.applications,
+  hiring.candidates
 TO cpf_app;
 
 GRANT SELECT ON

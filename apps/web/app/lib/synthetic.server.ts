@@ -51,6 +51,7 @@ import type {
   EmployerDashboardView,
   EmployerOrgProfileView,
   ImportResultView,
+  ImportRowActionView,
   IntegrationView,
   InvitationView,
   MemberView,
@@ -1634,6 +1635,76 @@ function freshEmployer(): EmployerState {
 
 let employer: EmployerState = freshEmployer();
 
+interface SyntheticImportRow {
+  readonly id: string;
+  readonly row: number;
+  readonly value: string;
+  readonly action: ImportRowActionView;
+}
+
+interface SyntheticImportJob {
+  readonly id: string;
+  readonly fileName: string;
+  readonly rows: SyntheticImportRow[];
+  committed: boolean;
+}
+
+const syntheticImports = new Map<string, SyntheticImportJob>();
+
+function importErrors(job: SyntheticImportJob, row: SyntheticImportRow): readonly string[] {
+  if (row.action === 'exclude') return [];
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.value)) {
+    return ['Enter a valid email address.'];
+  }
+  if (
+    row.action === 'include' &&
+    job.rows.some(
+      (candidate) =>
+        candidate.id !== row.id && candidate.value.toLowerCase() === row.value.toLowerCase(),
+    )
+  ) {
+    return ['Duplicate email in this import. Exclude the duplicate or keep it separate.'];
+  }
+  return [];
+}
+
+function maskImportValue(value: string): string {
+  const [local = '', domain] = value.split('@');
+  if (domain === undefined) return `${local[0] ?? ''}•••`;
+  return `${local[0] ?? ''}${'•'.repeat(Math.min(6, Math.max(2, local.length - 1)))}@${domain}`;
+}
+
+function projectSyntheticImport(job: SyntheticImportJob): ImportResultView {
+  const rows = job.rows.map((row) => {
+    const errors = importErrors(job, row);
+    return {
+      id: row.id,
+      row: row.row,
+      displayValue: maskImportValue(row.value),
+      status: job.committed
+        ? ('committed' as const)
+        : row.action === 'exclude'
+          ? ('excluded' as const)
+          : errors.length === 0
+            ? ('valid' as const)
+            : ('invalid' as const),
+      action: row.action,
+      errors,
+      duplicateCandidateId: null,
+    };
+  });
+  return {
+    importId: job.id,
+    stage: job.committed ? 'committed' : 'validated',
+    status: job.committed ? 'completed' : 'preview_ready',
+    fileName: job.fileName,
+    totalRows: rows.length,
+    validRows: rows.filter((row) => row.status === 'valid' || row.status === 'committed').length,
+    errors: rows.flatMap((row) => row.errors.map((message) => ({ row: row.row, message }))),
+    rows,
+  };
+}
+
 function campaign(id: string): CampaignView | undefined {
   return employer.campaigns.find((c) => c.id === id);
 }
@@ -1803,22 +1874,48 @@ export const employerStore = {
     return this.getCandidate(id);
   },
 
-  validateImport(rowText: string): ImportResultView {
-    const rows = rowText.split('\n').filter((r) => r.trim().length > 0);
-    const errors = rows
-      .map((r, i) => ({ row: i + 1, value: r }))
-      .filter((r) => !r.value.includes('@'))
-      .map((r) => ({ row: r.row, message: 'Missing a valid email address.' }));
-    return {
-      stage: 'validated',
-      totalRows: rows.length,
-      validRows: rows.length - errors.length,
-      errors,
+  validateImport(rowText: string, fileName = 'candidate-import.csv'): ImportResultView {
+    const job: SyntheticImportJob = {
+      id: randomId('import'),
+      fileName,
+      rows: rowText
+        .split(/\r?\n/)
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map((value, index) => ({
+          id: randomId('import_row'),
+          row: index + 1,
+          value,
+          action: 'include' as const,
+        })),
+      committed: false,
     };
+    syntheticImports.set(job.id, job);
+    return projectSyntheticImport(job);
   },
-  commitImport(rowText: string): ImportResultView {
-    const validated = this.validateImport(rowText);
-    return { ...validated, stage: 'committed' };
+  updateImport(
+    importId: string,
+    rowId: string,
+    action: ImportRowActionView,
+    value?: string,
+  ): ImportResultView | null {
+    const job = syntheticImports.get(importId);
+    if (job === undefined || job.committed) return null;
+    const index = job.rows.findIndex((row) => row.id === rowId);
+    const row = job.rows[index];
+    if (row === undefined) return null;
+    job.rows[index] = { ...row, action, ...(value === undefined ? {} : { value: value.trim() }) };
+    return projectSyntheticImport(job);
+  },
+  commitImport(importId: string): ImportResultView | null {
+    const job = syntheticImports.get(importId);
+    if (job === undefined) return null;
+    if (projectSyntheticImport(job).errors.length > 0) return null;
+    job.committed = true;
+    return projectSyntheticImport(job);
+  },
+  cancelImport(importId: string): boolean {
+    return syntheticImports.delete(importId);
   },
 
   getInvitations(): Collection<InvitationView> {
@@ -1994,6 +2091,7 @@ export const employerStore = {
 
   reset(): void {
     employer = freshEmployer();
+    syntheticImports.clear();
   },
 };
 

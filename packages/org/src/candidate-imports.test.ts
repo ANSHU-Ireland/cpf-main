@@ -19,16 +19,20 @@ const job: ImportJobRecord = {
   id: 'j1',
   campaignId: C,
   status: 'uploaded',
+  fileName: 'candidates.csv',
   totalRows: 10,
   validRows: 8,
   errorRows: 2,
   createdAt: '',
+  completedAt: null,
 };
 
 function repo(ov: Partial<CandidateImportRepository> = {}): CandidateImportRepository {
   return {
     createJob: () => Promise.resolve(job),
     getJob: () => Promise.resolve(job),
+    listRows: () => Promise.resolve({ items: [], total: 0 }),
+    updateRow: () => Promise.resolve(null),
     commitJob: () => Promise.resolve(job),
     cancelJob: () => Promise.resolve(job),
     ...ov,
@@ -37,9 +41,14 @@ function repo(ov: Partial<CandidateImportRepository> = {}): CandidateImportRepos
 
 describe('parseImportJobCreate', () => {
   it('valid', () =>
-    expect(parseImportJobCreate({ campaignId: C, idempotencyKey: 'k', fileName: 'f.csv' }).ok).toBe(
-      true,
-    ));
+    expect(
+      parseImportJobCreate({
+        campaignId: C,
+        idempotencyKey: 'k',
+        fileName: 'f.csv',
+        rows: ['alex@example.test'],
+      }).ok,
+    ).toBe(true));
   it('invalid', () => expect(parseImportJobCreate({}).ok).toBe(false));
 });
 describe('parseImportJobId', () => {
@@ -53,6 +62,7 @@ describe('createImportJob', () => {
           campaignId: C,
           idempotencyKey: 'k',
           fileName: 'f.csv',
+          rows: ['alex@example.test'],
         })
       ).ok,
     ).toBe(true));
@@ -63,6 +73,7 @@ describe('createImportJob', () => {
           campaignId: C,
           idempotencyKey: 'k',
           fileName: 'f.csv',
+          rows: ['alex@example.test'],
         })
       ).ok,
     ).toBe(false));
@@ -78,7 +89,7 @@ describe('createImportJob', () => {
         }),
       },
       admin,
-      { campaignId: C, idempotencyKey: 'k', fileName: 'f.csv' },
+      { campaignId: C, idempotencyKey: 'k', fileName: 'f.csv', rows: ['alex@example.test'] },
     );
     expect(r.ok).toBe(false);
   });
