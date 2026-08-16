@@ -3,7 +3,7 @@
  * that did not yet have a Pg adapter. Each class is wired to the v2.0 baseline schema
  * and satisfies its interface exactly (field names verified against the domain modules).
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
 import { PgAuditWriter } from '@cpf/audit';
@@ -19,6 +19,10 @@ function ctx(actor: Actor, role?: string): TenantContext {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function contentHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 // ─── Admin: Tenants ───────────────────────────────────────────────────────────
@@ -1666,7 +1670,7 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
         resourceType: 'profile_correction',
         resourceId: id,
         outcome: 'success',
-        metadata: { field: input.field, requestedValue: input.requestedValue },
+        metadata: { field: input.field, requestedValueHash: contentHash(input.requestedValue) },
       });
     });
     return { id, field: input.field, status: 'pending', createdAt: nowIso() };
@@ -1678,7 +1682,17 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
     input: ApplicationActionInput,
   ): Promise<ApplicationRequestRecord | null> {
     const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    const exists = await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const scoped = await client.query(
+        `SELECT 1
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate ON candidate.id = application.candidate_id
+          WHERE application.tenant_id = $1
+            AND application.id = $2
+            AND candidate.user_id = $3`,
+        [actor.tenantId, applicationId, actor.userId],
+      );
+      if (scoped.rowCount !== 1) return false;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -1687,9 +1701,11 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
         resourceType: 'explanation_request',
         resourceId: id,
         outcome: 'success',
-        metadata: { applicationId, reason: input.reason },
+        metadata: { applicationId, reasonHash: contentHash(input.reason) },
       });
+      return true;
     });
+    if (!exists) return null;
     return { id, applicationId, kind: 'explanation', status: 'pending', createdAt: nowIso() };
   }
 
@@ -1699,7 +1715,17 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
     input: ApplicationActionInput,
   ): Promise<ApplicationRequestRecord | null> {
     const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    const exists = await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const scoped = await client.query(
+        `SELECT 1
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate ON candidate.id = application.candidate_id
+          WHERE application.tenant_id = $1
+            AND application.id = $2
+            AND candidate.user_id = $3`,
+        [actor.tenantId, applicationId, actor.userId],
+      );
+      if (scoped.rowCount !== 1) return false;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -1708,9 +1734,11 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
         resourceType: 'human_review_request',
         resourceId: id,
         outcome: 'success',
-        metadata: { applicationId, reason: input.reason },
+        metadata: { applicationId, reasonHash: contentHash(input.reason) },
       });
+      return true;
     });
+    if (!exists) return null;
     return { id, applicationId, kind: 'human_review', status: 'pending', createdAt: nowIso() };
   }
 
@@ -1721,10 +1749,21 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
   ): Promise<ApplicationRequestRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<{ id: string }>(
-        `UPDATE hiring.applications SET status = 'withdrawn', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id`,
-        [actor.tenantId, applicationId],
+        `UPDATE hiring.applications AS application
+            SET status = 'withdrawn', updated_at = now()
+          WHERE application.tenant_id = $1
+            AND application.id = $2
+            AND EXISTS (
+              SELECT 1 FROM hiring.candidates AS candidate
+               WHERE candidate.id = application.candidate_id
+                 AND candidate.tenant_id = application.tenant_id
+                 AND candidate.user_id = $3
+            )
+        RETURNING application.id`,
+        [actor.tenantId, applicationId, actor.userId],
       );
-      const id = r.rows[0]?.id ?? randomUUID();
+      const id = r.rows[0]?.id;
+      if (id === undefined) return null;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -1733,7 +1772,7 @@ export class PgCandidateActionRepository implements CandidateActionRepository {
         resourceType: 'application',
         resourceId: id,
         outcome: 'success',
-        metadata: { reason: input.reason },
+        metadata: { reasonHash: contentHash(input.reason) },
       });
       return { id, applicationId, kind: 'withdrawal', status: 'withdrawn', createdAt: nowIso() };
     });
@@ -1841,6 +1880,7 @@ import type {
   CandidatePortalRepository,
   CandidateProfileData,
   CandidateInvitationData,
+  CandidateApplicationStatusData,
 } from './candidate-portal.js';
 
 export class PgCandidatePortalRepository implements CandidatePortalRepository {
@@ -1861,7 +1901,16 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
         campaign_title: string;
         status: string;
       }>(
-        `SELECT a.id AS application_id, COALESCE(c.title, 'Campaign') AS campaign_title, a.status FROM hiring.applications a LEFT JOIN hiring.campaigns c ON c.id = a.campaign_id WHERE a.tenant_id = $1 AND a.candidate_user_id = $2 ORDER BY a.created_at DESC LIMIT 10`,
+        `SELECT application.id AS application_id,
+                COALESCE(campaign.title, 'Campaign') AS campaign_title,
+                application.status
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+      LEFT JOIN hiring.campaigns AS campaign ON campaign.id = application.campaign_id
+          WHERE application.tenant_id = $1 AND candidate.user_id = $2
+          ORDER BY application.created_at DESC LIMIT 10`,
         [actor.tenantId, actor.userId],
       );
       return {
@@ -1885,7 +1934,18 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
         expires_at: Date;
         status: string;
       }>(
-        `SELECT i.id AS invitation_id, COALESCE(c.title, 'Campaign') AS campaign_title, i.expires_at, i.status FROM hiring.invitations i JOIN hiring.applications a ON a.id = i.application_id JOIN hiring.campaigns c ON c.id = a.campaign_id WHERE i.tenant_id = $1 AND a.candidate_user_id = $2 ORDER BY i.created_at DESC LIMIT 1`,
+        `SELECT invitation.id AS invitation_id,
+                COALESCE(campaign.title, 'Campaign') AS campaign_title,
+                invitation.expires_at,
+                invitation.status
+           FROM hiring.invitations AS invitation
+           JOIN hiring.applications AS application ON application.id = invitation.application_id
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+           JOIN hiring.campaigns AS campaign ON campaign.id = application.campaign_id
+          WHERE invitation.tenant_id = $1 AND candidate.user_id = $2
+          ORDER BY invitation.created_at DESC LIMIT 1`,
         [actor.tenantId, actor.userId],
       );
       if (!r.rows[0]) return null;
@@ -1894,6 +1954,93 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
         campaignTitle: r.rows[0].campaign_title,
         expiresAt: r.rows[0].expires_at.toISOString(),
         status: r.rows[0].status,
+      };
+    });
+  }
+
+  async getApplicationStatus(
+    actor: Actor,
+    applicationId: string,
+  ): Promise<CandidateApplicationStatusData | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        application_id: string;
+        employer_name: string;
+        role_name: string;
+        assessment_title: string;
+        status: string;
+        applied_at: Date;
+        invited_at: Date | null;
+        due_at: Date | null;
+        decision: string | null;
+        reason: string | null;
+        decided_by: string | null;
+        issued_at: Date | null;
+      }>(
+        `SELECT application.id AS application_id,
+                organization.display_name AS employer_name,
+                campaign.role_name,
+                COALESCE(assessment.title, campaign.title) AS assessment_title,
+                application.status,
+                application.created_at AS applied_at,
+                invitation.sent_at AS invited_at,
+                invitation.expires_at AS due_at,
+                decision.decision,
+                decision.reason,
+                COALESCE(decider.display_name, decider_profile.full_name) AS decided_by,
+                decision.issued_at
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+           JOIN hiring.campaigns AS campaign ON campaign.id = application.campaign_id
+           JOIN tenant.organizations AS organization ON organization.id = application.tenant_id
+      LEFT JOIN hiring.campaign_versions AS campaign_version
+             ON campaign_version.campaign_id = campaign.id
+            AND campaign_version.version_no = campaign.current_version_no
+      LEFT JOIN assessment.assessment_versions AS assessment_version
+             ON assessment_version.id = campaign_version.assessment_version_id
+      LEFT JOIN assessment.assessments AS assessment
+             ON assessment.id = assessment_version.assessment_id
+      LEFT JOIN LATERAL (
+                SELECT sent_at, expires_at
+                  FROM hiring.invitations
+                 WHERE application_id = application.id
+                 ORDER BY created_at DESC LIMIT 1
+                ) AS invitation ON true
+      LEFT JOIN LATERAL (
+                SELECT decision, reason, decided_by, issued_at
+                  FROM review.progression_decisions
+                 WHERE application_id = application.id AND status = 'issued'
+                 ORDER BY issued_at DESC NULLS LAST LIMIT 1
+                ) AS decision ON true
+      LEFT JOIN iam.users AS decider ON decider.id = decision.decided_by
+      LEFT JOIN iam.user_profiles AS decider_profile ON decider_profile.user_id = decision.decided_by
+          WHERE application.tenant_id = $1
+            AND application.id = $2
+            AND candidate.user_id = $3`,
+        [actor.tenantId, applicationId, actor.userId],
+      );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      return {
+        applicationId: row.application_id,
+        employerName: row.employer_name,
+        roleName: row.role_name,
+        assessmentTitle: row.assessment_title,
+        status: row.status,
+        appliedAt: row.applied_at.toISOString(),
+        invitedAt: row.invited_at?.toISOString() ?? null,
+        dueAt: row.due_at?.toISOString() ?? null,
+        decision:
+          row.decision === null || row.issued_at === null
+            ? null
+            : {
+                outcome: row.decision,
+                rationale: row.reason ?? '',
+                decidedBy: row.decided_by ?? 'Named human decision owner',
+                issuedAt: row.issued_at.toISOString(),
+              },
       };
     });
   }
@@ -2761,6 +2908,7 @@ import type {
   ScorecardAmendmentRecord,
   ScorecardAmendmentCreate,
   ObservationRecord,
+  ReviewObservationPage,
   ObservationDispositionInput,
   IntegrityEventRecord,
   IntegrityResolutionInput,
@@ -2772,6 +2920,73 @@ export class PgReviewQualityRepository implements ReviewQualityRepository {
     private readonly role?: string,
   ) {}
 
+  async listObservations(
+    actor: Actor,
+    assignmentId: string,
+  ): Promise<ReviewObservationPage | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const assignment = await client.query<{ submission_id: string; scoring_complete: boolean }>(
+        `SELECT assignment.submission_id,
+                EXISTS (
+                  SELECT 1 FROM review.scorecards
+                   WHERE assignment_id = assignment.id
+                ) AND NOT EXISTS (
+                  SELECT 1
+                    FROM review.scorecards AS scorecard
+                    JOIN assessment.rubric_criteria AS criterion
+                      ON criterion.rubric_version_id = scorecard.rubric_version_id
+               LEFT JOIN review.criterion_scores AS score
+                      ON score.scorecard_id = scorecard.id
+                     AND score.criterion_id = criterion.id
+                   WHERE scorecard.assignment_id = assignment.id
+                     AND score.human_score IS NULL
+                     AND score.insufficient_evidence = false
+                ) AS scoring_complete
+           FROM review.reviewer_assignments AS assignment
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+          WHERE assignment.tenant_id = $1
+            AND assignment.id = $2
+            AND reviewer.user_id = $3`,
+        [actor.tenantId, assignmentId, actor.userId],
+      );
+      const row = assignment.rows[0];
+      if (row === undefined) return null;
+      if (!row.scoring_complete) {
+        return { items: [], total: 0, independentScoringComplete: false };
+      }
+      const result = await client.query<{
+        id: string;
+        criterion_id: string | null;
+        observation_text: string;
+        evidence_links: unknown[];
+        limitations: unknown[];
+        status: 'generated' | 'blocked' | 'reported' | 'withdrawn';
+        generated_at: Date;
+      }>(
+        `SELECT id, criterion_id, observation_text, evidence_links, limitations, status, generated_at
+           FROM evidence.reviewer_ai_observations
+          WHERE tenant_id = $1 AND submission_id = $2
+          ORDER BY generated_at, id`,
+        [actor.tenantId, row.submission_id],
+      );
+      return {
+        items: result.rows.map((observation) => ({
+          id: observation.id,
+          criterionId: observation.criterion_id,
+          observation: observation.observation_text,
+          evidenceLinks: observation.evidence_links,
+          limitations: observation.limitations,
+          status: observation.status,
+          generatedAt: observation.generated_at.toISOString(),
+        })),
+        total: result.rows.length,
+        independentScoringComplete: true,
+      };
+    });
+  }
+
   async createAmendment(
     actor: Actor,
     scorecardId: string,
@@ -2779,10 +2994,23 @@ export class PgReviewQualityRepository implements ReviewQualityRepository {
   ): Promise<ScorecardAmendmentRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const id = randomUUID();
-      await client.query(
-        `INSERT INTO review.review_amendments (id, tenant_id, scorecard_id, reason, changes_summary, amended_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+      const inserted = await client.query<{ created_at: Date }>(
+        `INSERT INTO review.review_amendments
+           (id, tenant_id, scorecard_id, prior_scorecard_hash, amendment_json, reason,
+            requested_by, status)
+         SELECT $1, $2, scorecard.id,
+                encode(digest(jsonb_build_object(
+                  'id', scorecard.id,
+                  'status', scorecard.status,
+                  'updatedAt', scorecard.updated_at
+                )::text, 'sha256'), 'hex'),
+                jsonb_build_object('changes', $5::text), $4, $6, 'requested'
+           FROM review.scorecards AS scorecard
+          WHERE scorecard.tenant_id = $2 AND scorecard.id = $3
+        RETURNING created_at`,
         [id, actor.tenantId, scorecardId, input.rationale, input.changes, actor.userId],
       );
+      if (inserted.rows[0] === undefined) return null;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2793,7 +3021,12 @@ export class PgReviewQualityRepository implements ReviewQualityRepository {
         outcome: 'success',
         metadata: { scorecardId },
       });
-      return { id, scorecardId, rationale: input.rationale, createdAt: nowIso() };
+      return {
+        id,
+        scorecardId,
+        rationale: input.rationale,
+        createdAt: inserted.rows[0].created_at.toISOString(),
+      };
     });
   }
 
@@ -2803,20 +3036,35 @@ export class PgReviewQualityRepository implements ReviewQualityRepository {
     input: ObservationDispositionInput,
   ): Promise<ObservationRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        disposition: string;
-        note: string | null;
-        updated_at: Date;
-      }>(
-        `UPDATE evidence.reviewer_ai_observations SET disposition = $1, disposition_note = $2, disposed_by = $3, disposed_at = now() WHERE tenant_id = $4 AND id = $5 RETURNING id, disposition, disposition_note AS note, now() AS updated_at`,
-        [input.disposition, input.note ?? null, actor.userId, actor.tenantId, observationId],
+      const r = await client.query<{ id: string; updated_at: Date }>(
+        `UPDATE review.criterion_scores AS score
+            SET ai_observation_disposition = $1, updated_at = now()
+           FROM evidence.reviewer_ai_observations AS observation
+          WHERE observation.tenant_id = $2
+            AND observation.id = $3
+            AND score.tenant_id = observation.tenant_id
+            AND score.ai_observation_id = observation.id
+        RETURNING observation.id, score.updated_at`,
+        [input.disposition, actor.tenantId, observationId],
       );
       if (!r.rows[0]) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'ai_observation.disposition',
+        resourceType: 'reviewer_ai_observation',
+        resourceId: observationId,
+        outcome: 'success',
+        metadata: {
+          disposition: input.disposition,
+          notePresent: input.note !== undefined && input.note.trim() !== '',
+        },
+      });
       return {
         id: r.rows[0].id,
-        disposition: r.rows[0].disposition as ObservationRecord['disposition'],
-        note: r.rows[0].note,
+        disposition: input.disposition,
+        note: input.note ?? null,
         updatedAt: r.rows[0].updated_at.toISOString(),
       };
     });
@@ -2828,15 +3076,38 @@ export class PgReviewQualityRepository implements ReviewQualityRepository {
     input: IntegrityResolutionInput,
   ): Promise<IntegrityEventRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{ resolved_at: Date }>(
+        `INSERT INTO review.integrity_resolutions
+           (id, tenant_id, integrity_event_id, assignment_id, resolution, rationale,
+            evidence_links, resolved_by)
+         SELECT $1, $2, event.id, NULL, $4, $5, '[]'::jsonb, $6
+           FROM evidence.integrity_events AS event
+          WHERE event.tenant_id = $2 AND event.id = $3
+         ON CONFLICT (integrity_event_id, assignment_id)
+         DO UPDATE SET resolution = EXCLUDED.resolution,
+                       rationale = EXCLUDED.rationale,
+                       resolved_by = EXCLUDED.resolved_by,
+                       resolved_at = now()
+        RETURNING resolved_at`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          eventId,
+          input.resolution,
+          input.note?.trim() || input.resolution,
+          actor.userId,
+        ],
+      );
+      if (result.rows[0] === undefined) return null;
       await client.query(
-        `INSERT INTO review.integrity_resolutions (id, tenant_id, event_id, resolution, outcome, resolved_by) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (event_id) DO UPDATE SET resolution = $4, outcome = $5, resolved_by = $6`,
-        [randomUUID(), actor.tenantId, eventId, input.resolution, 'resolved', actor.userId],
+        `UPDATE evidence.integrity_events SET status = 'resolved' WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, eventId],
       );
       return {
         id: eventId,
         resolution: input.resolution,
         note: input.note ?? null,
-        resolvedAt: nowIso(),
+        resolvedAt: result.rows[0].resolved_at.toISOString(),
       };
     });
   }

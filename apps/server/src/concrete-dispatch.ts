@@ -25,7 +25,6 @@ import {
   PgAssessmentRepository,
   PgCampaignReviewerRepository,
   PgCampaignStatsRepository,
-  PgReviewerProfileRepository,
   PgCampaignDashboardRepository,
   PgBookingRepository,
   PgAiModelRepository,
@@ -345,7 +344,6 @@ export class ConcreteDispatcher {
   readonly #bookings;
   readonly #campaignReviewers;
   readonly #campaignDashboard;
-  readonly #reviewerProfiles;
   readonly #reviewAssignments;
   readonly #assessments;
   readonly #assessmentVersions;
@@ -433,9 +431,6 @@ export class ConcreteDispatcher {
     });
     this.#campaignDashboard = api.createCampaignDashboardService({
       repository: new PgCampaignDashboardRepository(pool, role),
-    });
-    this.#reviewerProfiles = api.createReviewerProfileService({
-      repository: new PgReviewerProfileRepository(pool, options),
     });
     this.#reviewAssignments = api.createReviewAssignmentService({
       repository: new PgReviewAssignmentRepository(pool, role),
@@ -917,7 +912,10 @@ export class ConcreteDispatcher {
       case 'post_candidate_profile_corrections':
         return api.handleCreateProfileCorrection(this.#candidateActions, { actor, body });
       case 'get_candidate_applications_applicationId_status':
-        return api.handleGetCandidateInvitation(this.#candidatePortal, { actor });
+        return api.handleGetCandidateApplicationStatus(this.#candidatePortal, {
+          actor,
+          applicationId,
+        });
 
       // ── Deployer Readiness ────────────────────────────────────────────────
       case 'get_organization_deployer_readiness':
@@ -965,8 +963,9 @@ export class ConcreteDispatcher {
           query: query as never,
         });
       case 'get_review_assignments_assignmentId':
-      case 'get_review_assignments_assignmentId_ai_observations':
         return api.handleGetReviewAssignment(this.#reviewAssignments, { actor, assignmentId });
+      case 'get_review_assignments_assignmentId_ai_observations':
+        return api.handleListReviewObservations(this.#reviewQuality, { actor, assignmentId });
       case 'post_review_assignments_assignmentId_accept':
         return api.handlePostAcceptAssignment(this.#reviewAssignments, { actor, assignmentId });
       case 'post_review_assignments_assignmentId_ai_stop':
@@ -995,23 +994,15 @@ export class ConcreteDispatcher {
 
       // ── Reviewer Profile ──────────────────────────────────────────────────
       case 'get_reviewer_profile':
-        return api.handleGetReviewerProfile(this.#reviewerProfiles, {
-          actor,
-          profileId: actor.userId,
-        });
+        return api.handleGetMyReviewerProfile(this.#reviewer, { actor });
       case 'patch_reviewer_profile':
-        return api.handlePatchReviewerProfile(this.#reviewerProfiles, {
-          actor,
-          profileId: actor.userId,
-          body,
-        });
+        return api.handlePatchMyReviewerProfile(this.#reviewer, { actor, body });
       case 'get_reviewer_availability':
+        return api.handleGetReviewerAvailability(this.#reviewer, { actor, query });
       case 'put_reviewer_availability':
+        return api.handlePutReviewerAvailability(this.#reviewer, { actor, body });
       case 'get_reviewer_training':
-        return api.handleGetReviewerProfile(this.#reviewer as never, {
-          actor,
-          profileId: actor.userId,
-        });
+        return api.handleGetReviewerTraining(this.#reviewer, { actor, query });
 
       // ── Governance — AI Systems ───────────────────────────────────────────
       case 'get_governance_ai_systems':

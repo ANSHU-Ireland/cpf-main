@@ -44,17 +44,14 @@ function repo(ov: Partial<DataRightsRepository> = {}): DataRightsRepository {
 
 describe('parseDataRightRequestCreate', () => {
   it('valid', () =>
-    expect(
-      parseDataRightRequestCreate({ requestType: 'erasure', candidateId: C, justification: 'j' })
-        .ok,
-    ).toBe(true));
+    expect(parseDataRightRequestCreate({ requestType: 'erasure', justification: 'j' }).ok).toBe(
+      true,
+    ));
   it('invalid', () => expect(parseDataRightRequestCreate({}).ok).toBe(false));
 });
 describe('parseComplaintCreate', () => {
   it('valid', () =>
-    expect(parseComplaintCreate({ category: 'bias', candidateId: C, description: 'd' }).ok).toBe(
-      true,
-    ));
+    expect(parseComplaintCreate({ category: 'bias', description: 'd' }).ok).toBe(true));
   it('invalid', () => expect(parseComplaintCreate({}).ok).toBe(false));
 });
 describe('listDataRightRequests', () => {
@@ -69,7 +66,6 @@ describe('createDataRightRequest', () => {
       (
         await createDataRightRequest({ repository: repo() }, admin, {
           requestType: 'erasure',
-          candidateId: C,
           justification: 'j',
         })
       ).ok,
@@ -81,7 +77,6 @@ describe('createComplaint', () => {
       (
         await createComplaint({ repository: repo() }, admin, {
           category: 'bias',
-          candidateId: C,
           description: 'd',
         })
       ).ok,

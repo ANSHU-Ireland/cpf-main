@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import pg from 'pg';
@@ -12,6 +12,7 @@ const baselinePath = path.join(
   'docs/source-of-truth/originals/cpf_postgresql_schema_v2.0.sql',
 );
 const seedPath = path.join(packageDir, 'seeds/northstar-demo.sql');
+const migrationsPath = path.join(packageDir, 'migrations');
 
 const connectionString = process.env.DATABASE_URL;
 if (connectionString === undefined || connectionString.length === 0) {
@@ -23,6 +24,12 @@ try {
   const present = await pool.query("SELECT to_regclass('audit.events') IS NOT NULL AS present");
   if (present.rows[0]?.present !== true) {
     await pool.query(await readFile(baselinePath, 'utf8'));
+  }
+  const migrations = (await readdir(migrationsPath))
+    .filter((filename) => filename.endsWith('.sql'))
+    .sort();
+  for (const filename of migrations) {
+    await pool.query(await readFile(path.join(migrationsPath, filename), 'utf8'));
   }
   await pool.query(await readFile(seedPath, 'utf8'));
 

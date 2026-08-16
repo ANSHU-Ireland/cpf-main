@@ -2,8 +2,6 @@ import { can } from '@cpf/policy';
 import { ORG_PERMISSIONS } from './permissions.js';
 import type { Actor } from './types.js';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export const DATA_RIGHT_STATUSES = ['pending', 'in_progress', 'completed', 'rejected'] as const;
 export type DataRightStatus = (typeof DATA_RIGHT_STATUSES)[number];
 
@@ -17,7 +15,6 @@ export interface DataRightRequestRecord {
 
 export interface DataRightRequestCreate {
   readonly requestType: string;
-  readonly candidateId: string;
   readonly justification: string;
 }
 
@@ -31,7 +28,6 @@ export interface ComplaintRecord {
 
 export interface ComplaintCreate {
   readonly category: string;
-  readonly candidateId: string;
   readonly description: string;
 }
 
@@ -51,8 +47,6 @@ export function parseDataRightRequestCreate(
   const errors: string[] = [];
   if (typeof obj['requestType'] !== 'string' || obj['requestType'].length === 0)
     errors.push('requestType required');
-  if (typeof obj['candidateId'] !== 'string' || !UUID_RE.test(obj['candidateId']))
-    errors.push('candidateId required (uuid)');
   if (typeof obj['justification'] !== 'string' || obj['justification'].length === 0)
     errors.push('justification required');
   if (errors.length > 0) return { ok: false, errors };
@@ -60,7 +54,6 @@ export function parseDataRightRequestCreate(
     ok: true,
     value: {
       requestType: obj['requestType'] as string,
-      candidateId: obj['candidateId'] as string,
       justification: obj['justification'] as string,
     },
   };
@@ -74,8 +67,6 @@ export function parseComplaintCreate(
   const errors: string[] = [];
   if (typeof obj['category'] !== 'string' || obj['category'].length === 0)
     errors.push('category required');
-  if (typeof obj['candidateId'] !== 'string' || !UUID_RE.test(obj['candidateId']))
-    errors.push('candidateId required (uuid)');
   if (typeof obj['description'] !== 'string' || obj['description'].length === 0)
     errors.push('description required');
   if (errors.length > 0) return { ok: false, errors };
@@ -83,7 +74,6 @@ export function parseComplaintCreate(
     ok: true,
     value: {
       category: obj['category'] as string,
-      candidateId: obj['candidateId'] as string,
       description: obj['description'] as string,
     },
   };

@@ -3,6 +3,7 @@ import {
   handleCreateScorecardAmendment,
   handleSetObservationDisposition,
   handleResolveIntegrityEvent,
+  handleListReviewObservations,
   type ReviewQualityService,
 } from './review-quality.handler.js';
 import type { Actor } from '@cpf/org';
@@ -12,6 +13,7 @@ const actor: Actor = { tenantId: ID, userId: ID, roles: ['employer_admin'] };
 
 function svc(ov: Partial<ReviewQualityService> = {}): ReviewQualityService {
   return {
+    listObservations: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
     amendScorecard: () => Promise.resolve({ status: 201, headers: {}, body: '{}' }),
     disposeObservation: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
     resolveIntegrity: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
@@ -24,6 +26,12 @@ describe('handleCreateScorecardAmendment', () => {
     expect(
       (await handleCreateScorecardAmendment(svc(), { actor, scorecardId: ID, body: {} })).status,
     ).toBe(201));
+});
+describe('handleListReviewObservations', () => {
+  it('200', async () =>
+    expect((await handleListReviewObservations(svc(), { actor, assignmentId: ID })).status).toBe(
+      200,
+    ));
 });
 describe('handleSetObservationDisposition', () => {
   it('200', async () =>

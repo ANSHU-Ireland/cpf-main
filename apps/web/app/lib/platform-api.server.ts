@@ -195,3 +195,20 @@ export async function forwardPlatform(input: PlatformCallInput): Promise<Respons
     throw error;
   }
 }
+
+export async function projectPlatform<T, U>(
+  input: PlatformCallInput,
+  project: (data: T) => U,
+  status?: number,
+): Promise<Response> {
+  try {
+    const result = await callPlatform<T>(input);
+    return Response.json(project(result.data), {
+      status: status ?? result.status,
+      headers: { [CORRELATION_HEADER]: result.correlationId },
+    });
+  } catch (error) {
+    if (error instanceof PlatformApiError) return error.toResponse();
+    throw error;
+  }
+}

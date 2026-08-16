@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { callPlatform, forwardPlatform, PlatformApiError } from './platform-api.server.js';
+import {
+  callPlatform,
+  forwardPlatform,
+  PlatformApiError,
+  projectPlatform,
+} from './platform-api.server.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -104,5 +109,19 @@ describe('platform API adapter', () => {
       correlationId: 'upstream-id',
       detail: 'Role denied.',
     });
+  });
+
+  it('projects contract DTOs into web view models', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ value: 2 })));
+    const request = new Request('http://web.test/api/example', {
+      headers: { authorization: 'Bearer token' },
+    });
+
+    const response = await projectPlatform<
+      { readonly value: number },
+      { readonly doubled: number }
+    >({ request, path: '/projection' }, (data) => ({ doubled: data.value * 2 }));
+
+    await expect(response.json()).resolves.toEqual({ doubled: 4 });
   });
 });
