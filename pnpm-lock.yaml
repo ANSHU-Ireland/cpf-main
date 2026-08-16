@@ -59,6 +59,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@cpf/account':
+        specifier: workspace:*
+        version: link:../../packages/account
       '@cpf/api':
         specifier: workspace:*
         version: link:../api

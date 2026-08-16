@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cpf/account": "workspace:*",
     "@cpf/api": "workspace:*",
     "@cpf/contracts": "workspace:*",
     "@cpf/db": "workspace:*",

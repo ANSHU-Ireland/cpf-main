@@ -29,3 +29,4 @@ export * from './support-case-detail-repository.js';
 export * from './support-case-detail.js';
 export * from './auth.js';
 export * from './reviewer.js';
+export * from './reviewer-repository.js';

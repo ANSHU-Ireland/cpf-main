@@ -88,3 +88,4 @@ export * from './submission-reports.js';
 export * from './review-quality.js';
 export * from './candidate-merges.js';
 export * from './candidate-actions.js';
+export * from './pg-extended-repositories.js';
