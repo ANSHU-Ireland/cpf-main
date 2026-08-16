@@ -36,7 +36,7 @@ describe.skipIf(!dbAvailable)('PgAccountRepository / getMe against live Postgres
     await pool.query(
       `INSERT INTO iam.roles (id, code, name, scope)
          VALUES ($1, 'employer_admin', 'Employer Admin', 'tenant')
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (code) DO NOTHING`,
       [ROLE1],
     );
     await pool.query(
@@ -47,9 +47,11 @@ describe.skipIf(!dbAvailable)('PgAccountRepository / getMe against live Postgres
     );
     await pool.query(
       `INSERT INTO iam.membership_roles (membership_id, role_id, scope_type, scope_id)
-         VALUES ($1, $2, 'tenant', $3)
+         SELECT $1, role.id, 'tenant', $2
+           FROM iam.roles AS role
+          WHERE role.code = 'employer_admin'
        ON CONFLICT DO NOTHING`,
-      [MEMBERSHIP1, ROLE1, ORG_C],
+      [MEMBERSHIP1, ORG_C],
     );
   }, 120_000);
 
