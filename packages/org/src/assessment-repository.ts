@@ -95,7 +95,83 @@ export class PgAssessmentRepository implements AssessmentRepository {
         [actor.tenantId, id],
       );
       const row = res.rows[0];
-      return row === undefined ? null : toRecord(row);
+      if (row === undefined) return null;
+      const versions = await client.query<{
+        id: string;
+        assessment_id: string;
+        version_no: number;
+        status: string;
+        duration_seconds: number;
+        created_at: Date;
+        validations: unknown;
+      }>(
+        `SELECT av.id, av.assessment_id, av.version_no, av.status, av.duration_seconds,
+                av.created_at,
+                COALESCE(
+                  jsonb_agg(
+                    jsonb_build_object(
+                      'id', validation.id,
+                      'validationType', validation.validation_type,
+                      'status', validation.status,
+                      'summary', validation.summary
+                    ) ORDER BY validation.created_at
+                  ) FILTER (WHERE validation.id IS NOT NULL),
+                  '[]'::jsonb
+                ) AS validations
+           FROM assessment.assessment_versions av
+      LEFT JOIN assessment.assessment_validations validation
+             ON validation.assessment_version_id = av.id
+          WHERE av.assessment_id = $1
+          GROUP BY av.id
+          ORDER BY av.version_no DESC`,
+        [id],
+      );
+      const defects = await client.query<{
+        id: string;
+        assessment_version_id: string;
+        defect_type: string;
+        severity: string;
+        description: string;
+        status: string;
+        created_at: Date;
+      }>(
+        `SELECT defect.id, defect.assessment_version_id, defect.defect_type,
+                defect.severity, defect.description, defect.status, defect.created_at
+           FROM governance.assessment_defects defect
+           JOIN assessment.assessment_versions version
+             ON version.id = defect.assessment_version_id
+          WHERE version.assessment_id = $1
+          ORDER BY defect.created_at DESC`,
+        [id],
+      );
+      return {
+        ...toRecord(row),
+        versions: versions.rows.map((version) => ({
+          id: version.id,
+          assessmentId: version.assessment_id,
+          versionNo: version.version_no,
+          status: version.status,
+          durationSeconds: version.duration_seconds,
+          createdAt: version.created_at.toISOString(),
+          validations: Array.isArray(version.validations)
+            ? (version.validations as {
+                id: string;
+                validationType: string;
+                status: string;
+                summary: string | null;
+              }[])
+            : [],
+        })),
+        defects: defects.rows.map((defect) => ({
+          id: defect.id,
+          assessmentVersionId: defect.assessment_version_id,
+          defectType: defect.defect_type,
+          severity: defect.severity,
+          description: defect.description,
+          status: defect.status,
+          createdAt: defect.created_at.toISOString(),
+        })),
+      };
     });
   }
 

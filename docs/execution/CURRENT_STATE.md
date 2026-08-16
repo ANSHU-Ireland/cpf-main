@@ -27,13 +27,28 @@ the full build contract.
 - Governed AI and companion policy packages enforce the core scope, version, budget, output,
   signature, disclosure and telemetry invariants under unit tests.
 
+## 2026-08-16 continuation checkpoint
+
+- `@cpf/org`, `@cpf/api`, `@cpf/server` and `@cpf/web` typechecks pass after the checkpoint batch.
+- No route or page under `apps/web/app` imports `synthetic.server.ts` or
+  `persistence.server.ts`. Contract-backed journeys use authenticated platform calls; incomplete
+  screen/API/schema combinations now return an explicit `501 application/problem+json` response.
+- `pnpm verify` passes at this checkpoint: formatting, lint and all workspace typechecks are green;
+  148 test files / 1,559 tests pass and 21 database-gated files / 53 tests skip without
+  `DATABASE_URL`. Production build, contract checks and live PostgreSQL integration remain for the
+  next session.
+- The ordered continuation and known local adapter gaps are recorded in
+  `NEXT_SESSION_PLAN_2026-08-16.md`.
+
 ## Important scope boundaries
 
 ### Web product
 
-The Next.js product covers most role surfaces, but most custom Next API routes still use
-`apps/web/app/lib/synthetic.server.ts`. Only the named reference journeys use scoped sessions and
-PostgreSQL. CPF-06 therefore remains a major release blocker.
+The Next.js product covers most role surfaces and no longer imports its process-local synthetic or
+persistence stores. Several screens now fail closed because their visual contract requires fields or
+lifecycle operations absent from the approved public API or canonical persistence model. Completing
+those vertical slices—with contract, migration, tenant-negative and browser evidence—remains a major
+release blocker.
 
 ### API and persistence
 

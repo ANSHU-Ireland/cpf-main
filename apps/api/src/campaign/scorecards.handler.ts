@@ -1,6 +1,7 @@
 import {
   getScorecard,
   updateScorecard,
+  submitScorecard,
   parseScorecardAssignmentId,
   parseScorecardUpdate,
   type ScorecardRepository,
@@ -17,6 +18,7 @@ export interface ScorecardService {
     assignmentId: string,
     input: ScorecardUpdate,
   ): Promise<UpdateScorecardResult>;
+  submitScorecard(actor: Actor, assignmentId: string): Promise<UpdateScorecardResult>;
 }
 
 export function createScorecardService(deps: {
@@ -25,6 +27,7 @@ export function createScorecardService(deps: {
   return {
     getScorecard: (actor, aId) => getScorecard(deps, actor, aId),
     updateScorecard: (actor, aId, input) => updateScorecard(deps, actor, aId, input),
+    submitScorecard: (actor, aId) => submitScorecard(deps, actor, aId),
   };
 }
 
@@ -71,5 +74,26 @@ export async function handlePutScorecard(
       correlationId,
       detail: result.reason,
     });
+  return jsonResponse(200, result.scorecard, correlationId);
+}
+
+export async function handleSubmitScorecard(
+  svc: ScorecardService,
+  req: { actor: Actor; assignmentId: string },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const id = parseScorecardAssignmentId(req.assignmentId);
+  if (id === null) {
+    return problemResponse({ status: 422, title: 'Invalid ID', correlationId, detail: 'bad uuid' });
+  }
+  const result = await svc.submitScorecard(req.actor, id);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
   return jsonResponse(200, result.scorecard, correlationId);
 }

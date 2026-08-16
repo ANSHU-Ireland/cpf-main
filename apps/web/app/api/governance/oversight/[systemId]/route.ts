@@ -1,12 +1,11 @@
-import { NextResponse } from 'next/server';
-import { governanceStore } from '../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, { params }: { params: { systemId: string } }) {
-  const plan = governanceStore.getOversightPlan(params.systemId);
-  if (!plan) {
-    return NextResponse.json({ error: 'Oversight plan not found.' }, { status: 404 });
-  }
-  return NextResponse.json(plan);
+export function GET(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Human-oversight plan contract is missing',
+    detail: 'GOV-09 has no approved public API read operation for a system oversight plan.',
+    requirementIds: ['GOV-09', 'FR-GOV-14'],
+  });
 }

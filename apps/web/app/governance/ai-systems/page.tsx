@@ -34,11 +34,26 @@ export default function GovernanceAiSystemsPage() {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
+    const systemCode = (formData.get('systemCode') as string) || '';
     const name = (formData.get('name') as string) || '';
-    const purpose = (formData.get('purpose') as string) || '';
-    const classification = (formData.get('classification') as string) || '';
-    if (!name.trim() || !purpose.trim() || !classification.trim()) return;
-    await apiClient.registerAiSystem(name.trim(), purpose.trim(), classification.trim());
+    const providerLegalName = (formData.get('providerLegalName') as string) || '';
+    const intendedPurpose = (formData.get('intendedPurpose') as string) || '';
+    const version = (formData.get('version') as string) || '';
+    if (
+      !systemCode.trim() ||
+      !name.trim() ||
+      !providerLegalName.trim() ||
+      !intendedPurpose.trim() ||
+      !version.trim()
+    )
+      return;
+    await apiClient.registerAiSystem(
+      systemCode.trim(),
+      name.trim(),
+      providerLegalName.trim(),
+      intendedPurpose.trim(),
+      version.trim(),
+    );
     form.reset();
     const updated = await apiClient.getAiSystems();
     setData(updated);
@@ -79,6 +94,20 @@ export default function GovernanceAiSystemsPage() {
               <h2 className="text-base font-semibold text-ink mb-4">Register AI system</h2>
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
+                  <label htmlFor="systemCode" className={labelStyle}>
+                    System code
+                  </label>
+                  <input
+                    type="text"
+                    id="systemCode"
+                    name="systemCode"
+                    required
+                    pattern="[a-z0-9][a-z0-9._-]*[a-z0-9]"
+                    placeholder="cpf.employment.assessment"
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
                   <label htmlFor="name" className={labelStyle}>
                     System name
                   </label>
@@ -93,13 +122,26 @@ export default function GovernanceAiSystemsPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="purpose" className={labelStyle}>
+                  <label htmlFor="providerLegalName" className={labelStyle}>
+                    Provider legal name
+                  </label>
+                  <input
+                    type="text"
+                    id="providerLegalName"
+                    name="providerLegalName"
+                    required
+                    minLength={2}
+                    className={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="intendedPurpose" className={labelStyle}>
                     Intended purpose
                   </label>
                   <input
                     type="text"
-                    id="purpose"
-                    name="purpose"
+                    id="intendedPurpose"
+                    name="intendedPurpose"
                     required
                     minLength={4}
                     placeholder="Describe the AI system's intended purpose"
@@ -107,16 +149,16 @@ export default function GovernanceAiSystemsPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="classification" className={labelStyle}>
-                    Classification
+                  <label htmlFor="version" className={labelStyle}>
+                    Version
                   </label>
                   <input
                     type="text"
-                    id="classification"
-                    name="classification"
+                    id="version"
+                    name="version"
                     required
-                    minLength={2}
-                    placeholder="e.g. High-risk (AI Act Article 6)"
+                    minLength={1}
+                    placeholder="1.0.0"
                     className={fieldStyle}
                   />
                 </div>

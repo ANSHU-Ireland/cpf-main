@@ -1,27 +1,20 @@
-import { NextResponse } from 'next/server';
-import { supportStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const sessions = await supportStore.getJitAccessSessions();
-  return NextResponse.json(sessions);
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'JIT access lifecycle contract is incomplete',
+    detail:
+      'The approved API can create and revoke a grant but cannot list sessions, and the current screen omits tenant, user, case, purpose and expiry fields.',
+    requirementIds: ['SUP-03', 'FR-SA-21'],
+  });
 }
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const { scope, justification } = body;
+export function GET(request: Request): Response {
+  return gap(request);
+}
 
-  if (!scope?.trim()) {
-    return NextResponse.json({ error: 'scope is required' }, { status: 422 });
-  }
-  if (!justification?.trim() || justification.trim().length < 20) {
-    return NextResponse.json(
-      { error: 'justification must be at least 20 characters' },
-      { status: 422 },
-    );
-  }
-
-  await supportStore.requestJitAccess(scope.trim(), justification.trim());
-  return NextResponse.json({ success: true }, { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

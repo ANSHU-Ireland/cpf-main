@@ -1,30 +1,20 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-interface ReviewerBody {
-  readonly name?: unknown;
-  readonly discipline?: unknown;
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Tenant reviewer directory contract not approved',
+    detail:
+      'Campaign-scoped reviewer operations exist, but the tenant-wide reviewer directory and invite command required by this screen are not exposed.',
+    requirementIds: ['FR-EA-14'],
+  });
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getReviewers());
+export function GET(request: Request): Response {
+  return gap(request);
 }
 
-export async function POST(request: Request): Promise<Response> {
-  let payload: ReviewerBody;
-  try {
-    payload = (await request.json()) as ReviewerBody;
-  } catch {
-    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
-  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-  const discipline = typeof payload.discipline === 'string' ? payload.discipline.trim() : '';
-  if (name.length < 2) {
-    return Response.json({ error: 'A reviewer name is required.' }, { status: 422 });
-  }
-  if (discipline.length < 2) {
-    return Response.json({ error: 'A discipline is required.' }, { status: 422 });
-  }
-  return Response.json(employerStore.inviteReviewer(name, discipline), { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

@@ -31,6 +31,7 @@ export interface CriterionScoreRecord {
   readonly title: string;
   readonly description: string;
   readonly displayOrder: number;
+  readonly maxScore: number;
   readonly humanScore: number | null;
   readonly confidence: number | null;
   readonly insufficientEvidence: boolean;

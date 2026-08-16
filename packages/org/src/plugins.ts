@@ -4,13 +4,23 @@ import type { Actor } from './types.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const PLUGIN_STATUSES = ['enabled', 'disabled'] as const;
+export const PLUGIN_STATUSES = [
+  'draft',
+  'review',
+  'approved',
+  'active',
+  'suspended',
+  'retired',
+] as const;
 export type PluginStatus = (typeof PLUGIN_STATUSES)[number];
 
 export interface PluginRecord {
   readonly id: string;
   readonly code: string;
+  readonly provider: string;
   readonly name: string;
+  readonly version: string;
+  readonly permissions: Readonly<Record<string, unknown>>;
   readonly status: PluginStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -18,7 +28,10 @@ export interface PluginRecord {
 
 export interface PluginCreate {
   readonly code: string;
+  readonly provider: string;
   readonly name: string;
+  readonly version: string;
+  readonly permissions: Readonly<Record<string, unknown>>;
 }
 
 export interface PluginStatusUpdate {
@@ -46,9 +59,28 @@ export function parsePluginCreate(
   const errors: string[] = [];
   if (typeof obj['code'] !== 'string' || !CODE_RE.test(obj['code']))
     errors.push('code must be a dotted lowercase slug');
-  if (typeof obj['name'] !== 'string' || obj['name'].length === 0) errors.push('name required');
+  for (const key of ['provider', 'name', 'version'] as const) {
+    if (typeof obj[key] !== 'string' || obj[key].trim().length === 0)
+      errors.push(`${key} required`);
+  }
+  if (
+    obj['permissions'] === null ||
+    typeof obj['permissions'] !== 'object' ||
+    Array.isArray(obj['permissions'])
+  ) {
+    errors.push('permissions must be an object');
+  }
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, value: { code: obj['code'] as string, name: obj['name'] as string } };
+  return {
+    ok: true,
+    value: {
+      code: obj['code'] as string,
+      provider: obj['provider'] as string,
+      name: obj['name'] as string,
+      version: obj['version'] as string,
+      permissions: obj['permissions'] as Readonly<Record<string, unknown>>,
+    },
+  };
 }
 
 export function parsePluginStatusUpdate(
@@ -57,7 +89,7 @@ export function parsePluginStatusUpdate(
   if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
   const obj = raw as Record<string, unknown>;
   if (typeof obj['status'] !== 'string' || !VALID_STATUSES.has(obj['status']))
-    return { ok: false, errors: ['status must be enabled|disabled'] };
+    return { ok: false, errors: [`status must be ${PLUGIN_STATUSES.join('|')}`] };
   return { ok: true, value: { status: obj['status'] as PluginStatus } };
 }
 

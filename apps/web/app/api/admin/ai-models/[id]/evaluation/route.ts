@@ -1,4 +1,9 @@
-import { assessmentStore } from '../../../../../lib/synthetic.server';
+import {
+  callPlatform,
+  platformErrorResponse,
+  projectPlatform,
+} from '../../../../../lib/platform-api.server';
+import { aiEvaluation, type PlatformAiModel } from '../../../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,23 +13,32 @@ interface RecordBody {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  const evaluation = assessmentStore.getEvaluation(params.id);
-  if (evaluation === null) {
-    return Response.json({ error: 'Model not found.' }, { status: 404 });
+  try {
+    const page = await callPlatform<{ items: readonly PlatformAiModel[] }>({
+      request,
+      path: '/ai-models?limit=100',
+      method: 'GET',
+    });
+    const item = page.data.items.find((model) => model.id === params.id);
+    return item === undefined
+      ? Response.json({ error: 'Model not found.' }, { status: 404 })
+      : Response.json(aiEvaluation(item), {
+          headers: { 'x-correlation-id': page.correlationId },
+        });
+  } catch (error) {
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
+    throw error;
   }
-  return Response.json(evaluation);
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (assessmentStore.getEvaluation(params.id) === null) {
-    return Response.json({ error: 'Model not found.' }, { status: 404 });
-  }
   let payload: RecordBody;
   try {
     payload = (await request.json()) as RecordBody;
@@ -33,18 +47,19 @@ export async function POST(
   }
   const outcome = typeof payload.outcome === 'string' ? payload.outcome.trim() : '';
   const rationale = typeof payload.rationale === 'string' ? payload.rationale.trim() : '';
-  if (outcome.length < 2) {
-    return Response.json({ error: 'An outcome is required.' }, { status: 422 });
-  }
-  if (rationale.length < 12) {
+  if (outcome.length < 2 || rationale.length < 12) {
     return Response.json(
-      { error: 'A rationale of at least 12 characters is required.' },
+      { error: 'An outcome and rationale of at least 12 characters are required.' },
       { status: 422 },
     );
   }
-  const recorded = assessmentStore.recordEvaluation(params.id, outcome, rationale);
-  if (recorded === null) {
-    return Response.json({ error: 'Model not found.' }, { status: 404 });
-  }
-  return Response.json(recorded);
+  return projectPlatform<PlatformAiModel, unknown>(
+    {
+      request,
+      path: `/ai-models/${encodeURIComponent(params.id)}/evaluations`,
+      method: 'POST',
+      body: { outcome, rationale },
+    },
+    aiEvaluation,
+  );
 }

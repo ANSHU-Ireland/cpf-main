@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server';
-import { operationsStore } from '../../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(_request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  await operationsStore.escalateSecurityIncident(id);
-  return NextResponse.json({ success: true });
+export function POST(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Security incident escalation contract is missing',
+    detail:
+      'OPS-02 has no approved public API operation for escalating a selected security incident.',
+    requirementIds: ['OPS-02', 'FR-SEC-14'],
+  });
 }

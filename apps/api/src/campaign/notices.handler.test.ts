@@ -3,6 +3,7 @@ import {
   handleGetAccountNotices,
   handleGetNotices,
   handlePostNotice,
+  handlePostCandidateNoticeAcknowledgement,
   type NoticeService,
 } from './notices.handler.js';
 import type { Actor } from '@cpf/org';
@@ -75,5 +76,21 @@ describe('handlePostNotice', () => {
       body: { noticeType: 'privacy', noticeVersion: '1.0' },
     });
     expect(res.status).toBe(422);
+  });
+});
+
+describe('handlePostCandidateNoticeAcknowledgement', () => {
+  it('resolves the candidate application from identity', async () => {
+    const createNotice = vi.fn().mockResolvedValue({ ok: true as const, notice: { id: 'n' } });
+    const res = await handlePostCandidateNoticeAcknowledgement(service({ createNotice }), {
+      actor,
+      noticeId: VALID_ID,
+      body: { noticeType: 'privacy', noticeVersion: 'demo-1' },
+    });
+    expect(res.status).toBe(200);
+    expect(createNotice).toHaveBeenCalledWith(actor, null, {
+      noticeType: 'privacy',
+      noticeVersion: 'demo-1',
+    });
   });
 });

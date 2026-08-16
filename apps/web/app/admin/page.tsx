@@ -34,12 +34,12 @@ const ALERT_TONE: Record<string, BadgeTone> = {
   info: 'info',
 };
 
-function Stat({ label, value }: { label: string; value: number }): React.JSX.Element {
+function Stat({ label, value }: { label: string; value: number | null }): React.JSX.Element {
   return (
     <Card as="article" aria-label={label}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--space-unit) * 1)' }}>
         <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-ink)' }}>
-          {value}
+          {value ?? '—'}
         </span>
         <span style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>{label}</span>
       </div>

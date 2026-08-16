@@ -47,12 +47,16 @@ export default function AiModelsPage(): React.JSX.Element {
   const headingId = useId();
   const nameId = useId();
   const providerId = useId();
+  const modelKeyId = useId();
+  const modelVersionId = useId();
   const useCaseId = useId();
   const limitId = useId();
   const load = useCallback(() => apiClient.getAiModels(), []);
   const { state, reload, setData } = useAsync<Collection<AiModelView>>(load);
   const [name, setName] = useState('');
   const [provider, setProvider] = useState('');
+  const [modelKey, setModelKey] = useState('');
+  const [modelVersion, setModelVersion] = useState('');
   const [useCase, setUseCase] = useState('');
   const [limitations, setLimitations] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,12 +69,16 @@ export default function AiModelsPage(): React.JSX.Element {
       const created = await apiClient.registerAiModel(
         name.trim(),
         provider.trim(),
+        modelKey.trim(),
+        modelVersion.trim(),
         useCase.trim(),
         limitations.trim(),
       );
       setData({ items: [created, ...current.items], total: current.total + 1 });
       setName('');
       setProvider('');
+      setModelKey('');
+      setModelVersion('');
       setUseCase('');
       setLimitations('');
     } catch (e) {
@@ -120,6 +128,28 @@ export default function AiModelsPage(): React.JSX.Element {
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={modelKeyId} style={{ fontWeight: 600 }}>
+                    Provider model key
+                  </label>
+                  <input
+                    id={modelKeyId}
+                    value={modelKey}
+                    onChange={(e) => setModelKey(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={modelVersionId} style={{ fontWeight: 600 }}>
+                    Model version
+                  </label>
+                  <input
+                    id={modelVersionId}
+                    value={modelVersion}
+                    onChange={(e) => setModelVersion(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <label htmlFor={providerId} style={{ fontWeight: 600 }}>
                     Provider
                   </label>
@@ -164,6 +194,8 @@ export default function AiModelsPage(): React.JSX.Element {
                       busy ||
                       name.trim().length < 2 ||
                       provider.trim().length < 2 ||
+                      modelKey.trim().length < 1 ||
+                      modelVersion.trim().length < 1 ||
                       useCase.trim().length < 4 ||
                       limitations.trim().length < 4
                     }

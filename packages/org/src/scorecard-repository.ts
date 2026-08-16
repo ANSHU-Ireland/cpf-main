@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { PgAuditWriter } from '@cpf/audit';
 import { withTenant, type TenantContext } from '@cpf/db';
-import type { ScorecardRepository } from './scorecards.js';
+import { ScorecardSubmissionConflictError, type ScorecardRepository } from './scorecards.js';
 import type {
   CriterionScoreRecord,
   ScorecardRecord,
@@ -31,6 +31,7 @@ interface CriterionRow {
   title: string;
   description: string;
   display_order: number;
+  max_score: string | number;
   human_score: string | number | null;
   confidence: string | number | null;
   insufficient_evidence: boolean | null;
@@ -69,6 +70,7 @@ function toCriterion(row: CriterionRow): CriterionScoreRecord {
     title: row.title,
     description: row.description,
     displayOrder: row.display_order,
+    maxScore: Number(row.max_score),
     humanScore: row.human_score === null ? null : Number(row.human_score),
     confidence: row.confidence === null ? null : Number(row.confidence),
     insufficientEvidence: row.insufficient_evidence ?? false,
@@ -86,6 +88,7 @@ async function loadCriteria(
 ): Promise<CriterionScoreRecord[]> {
   const result = await client.query<CriterionRow>(
     `SELECT s.id, c.id AS criterion_id, c.code, c.title, c.description, c.display_order,
+            c.max_score,
             s.human_score, s.confidence, s.insufficient_evidence, s.evidence_links,
             s.reviewer_comment, s.updated_at
        FROM assessment.rubric_criteria AS c
@@ -132,10 +135,20 @@ export class PgScorecardRepository implements ScorecardRepository {
   async getScorecard(actor: Actor, assignmentId: string): Promise<ScorecardRecord | null> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const result = await client.query<ScorecardRow>(
-        `SELECT ${COLUMNS}
-           FROM review.scorecards
-          WHERE tenant_id = $1 AND assignment_id = $2`,
-        [actor.tenantId, assignmentId],
+        `SELECT scorecard.id, scorecard.tenant_id, scorecard.assignment_id,
+                scorecard.rubric_version_id, scorecard.status,
+                scorecard.overall_confidence, scorecard.summary, scorecard.submitted_at,
+                scorecard.created_at, scorecard.updated_at
+           FROM review.scorecards AS scorecard
+           JOIN review.reviewer_assignments AS assignment
+             ON assignment.id = scorecard.assignment_id
+            AND assignment.tenant_id = scorecard.tenant_id
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+          WHERE scorecard.tenant_id = $1 AND scorecard.assignment_id = $2
+            AND ($3::boolean = false OR reviewer.user_id = $4)`,
+        [actor.tenantId, assignmentId, actor.roles.includes('employer_reviewer'), actor.userId],
       );
       const row = result.rows[0];
       if (row === undefined) return null;
@@ -170,19 +183,39 @@ export class PgScorecardRepository implements ScorecardRepository {
       if (sets.length > 0) {
         sets.push('updated_at = now()');
         const result = await client.query<ScorecardRow>(
-          `UPDATE review.scorecards
+          `UPDATE review.scorecards AS scorecard
               SET ${sets.join(', ')}
-            WHERE tenant_id = $1 AND assignment_id = $2
-          RETURNING ${COLUMNS}`,
-          params,
+             FROM review.reviewer_assignments AS assignment
+             JOIN hiring.reviewer_profiles AS reviewer
+               ON reviewer.id = assignment.reviewer_profile_id
+              AND reviewer.tenant_id = assignment.tenant_id
+            WHERE scorecard.tenant_id = $1 AND scorecard.assignment_id = $2
+              AND assignment.id = scorecard.assignment_id
+              AND scorecard.status = 'draft'
+              AND ($${params.length + 1}::boolean = false OR reviewer.user_id = $${params.length + 2})
+          RETURNING scorecard.id, scorecard.tenant_id, scorecard.assignment_id,
+                    scorecard.rubric_version_id, scorecard.status,
+                    scorecard.overall_confidence, scorecard.summary, scorecard.submitted_at,
+                    scorecard.created_at, scorecard.updated_at`,
+          [...params, actor.roles.includes('employer_reviewer'), actor.userId],
         );
         row = result.rows[0];
       } else {
         const result = await client.query<ScorecardRow>(
-          `SELECT ${COLUMNS}
-             FROM review.scorecards
-            WHERE tenant_id = $1 AND assignment_id = $2`,
-          params,
+          `SELECT scorecard.id, scorecard.tenant_id, scorecard.assignment_id,
+                  scorecard.rubric_version_id, scorecard.status,
+                  scorecard.overall_confidence, scorecard.summary, scorecard.submitted_at,
+                  scorecard.created_at, scorecard.updated_at
+             FROM review.scorecards AS scorecard
+             JOIN review.reviewer_assignments AS assignment
+               ON assignment.id = scorecard.assignment_id
+              AND assignment.tenant_id = scorecard.tenant_id
+             JOIN hiring.reviewer_profiles AS reviewer
+               ON reviewer.id = assignment.reviewer_profile_id
+              AND reviewer.tenant_id = assignment.tenant_id
+            WHERE scorecard.tenant_id = $1 AND scorecard.assignment_id = $2
+              AND ($3::boolean = false OR reviewer.user_id = $4)`,
+          [actor.tenantId, assignmentId, actor.roles.includes('employer_reviewer'), actor.userId],
         );
         row = result.rows[0];
       }
@@ -239,6 +272,129 @@ export class PgScorecardRepository implements ScorecardRepository {
         [actor.tenantId, row.id],
       );
       const finalRow = refreshed.rows[0] ?? row;
+      const criteria = await loadCriteria(
+        client,
+        actor.tenantId,
+        finalRow.id,
+        finalRow.rubric_version_id,
+      );
+      return toRecord(finalRow, criteria);
+    });
+  }
+
+  async submitScorecard(actor: Actor, assignmentId: string): Promise<ScorecardRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const scorecardResult = await client.query<ScorecardRow>(
+        `SELECT scorecard.id, scorecard.tenant_id, scorecard.assignment_id,
+                scorecard.rubric_version_id, scorecard.status,
+                scorecard.overall_confidence, scorecard.summary, scorecard.submitted_at,
+                scorecard.created_at, scorecard.updated_at
+           FROM review.scorecards AS scorecard
+           JOIN review.reviewer_assignments AS assignment
+             ON assignment.id = scorecard.assignment_id
+            AND assignment.tenant_id = scorecard.tenant_id
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+          WHERE scorecard.tenant_id = $1 AND scorecard.assignment_id = $2
+            AND ($3::boolean = false OR reviewer.user_id = $4)
+          FOR UPDATE OF scorecard, assignment`,
+        [actor.tenantId, assignmentId, actor.roles.includes('employer_reviewer'), actor.userId],
+      );
+      const row = scorecardResult.rows[0];
+      if (row === undefined) return null;
+      if (row.status === 'locked' || row.status === 'submitted') {
+        const criteria = await loadCriteria(client, actor.tenantId, row.id, row.rubric_version_id);
+        return toRecord(row, criteria);
+      }
+
+      const readiness = await client.query<{
+        incomplete_criteria: string;
+        open_integrity_events: string;
+        unreviewed_evidence: string;
+      }>(
+        `SELECT
+           (SELECT count(*)::text
+              FROM assessment.rubric_criteria AS criterion
+         LEFT JOIN review.criterion_scores AS score
+                ON score.criterion_id = criterion.id
+               AND score.scorecard_id = $2
+               AND score.tenant_id = $1
+             WHERE criterion.rubric_version_id = $3
+               AND (
+                 score.id IS NULL
+                 OR score.reviewer_comment IS NULL
+                 OR length(trim(score.reviewer_comment)) < 3
+                 OR (score.human_score IS NULL AND score.insufficient_evidence = false)
+                 OR (score.insufficient_evidence = false AND jsonb_array_length(score.evidence_links) = 0)
+               )) AS incomplete_criteria,
+           (SELECT count(*)::text
+              FROM review.reviewer_assignments AS assignment
+              JOIN runtime.submissions AS submission ON submission.id = assignment.submission_id
+              JOIN evidence.integrity_events AS event ON event.attempt_id = submission.attempt_id
+             WHERE assignment.tenant_id = $1 AND assignment.id = $4
+               AND event.tenant_id = assignment.tenant_id
+               AND event.status <> 'resolved') AS open_integrity_events,
+           (SELECT count(*)::text
+              FROM review.reviewer_assignments AS assignment
+              JOIN runtime.submissions AS submission ON submission.id = assignment.submission_id
+              JOIN evidence.evidence_objects AS evidence
+                ON evidence.attempt_id = submission.attempt_id
+               AND evidence.tenant_id = assignment.tenant_id
+         LEFT JOIN review.evidence_annotations AS annotation
+                ON annotation.tenant_id = assignment.tenant_id
+               AND annotation.assignment_id = assignment.id
+               AND annotation.evidence_object_id = evidence.id
+               AND annotation.created_by = $5
+             WHERE assignment.tenant_id = $1 AND assignment.id = $4
+               AND annotation.id IS NULL) AS unreviewed_evidence`,
+        [actor.tenantId, row.id, row.rubric_version_id, assignmentId, actor.userId],
+      );
+      const incomplete = Number(readiness.rows[0]?.incomplete_criteria ?? 0);
+      const openIntegrity = Number(readiness.rows[0]?.open_integrity_events ?? 0);
+      const unreviewedEvidence = Number(readiness.rows[0]?.unreviewed_evidence ?? 0);
+      if (incomplete > 0) {
+        throw new ScorecardSubmissionConflictError(
+          `${String(incomplete)} required criterion record(s) are incomplete.`,
+        );
+      }
+      if (openIntegrity > 0) {
+        throw new ScorecardSubmissionConflictError(
+          `${String(openIntegrity)} integrity event(s) require a human resolution.`,
+        );
+      }
+      if (unreviewedEvidence > 0) {
+        throw new ScorecardSubmissionConflictError(
+          `${String(unreviewedEvidence)} evidence item(s) require reviewer acknowledgement.`,
+        );
+      }
+
+      const submitted = await client.query<ScorecardRow>(
+        `UPDATE review.scorecards
+            SET status = 'locked', submitted_at = now(), updated_at = now()
+          WHERE tenant_id = $1 AND id = $2
+        RETURNING ${COLUMNS}`,
+        [actor.tenantId, row.id],
+      );
+      await client.query(
+        `UPDATE review.reviewer_assignments
+            SET status = 'submitted', submitted_at = now()
+          WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, assignmentId],
+      );
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'scorecard.submit',
+        resourceType: 'scorecard',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { assignmentId },
+      });
+      await appendOutbox(client, actor, row.id, { assignmentId, status: 'locked' });
+      const finalRow = submitted.rows[0];
+      if (finalRow === undefined) return null;
       const criteria = await loadCriteria(
         client,
         actor.tenantId,

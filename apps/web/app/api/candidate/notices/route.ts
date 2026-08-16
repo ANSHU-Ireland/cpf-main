@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server';
-import { candidateStore } from '../../../lib/synthetic.server';
+import {
+  candidateNotices,
+  type PlatformNoticeAcknowledgement,
+} from '../../../lib/candidate-self-service.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const result = await candidateStore.getCandidateNotices();
-  return NextResponse.json(result);
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ readonly items: readonly PlatformNoticeAcknowledgement[] }, object>(
+    { request, path: '/candidate/notices', method: 'GET' },
+    candidateNotices,
+  );
 }

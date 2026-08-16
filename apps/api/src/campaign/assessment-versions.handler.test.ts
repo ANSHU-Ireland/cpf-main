@@ -15,6 +15,18 @@ const actor: Actor = { tenantId: VALID_ID, userId: VALID_ID, roles: ['employer_a
 
 function service(overrides: Partial<AssessmentVersionService> = {}): AssessmentVersionService {
   return {
+    createVersionForAssessment: () =>
+      Promise.resolve({
+        ok: true as const,
+        version: {
+          id: VALID_ID,
+          assessmentId: VALID_ID,
+          versionNo: 2,
+          status: 'draft' as const,
+          durationSeconds: 3600,
+          createdAt: '',
+        },
+      }),
     createValidation: () =>
       Promise.resolve({
         ok: true as const,

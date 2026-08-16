@@ -23,6 +23,31 @@ export interface AssessmentRecord {
   readonly lifecycleStatus: AssessmentStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly versions?: readonly AssessmentVersionSummary[];
+  readonly defects?: readonly {
+    readonly id: string;
+    readonly assessmentVersionId: string;
+    readonly defectType: string;
+    readonly severity: string;
+    readonly description: string;
+    readonly status: string;
+    readonly createdAt: string;
+  }[];
+}
+
+export interface AssessmentVersionSummary {
+  readonly id: string;
+  readonly assessmentId: string;
+  readonly versionNo: number;
+  readonly status: string;
+  readonly durationSeconds: number;
+  readonly createdAt: string;
+  readonly validations: readonly {
+    readonly id: string;
+    readonly validationType: string;
+    readonly status: string;
+    readonly summary: string | null;
+  }[];
 }
 
 export type AssessmentDto = AssessmentRecord;

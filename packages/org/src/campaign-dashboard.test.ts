@@ -25,12 +25,24 @@ const dashboard: CampaignDashboardData = {
   campaignId: CAMPAIGN,
   totalApplications: 10,
   totalReviewers: 3,
+  unassignedReviews: 1,
   averageScore: 72.5,
   statusBreakdown: { submitted: 5, under_review: 5 },
 };
 const comparison: CampaignComparisonData = {
   campaignId: CAMPAIGN,
-  candidates: [{ candidateId: 'c1', score: 80, rank: 1 }],
+  candidates: [
+    {
+      candidateId: 'c1',
+      applicationId: 'a1',
+      candidateReference: 'candidate-c1',
+      reviewStatus: 'in_review',
+      criteriaScored: 2,
+      criteriaTotal: 4,
+      score: 80,
+      rank: 1,
+    },
+  ],
 };
 
 function repo(overrides: Partial<CampaignDashboardRepository> = {}): CampaignDashboardRepository {

@@ -111,12 +111,17 @@ export default function SupportPage(): React.JSX.Element {
                     aria-label={`Assignee for ${c.subject}`}
                     value={assignee[c.id] ?? ''}
                     onChange={(e) => setAssignee((a) => ({ ...a, [c.id]: e.target.value }))}
-                    placeholder="Assignee name"
+                    placeholder="Assignee user UUID"
                     style={fieldStyle}
                   />
                   <Button
                     variant="secondary"
-                    disabled={busyId === c.id || (assignee[c.id] ?? '').trim().length < 2}
+                    disabled={
+                      busyId === c.id ||
+                      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                        (assignee[c.id] ?? '').trim(),
+                      )
+                    }
                     onClick={() => void assign(data, c.id)}
                   >
                     {busyId === c.id ? 'Assigning…' : 'Assign case'}

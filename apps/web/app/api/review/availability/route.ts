@@ -1,4 +1,8 @@
-import { reviewStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import {
+  reviewerAvailability,
+  type PlatformAvailabilityWindow,
+} from '../../../lib/review-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,8 +12,11 @@ interface AvailabilityBody {
   readonly note?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(reviewStore.getAvailability());
+export async function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: PlatformAvailabilityWindow[] }, unknown>(
+    { request, path: '/reviewer/availability?limit=100', method: 'GET' },
+    reviewerAvailability,
+  );
 }
 
 export async function PATCH(request: Request): Promise<Response> {
@@ -19,33 +26,48 @@ export async function PATCH(request: Request): Promise<Response> {
   } catch {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
-  const patch: {
-    state?: 'available' | 'limited' | 'unavailable';
-    weeklyCapacity?: number;
-    note?: string;
-  } = {};
-  if (payload.state !== undefined) {
-    if (
-      payload.state !== 'available' &&
-      payload.state !== 'limited' &&
-      payload.state !== 'unavailable'
-    ) {
-      return Response.json({ error: 'A valid availability state is required.' }, { status: 422 });
-    }
-    patch.state = payload.state;
+  if (
+    payload.state !== 'available' &&
+    payload.state !== 'limited' &&
+    payload.state !== 'unavailable'
+  ) {
+    return Response.json({ error: 'A valid availability state is required.' }, { status: 422 });
   }
-  if (payload.weeklyCapacity !== undefined) {
-    if (
-      typeof payload.weeklyCapacity !== 'number' ||
-      Number.isNaN(payload.weeklyCapacity) ||
-      payload.weeklyCapacity < 0
-    ) {
-      return Response.json({ error: 'Weekly capacity must be zero or more.' }, { status: 422 });
-    }
-    patch.weeklyCapacity = payload.weeklyCapacity;
+  if (
+    typeof payload.weeklyCapacity !== 'number' ||
+    !Number.isInteger(payload.weeklyCapacity) ||
+    payload.weeklyCapacity < 0 ||
+    payload.weeklyCapacity > 100
+  ) {
+    return Response.json(
+      { error: 'Weekly capacity must be an integer from 0 to 100.' },
+      { status: 422 },
+    );
   }
-  if (typeof payload.note === 'string') {
-    patch.note = payload.note;
-  }
-  return Response.json(reviewStore.updateAvailability(patch));
+  const availableFrom = new Date();
+  const availableTo = new Date(availableFrom.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return projectPlatform<{ windows: PlatformAvailabilityWindow[] }, unknown>(
+    {
+      request,
+      path: '/reviewer/availability',
+      method: 'PUT',
+      body: {
+        windows: [
+          {
+            availableFrom: availableFrom.toISOString(),
+            availableTo: availableTo.toISOString(),
+            capacity: payload.state === 'unavailable' ? 0 : payload.weeklyCapacity,
+            status:
+              payload.state === 'limited'
+                ? 'tentative'
+                : payload.state === 'unavailable'
+                  ? 'unavailable'
+                  : 'available',
+            note: typeof payload.note === 'string' ? payload.note : null,
+          },
+        ],
+      },
+    },
+    reviewerAvailability,
+  );
 }

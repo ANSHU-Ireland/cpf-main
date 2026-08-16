@@ -15,6 +15,8 @@ const pv = {
   version: 1,
   status: 'draft' as const,
   body: 'b',
+  purpose: 'reviewer guidance',
+  safetyPolicy: {},
   createdAt: '',
 };
 

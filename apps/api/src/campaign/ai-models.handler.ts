@@ -4,6 +4,7 @@ import {
   createAiModel,
   activateAiModel,
   suspendAiModel,
+  recordAiModelEvaluation,
   parseAiModelListQuery,
   parseAiModelCreate,
   parseAiModelId,
@@ -13,6 +14,7 @@ import {
   type CreateAiModelResult,
   type ActivateAiModelResult,
   type SuspendAiModelResult,
+  type RecordAiModelEvaluationResult,
   type RawAiModelListQuery,
 } from '@cpf/org';
 import type { Actor, AiModelCreate, AiModelListQuery } from '@cpf/org';
@@ -24,6 +26,11 @@ export interface AiModelService {
   createModel(actor: Actor, input: AiModelCreate): Promise<CreateAiModelResult>;
   activateModel(actor: Actor, id: string): Promise<ActivateAiModelResult>;
   suspendModel(actor: Actor, id: string): Promise<SuspendAiModelResult>;
+  recordEvaluation(
+    actor: Actor,
+    id: string,
+    input: { readonly outcome: string; readonly rationale: string },
+  ): Promise<RecordAiModelEvaluationResult>;
 }
 
 export function createAiModelService(deps: AiModelDeps): AiModelService {
@@ -33,7 +40,48 @@ export function createAiModelService(deps: AiModelDeps): AiModelService {
     createModel: (actor, input) => createAiModel(deps, actor, input),
     activateModel: (actor, id) => activateAiModel(deps, actor, id),
     suspendModel: (actor, id) => suspendAiModel(deps, actor, id),
+    recordEvaluation: (actor, id, input) => recordAiModelEvaluation(deps, actor, id, input),
   };
+}
+
+export async function handlePostAiModelEvaluation(
+  svc: AiModelService,
+  req: { actor: Actor; modelId: string; body: unknown },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const id = parseAiModelId(req.modelId);
+  if (id === null) {
+    return problemResponse({ status: 422, title: 'Invalid ID', correlationId, detail: 'bad uuid' });
+  }
+  if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: 'body must be an object',
+    });
+  }
+  const body = req.body as Record<string, unknown>;
+  const outcome = typeof body.outcome === 'string' ? body.outcome.trim() : '';
+  const rationale = typeof body.rationale === 'string' ? body.rationale.trim() : '';
+  if (outcome.length < 2 || rationale.length < 12) {
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: 'outcome and a rationale of at least 12 characters are required',
+    });
+  }
+  const result = await svc.recordEvaluation(req.actor, id, { outcome, rationale });
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return jsonResponse(200, result.model, correlationId);
 }
 
 export async function handleGetAiModels(

@@ -1,30 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const collection = governanceStore.getQmsProcedures();
-  return NextResponse.json(collection);
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'QMS document storage is externally gated',
+    detail:
+      'A canonical QMS version requires an immutable protected content URI and SHA-256 evidence; local placeholder content is not permitted.',
+    requirementIds: ['GOV-06', 'FR-GOV-08'],
+  });
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const { title, policy } = body;
+export function GET(request: Request): Response {
+  return gap(request);
+}
 
-  if (typeof title !== 'string' || title.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid title; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-  if (typeof policy !== 'string' || policy.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid policy; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-
-  const procedure = governanceStore.addQmsProcedure(title.trim(), policy.trim());
-  return NextResponse.json(procedure, { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

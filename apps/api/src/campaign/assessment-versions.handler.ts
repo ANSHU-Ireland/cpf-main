@@ -5,6 +5,7 @@ import {
   createAssessmentDefect,
   duplicateAssessmentVersion,
   suspendAssessmentVersion,
+  createAssessmentVersionForAssessment,
   parseValidationCreate,
   parseAssessmentDefectCreate,
   parseVersionId,
@@ -33,6 +34,11 @@ type DefectResult =
   { ok: true; defect: AssessmentDefectRecord } | { ok: false; status: number; reason: string };
 
 export interface AssessmentVersionService {
+  createVersionForAssessment(
+    actor: Actor,
+    assessmentId: string,
+    rationale: string,
+  ): Promise<ActResult>;
   createValidation(
     actor: Actor,
     versionId: string,
@@ -54,6 +60,13 @@ export function createAssessmentVersionService(deps: {
   versionRepository: AssessmentVersionRepository;
 }): AssessmentVersionService {
   return {
+    createVersionForAssessment: (actor, assessmentId, rationale) =>
+      createAssessmentVersionForAssessment(
+        { repository: deps.versionRepository },
+        actor,
+        assessmentId,
+        rationale,
+      ),
     createValidation: (actor, vId, input) =>
       createAssessmentValidation({ repository: deps.validationRepository }, actor, vId, input),
     activateVersion: (actor, vId) =>
@@ -67,6 +80,49 @@ export function createAssessmentVersionService(deps: {
     suspendVersion: (actor, vId) =>
       suspendAssessmentVersion({ repository: deps.versionRepository }, actor, vId),
   };
+}
+
+export async function handlePostAssessmentVersion(
+  svc: AssessmentVersionService,
+  req: { actor: Actor; assessmentId: string; body: unknown },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  if (parseVersionId(req.assessmentId) === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Invalid assessment ID',
+      correlationId,
+      detail: 'assessmentId must be a UUID',
+    });
+  }
+  if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: 'body must be an object',
+    });
+  }
+  const body = req.body as Record<string, unknown>;
+  const rationale = typeof body.rationale === 'string' ? body.rationale.trim() : '';
+  if (rationale.length < 4) {
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: 'a rationale of at least 4 characters is required',
+    });
+  }
+  const result = await svc.createVersionForAssessment(req.actor, req.assessmentId, rationale);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return jsonResponse(201, result.version, correlationId);
 }
 
 export async function handlePostAssessmentValidation(

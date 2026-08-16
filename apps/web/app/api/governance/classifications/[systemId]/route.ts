@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
-import { governanceStore } from '../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, { params }: { params: { systemId: string } }) {
-  const classification = governanceStore.getClassification(params.systemId);
-  if (!classification) {
-    return NextResponse.json({ error: 'Classification not found.' }, { status: 404 });
-  }
-  return NextResponse.json(classification);
+export function GET(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Classification read contract is missing',
+    detail:
+      'The approved public API can create a classification but cannot retrieve the current classification for an AI system.',
+    requirementIds: ['GOV-02', 'FR-GOV-03'],
+  });
 }

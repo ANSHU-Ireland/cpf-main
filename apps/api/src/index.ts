@@ -61,3 +61,4 @@ export * from './campaign/governance-risk-controls.handler.js';
 export * from './campaign/governance-docs.handler.js';
 export * from './campaign/governance-submissions.handler.js';
 export * from './campaign/campaign-stats.handler.js';
+export * from './campaign/campaign-readiness.handler.js';

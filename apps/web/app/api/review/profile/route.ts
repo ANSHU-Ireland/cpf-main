@@ -1,15 +1,19 @@
-import { reviewStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { reviewerProfile, type PlatformReviewerProfile } from '../../../lib/review-api.server';
 
 export const dynamic = 'force-dynamic';
 
 interface ProfileBody {
   readonly displayName?: unknown;
   readonly disciplines?: unknown;
-  readonly biography?: unknown;
+  readonly maxActiveReviews?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(reviewStore.getProfile());
+export async function GET(request: Request): Promise<Response> {
+  return projectPlatform<PlatformReviewerProfile, unknown>(
+    { request, path: '/reviewer/profile', method: 'GET' },
+    reviewerProfile,
+  );
 }
 
 export async function PATCH(request: Request): Promise<Response> {
@@ -19,22 +23,19 @@ export async function PATCH(request: Request): Promise<Response> {
   } catch {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
-  const patch: {
-    displayName?: string;
-    disciplines?: readonly string[];
-    biography?: string;
-  } = {};
-  if (typeof payload.displayName === 'string') {
-    if (payload.displayName.trim().length < 2) {
-      return Response.json({ error: 'A display name is required.' }, { status: 422 });
-    }
-    patch.displayName = payload.displayName.trim();
-  }
-  if (Array.isArray(payload.disciplines)) {
-    patch.disciplines = payload.disciplines.filter((d): d is string => typeof d === 'string');
-  }
-  if (typeof payload.biography === 'string') {
-    patch.biography = payload.biography;
-  }
-  return Response.json(reviewStore.updateProfile(patch));
+  return projectPlatform<PlatformReviewerProfile, unknown>(
+    {
+      request,
+      path: '/reviewer/profile',
+      method: 'PATCH',
+      body: {
+        ...(payload.displayName === undefined ? {} : { displayName: payload.displayName }),
+        ...(payload.disciplines === undefined ? {} : { expertise: payload.disciplines }),
+        ...(payload.maxActiveReviews === undefined
+          ? {}
+          : { maxActiveReviews: payload.maxActiveReviews }),
+      },
+    },
+    reviewerProfile,
+  );
 }

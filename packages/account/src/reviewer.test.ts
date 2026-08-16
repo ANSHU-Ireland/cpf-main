@@ -20,22 +20,33 @@ const actor: Actor = { userId: 'user-1', tenantId: 'tenant-1', roles: [] };
 
 const profile: ReviewerProfileRecord = {
   userId: 'user-1',
+  displayName: 'Review One',
   expertise: ['ml'],
-  qualifications: ['phd'],
-  languages: ['en'],
-  maxConcurrent: 5,
+  trainingStatus: 'passed',
+  calibrationStatus: 'calibrated',
+  conflictDeclarationRequired: true,
+  maxActiveReviews: 5,
   updatedAt: '',
 };
 const window: ReviewerAvailabilityWindow = {
   id: 'w1',
-  dayOfWeek: 1,
-  startTime: '09:00',
-  endTime: '17:00',
+  availableFrom: '2026-08-17T09:00:00.000Z',
+  availableTo: '2026-08-17T17:00:00.000Z',
+  capacity: 4,
+  status: 'available',
+  note: null,
 };
 const availabilityPage: ReviewerAvailabilityPage = { items: [window], nextCursor: null, total: 1 };
 const trainingPage: ReviewerTrainingPage = {
   items: [
-    { id: 't1', moduleCode: 'bias-101', status: 'completed', completedAt: '', expiresAt: null },
+    {
+      id: 't1',
+      trainingType: 'bias-101',
+      materialVersion: '1',
+      status: 'passed',
+      completedAt: '',
+      expiresAt: null,
+    },
   ],
   nextCursor: null,
   total: 1,
@@ -63,26 +74,47 @@ describe('parsers', () => {
     expect(parseReviewerListQuery({ limit: 101 }).ok).toBe(false);
   });
   it('parseReviewerProfileUpdate validates fields', () => {
-    expect(parseReviewerProfileUpdate({ expertise: ['ml'], maxConcurrent: 3 }).ok).toBe(true);
+    expect(parseReviewerProfileUpdate({ expertise: ['ml'], maxActiveReviews: 3 }).ok).toBe(true);
     expect(parseReviewerProfileUpdate({}).ok).toBe(false);
-    expect(parseReviewerProfileUpdate({ maxConcurrent: -1 }).ok).toBe(false);
+    expect(parseReviewerProfileUpdate({ maxActiveReviews: -1 }).ok).toBe(false);
     expect(parseReviewerProfileUpdate({ nope: 1 }).ok).toBe(false);
   });
   it('parseAvailabilityReplace validates windows', () => {
     expect(
       parseAvailabilityReplace({
-        windows: [{ dayOfWeek: 1, startTime: '09:00', endTime: '17:00' }],
+        windows: [
+          {
+            availableFrom: '2026-08-17T09:00:00Z',
+            availableTo: '2026-08-17T17:00:00Z',
+            capacity: 4,
+            status: 'available',
+          },
+        ],
       }).ok,
     ).toBe(true);
     expect(parseAvailabilityReplace({ windows: 'x' }).ok).toBe(false);
     expect(
       parseAvailabilityReplace({
-        windows: [{ dayOfWeek: 9, startTime: '09:00', endTime: '17:00' }],
+        windows: [
+          {
+            availableFrom: 'invalid',
+            availableTo: '2026-08-17T17:00:00Z',
+            capacity: 4,
+            status: 'available',
+          },
+        ],
       }).ok,
     ).toBe(false);
     expect(
       parseAvailabilityReplace({
-        windows: [{ dayOfWeek: 1, startTime: '17:00', endTime: '09:00' }],
+        windows: [
+          {
+            availableFrom: '2026-08-17T17:00:00Z',
+            availableTo: '2026-08-17T09:00:00Z',
+            capacity: 4,
+            status: 'available',
+          },
+        ],
       }).ok,
     ).toBe(false);
   });
@@ -100,9 +132,11 @@ describe('reviewer operations', () => {
     expect(denied.ok === false && denied.status).toBe(403);
   });
   it('updateReviewerProfile returns the profile', async () => {
-    const ok = await updateReviewerProfile(repo(), actor, { maxConcurrent: 3 });
-    expect(ok.ok && ok.profile.maxConcurrent).toBe(5);
-    const denied = await updateReviewerProfile({ ...repo(), ...deny }, actor, { maxConcurrent: 3 });
+    const ok = await updateReviewerProfile(repo(), actor, { maxActiveReviews: 3 });
+    expect(ok.ok && ok.profile.maxActiveReviews).toBe(5);
+    const denied = await updateReviewerProfile({ ...repo(), ...deny }, actor, {
+      maxActiveReviews: 3,
+    });
     expect(denied.ok === false && denied.status).toBe(403);
   });
   it('listReviewerAvailability returns a page', async () => {
@@ -111,7 +145,14 @@ describe('reviewer operations', () => {
   });
   it('replaceReviewerAvailability returns windows', async () => {
     const ok = await replaceReviewerAvailability(repo(), actor, {
-      windows: [{ dayOfWeek: 1, startTime: '09:00', endTime: '17:00' }],
+      windows: [
+        {
+          availableFrom: '2026-08-17T09:00:00Z',
+          availableTo: '2026-08-17T17:00:00Z',
+          capacity: 4,
+          status: 'available',
+        },
+      ],
     });
     expect(ok.ok && ok.windows.length).toBe(1);
   });

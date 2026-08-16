@@ -1,21 +1,20 @@
-import { NextResponse } from 'next/server';
-import { operationsStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const { reason } = body;
-
-  if (!reason?.trim() || reason.trim().length < 20) {
-    return NextResponse.json({ error: 'reason must be at least 20 characters' }, { status: 422 });
-  }
-
-  await operationsStore.activateKillSwitch(reason.trim());
-  return NextResponse.json({ success: true });
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Kill-switch contract is missing',
+    detail:
+      'A platform-wide kill switch is consequential and cannot be simulated without an approved API, threat model and dual-control policy.',
+    requirementIds: ['OPS-02', 'FR-SEC-15'],
+  });
 }
 
-export async function DELETE() {
-  await operationsStore.deactivateKillSwitch();
-  return NextResponse.json({ success: true });
+export function POST(request: Request): Response {
+  return gap(request);
+}
+
+export function DELETE(request: Request): Response {
+  return gap(request);
 }

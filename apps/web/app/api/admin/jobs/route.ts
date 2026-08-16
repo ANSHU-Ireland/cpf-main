@@ -1,4 +1,5 @@
-import { adminStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { job, type PlatformJob } from '../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +8,11 @@ interface JobBody {
   readonly action?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(adminStore.getJobs());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformJob[]; total: number }, unknown>(
+    { request, path: '/admin/jobs', method: 'GET' },
+    (data) => ({ items: data.items.map(job), total: data.total }),
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -19,16 +23,18 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
   const id = typeof payload.id === 'string' ? payload.id : '';
-  const action = payload.action;
-  if (id.length === 0) {
-    return Response.json({ error: 'A job id is required.' }, { status: 422 });
+  if (id === '' || (payload.action !== 'retry' && payload.action !== 'cancel')) {
+    return Response.json(
+      { error: 'A job id and retry or cancel action are required.' },
+      { status: 422 },
+    );
   }
-  if (action !== 'retry' && action !== 'cancel') {
-    return Response.json({ error: 'Action must be retry or cancel.' }, { status: 422 });
-  }
-  const updated = adminStore.actOnJob(id, action);
-  if (updated === null) {
-    return Response.json({ error: 'Job not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
+  return projectPlatform<PlatformJob, unknown>(
+    {
+      request,
+      path: `/admin/jobs/${encodeURIComponent(id)}/${payload.action}`,
+      method: 'POST',
+    },
+    job,
+  );
 }

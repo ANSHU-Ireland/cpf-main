@@ -42,12 +42,10 @@ function fmt(iso: string): string {
 export default function SubscriptionPage(): React.JSX.Element {
   const headingId = useId();
   const planId = useId();
-  const seatsId = useId();
   const params = useParams<{ id: string }>();
   const load = useCallback(() => apiClient.getSubscription(params.id), [params.id]);
   const { state, reload, setData } = useAsync<SubscriptionView>(load);
   const [plan, setPlan] = useState('');
-  const [seats, setSeats] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,14 +53,9 @@ export default function SubscriptionPage(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const updated = await apiClient.updateSubscription(
-        params.id,
-        plan.trim(),
-        Number.parseInt(seats, 10),
-      );
+      const updated = await apiClient.updateSubscription(params.id, plan.trim());
       setData(updated);
       setPlan('');
-      setSeats('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not update the subscription.');
     } finally {
@@ -101,11 +94,15 @@ export default function SubscriptionPage(): React.JSX.Element {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
                   <span style={{ color: 'var(--color-muted)' }}>Effective from</span>
-                  <span style={{ fontWeight: 600 }}>{fmt(data.effectiveFrom)}</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {data.effectiveFrom === null ? 'Not active' : fmt(data.effectiveFrom)}
+                  </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
                   <span style={{ color: 'var(--color-muted)' }}>Renews</span>
-                  <span style={{ fontWeight: 600 }}>{fmt(data.renewsAt)}</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {data.renewsAt === null ? 'No scheduled end' : fmt(data.renewsAt)}
+                  </span>
                 </div>
               </div>
             </Card>
@@ -135,35 +132,13 @@ export default function SubscriptionPage(): React.JSX.Element {
                     style={fieldStyle}
                   />
                 </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'calc(var(--space-unit) * 1)',
-                  }}
-                >
-                  <label htmlFor={seatsId} style={{ fontWeight: 600 }}>
-                    Seat limit
-                  </label>
-                  <input
-                    id={seatsId}
-                    type="number"
-                    min={1}
-                    value={seats}
-                    onChange={(e) => setSeats(e.target.value)}
-                    style={fieldStyle}
-                  />
-                </div>
                 {error ? (
                   <p role="alert" style={{ margin: 0, color: 'var(--color-red)' }}>
                     {error}
                   </p>
                 ) : null}
                 <div>
-                  <Button
-                    disabled={busy || plan.trim().length < 2 || seats.trim().length === 0}
-                    onClick={() => void update()}
-                  >
+                  <Button disabled={busy || plan.trim().length < 2} onClick={() => void update()}>
                     {busy ? 'Saving…' : 'Update subscription'}
                   </Button>
                 </div>

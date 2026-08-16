@@ -7,7 +7,11 @@ import type { NoticeListResult } from './notice-types.js';
 
 export interface NoticeRepository {
   listNotices(actor: Actor, applicationId: string | null): Promise<NoticeListResult>;
-  createNotice(actor: Actor, applicationId: string, input: NoticeCreate): Promise<NoticeRecord>;
+  createNotice(
+    actor: Actor,
+    applicationId: string | null,
+    input: NoticeCreate,
+  ): Promise<NoticeRecord | null>;
 }
 
 interface NoticeRow {
@@ -20,6 +24,8 @@ interface NoticeRow {
 }
 
 const COLUMNS = 'id, application_id, notice_type, notice_version, acknowledged_at, created_at';
+const QUALIFIED_COLUMNS =
+  'acknowledgement.id, acknowledgement.application_id, acknowledgement.notice_type, acknowledgement.notice_version, acknowledgement.acknowledged_at, acknowledgement.created_at';
 
 function toRecord(row: NoticeRow): NoticeRecord {
   return {
@@ -50,12 +56,19 @@ export class PgNoticeRepository implements NoticeRepository {
   async listNotices(actor: Actor, applicationId: string | null): Promise<NoticeListResult> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const res = await client.query<NoticeRow>(
-        `SELECT ${COLUMNS}
-           FROM hiring.notice_acknowledgements
-          WHERE tenant_id = $1
-            AND ($2::uuid IS NULL OR application_id = $2)
-          ORDER BY acknowledged_at DESC`,
-        [actor.tenantId, applicationId],
+        `SELECT ${QUALIFIED_COLUMNS}
+           FROM hiring.notice_acknowledgements AS acknowledgement
+           JOIN hiring.applications AS application
+             ON application.id = acknowledgement.application_id
+            AND application.tenant_id = acknowledgement.tenant_id
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE acknowledgement.tenant_id = $1
+            AND ($2::uuid IS NULL OR acknowledgement.application_id = $2)
+            AND ($3::boolean = false OR candidate.user_id = $4)
+          ORDER BY acknowledgement.acknowledged_at DESC`,
+        [actor.tenantId, applicationId, actor.roles.includes('candidate'), actor.userId],
       );
       return { items: res.rows.map(toRecord), total: res.rows.length };
     });
@@ -63,20 +76,38 @@ export class PgNoticeRepository implements NoticeRepository {
 
   async createNotice(
     actor: Actor,
-    applicationId: string,
+    applicationId: string | null,
     input: NoticeCreate,
-  ): Promise<NoticeRecord> {
+  ): Promise<NoticeRecord | null> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const res = await client.query<NoticeRow>(
-        `INSERT INTO hiring.notice_acknowledgements (tenant_id, application_id, notice_type, notice_version, acknowledged_at)
-           VALUES ($1, $2, $3, $4, now())
+        `INSERT INTO hiring.notice_acknowledgements
+           (tenant_id, application_id, notice_type, notice_version, acknowledged_at)
+         SELECT $1, application.id, $3, $4, now()
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE application.tenant_id = $1
+            AND ($2::uuid IS NULL OR application.id = $2)
+            AND ($5::boolean = false OR candidate.user_id = $6)
+            AND application.status NOT IN ('withdrawn', 'cancelled')
+          ORDER BY application.created_at DESC
+          LIMIT 1
          ON CONFLICT (application_id, notice_type, notice_version) DO UPDATE SET acknowledged_at = now()
          RETURNING ${COLUMNS}`,
-        [actor.tenantId, applicationId, input.noticeType, input.noticeVersion],
+        [
+          actor.tenantId,
+          applicationId,
+          input.noticeType,
+          input.noticeVersion,
+          actor.roles.includes('candidate'),
+          actor.userId,
+        ],
       );
 
       const row = res.rows[0];
-      if (row === undefined) throw new Error('notice row missing after insert');
+      if (row === undefined) return null;
 
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
@@ -86,7 +117,7 @@ export class PgNoticeRepository implements NoticeRepository {
         resourceType: 'notice_acknowledgement',
         resourceId: row.id,
         outcome: 'success',
-        metadata: { applicationId, noticeType: input.noticeType },
+        metadata: { applicationId: row.application_id, noticeType: input.noticeType },
       });
 
       return toRecord(row);

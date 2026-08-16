@@ -18,6 +18,7 @@ function service(overrides: Partial<CampaignDashboardService> = {}): CampaignDas
           campaignId: VALID_ID,
           totalApplications: 5,
           totalReviewers: 2,
+          unassignedReviews: 1,
           averageScore: 70,
           statusBreakdown: {},
         },

@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../../../components/PageHeader';
 import { Card } from '../../../../components/Card';
@@ -51,7 +50,7 @@ export default function AmendPage({ params }: { params: { id: string } }): React
       <PageHeader
         headingId={headingId}
         title="Review amendment"
-        description="Reopen a submitted review to correct it. The reason is recorded in the audit trail and a fresh receipt is issued on resubmission."
+        description="Request a controlled correction to a submitted review. The reason is recorded in the audit trail and must be approved before the locked scorecard can change."
       />
       <Card>
         {done ? (
@@ -63,26 +62,9 @@ export default function AmendPage({ params }: { params: { id: string } }): React
             }}
           >
             <p role="status" style={{ margin: 0, color: 'var(--color-sage)' }}>
-              The review has been reopened for amendment. Update your scorecard, then submit again.
+              The amendment request has been recorded. The scorecard remains locked until an
+              authorised approver accepts the request.
             </p>
-            <div>
-              <Link
-                href={`/review/assignment/${id}/scorecard`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  minHeight: 'var(--target-min)',
-                  padding: '0 calc(var(--space-unit) * 4)',
-                  borderRadius: 'var(--radius-control)',
-                  border: '1px solid var(--color-blue)',
-                  color: 'var(--color-blue)',
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                }}
-              >
-                Go to scorecard
-              </Link>
-            </div>
           </div>
         ) : (
           <div

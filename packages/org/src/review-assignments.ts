@@ -89,6 +89,11 @@ export interface ReviewAssignmentRepository {
     id: string,
     input: AssignmentDeclineInput,
   ): Promise<ReviewAssignmentRecord | null>;
+  setAssignmentConflict(
+    actor: Actor,
+    id: string,
+    input: AssignmentConflictInput,
+  ): Promise<ReviewAssignmentRecord | null>;
   addAnnotation(
     actor: Actor,
     id: string,
@@ -103,6 +108,11 @@ export interface ReviewAssignmentRepository {
 
 export interface AssignmentDeclineInput {
   readonly reason: string;
+}
+
+export interface AssignmentConflictInput {
+  readonly declared: boolean;
+  readonly reason?: string;
 }
 
 export interface AssignmentAnnotationInput {
@@ -138,6 +148,24 @@ export function parseAssignmentDecline(
   if (typeof obj['reason'] !== 'string' || obj['reason'].length === 0)
     return { ok: false, errors: ['reason required'] };
   return { ok: true, value: { reason: obj['reason'] } };
+}
+
+export function parseAssignmentConflict(
+  raw: unknown,
+): { ok: true; value: AssignmentConflictInput } | { ok: false; errors: string[] } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.declared !== 'boolean') {
+    return { ok: false, errors: ['declared must be boolean'] };
+  }
+  const reason = typeof obj.reason === 'string' ? obj.reason.trim() : '';
+  if (obj.declared && reason.length < 3) {
+    return { ok: false, errors: ['reason required when declaring a conflict'] };
+  }
+  return {
+    ok: true,
+    value: reason === '' ? { declared: obj.declared } : { declared: obj.declared, reason },
+  };
 }
 
 export function parseAssignmentAnnotation(
@@ -291,6 +319,18 @@ export async function declineReviewAssignment(
 ): Promise<AcceptAssignmentResult> {
   if (!canWriteAssignment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
   const record = await deps.repository.declineAssignment(actor, id, input);
+  if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
+  return { ok: true, assignment: record };
+}
+
+export async function setReviewAssignmentConflict(
+  deps: ReviewAssignmentDeps,
+  actor: Actor,
+  id: string,
+  input: AssignmentConflictInput,
+): Promise<AcceptAssignmentResult> {
+  if (!canWriteAssignment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.setAssignmentConflict(actor, id, input);
   if (record === null) return { ok: false, status: 404, reason: 'Assignment not found.' };
   return { ok: true, assignment: record };
 }

@@ -15,12 +15,12 @@ export interface AccommodationListResult {
 }
 
 export interface AccommodationRepository {
-  listAccommodations(actor: Actor, applicationId: string): Promise<AccommodationListResult>;
+  listAccommodations(actor: Actor, applicationId: string | null): Promise<AccommodationListResult>;
   createAccommodation(
     actor: Actor,
-    applicationId: string,
+    applicationId: string | null,
     input: AccommodationCreate,
-  ): Promise<AccommodationRecord>;
+  ): Promise<AccommodationRecord | null>;
   updateAccommodationStatus(
     actor: Actor,
     id: string,
@@ -42,6 +42,8 @@ interface AccommodationRow {
 
 const COLUMNS =
   'id, application_id, request_summary, operational_adjustments, status, reviewed_by, reviewed_at, created_at, updated_at';
+const QUALIFIED_COLUMNS =
+  'accommodation.id, accommodation.application_id, accommodation.request_summary, accommodation.operational_adjustments, accommodation.status, accommodation.reviewed_by, accommodation.reviewed_at, accommodation.created_at, accommodation.updated_at';
 
 function toRecord(row: AccommodationRow): AccommodationRecord {
   return {
@@ -72,14 +74,25 @@ export class PgAccommodationRepository implements AccommodationRepository {
       : { tenantId: actor.tenantId, userId: actor.userId, role: this.#role };
   }
 
-  async listAccommodations(actor: Actor, applicationId: string): Promise<AccommodationListResult> {
+  async listAccommodations(
+    actor: Actor,
+    applicationId: string | null,
+  ): Promise<AccommodationListResult> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const res = await client.query<AccommodationRow>(
-        `SELECT ${COLUMNS}
-           FROM hiring.accommodations
-          WHERE tenant_id = $1 AND application_id = $2
-          ORDER BY created_at DESC`,
-        [actor.tenantId, applicationId],
+        `SELECT ${QUALIFIED_COLUMNS}
+           FROM hiring.accommodations AS accommodation
+           JOIN hiring.applications AS application
+             ON application.id = accommodation.application_id
+            AND application.tenant_id = accommodation.tenant_id
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE accommodation.tenant_id = $1
+            AND ($2::uuid IS NULL OR accommodation.application_id = $2)
+            AND ($3::boolean = false OR candidate.user_id = $4)
+          ORDER BY accommodation.created_at DESC`,
+        [actor.tenantId, applicationId, actor.roles.includes('candidate'), actor.userId],
       );
       return { items: res.rows.map(toRecord), total: res.rows.length };
     });
@@ -87,24 +100,37 @@ export class PgAccommodationRepository implements AccommodationRepository {
 
   async createAccommodation(
     actor: Actor,
-    applicationId: string,
+    applicationId: string | null,
     input: AccommodationCreate,
-  ): Promise<AccommodationRecord> {
+  ): Promise<AccommodationRecord | null> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const res = await client.query<AccommodationRow>(
-        `INSERT INTO hiring.accommodations (tenant_id, application_id, request_summary, operational_adjustments, status)
-           VALUES ($1, $2, $3, $4, 'requested')
+        `INSERT INTO hiring.accommodations
+           (tenant_id, application_id, request_summary, operational_adjustments, status)
+         SELECT $1, application.id, $3, $4, 'requested'
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE application.tenant_id = $1
+            AND ($2::uuid IS NULL OR application.id = $2)
+            AND ($5::boolean = false OR candidate.user_id = $6)
+            AND application.status NOT IN ('withdrawn', 'cancelled')
+          ORDER BY application.created_at DESC
+          LIMIT 1
          RETURNING ${COLUMNS}`,
         [
           actor.tenantId,
           applicationId,
           input.requestSummary,
           JSON.stringify(input.operationalAdjustments ?? {}),
+          actor.roles.includes('candidate'),
+          actor.userId,
         ],
       );
 
       const row = res.rows[0];
-      if (row === undefined) throw new Error('accommodation row missing after insert');
+      if (row === undefined) return null;
 
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
@@ -114,7 +140,7 @@ export class PgAccommodationRepository implements AccommodationRepository {
         resourceType: 'accommodation',
         resourceId: row.id,
         outcome: 'success',
-        metadata: { applicationId },
+        metadata: { applicationId: row.application_id },
       });
 
       return toRecord(row);
@@ -128,11 +154,21 @@ export class PgAccommodationRepository implements AccommodationRepository {
   ): Promise<AccommodationRecord | null> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const res = await client.query<AccommodationRow>(
-        `UPDATE hiring.accommodations
-            SET status = $3, reviewed_by = $4, reviewed_at = now(), updated_at = now()
-          WHERE tenant_id = $1 AND id = $2
-         RETURNING ${COLUMNS}`,
-        [actor.tenantId, id, input.status, actor.userId],
+        `UPDATE hiring.accommodations AS accommodation
+            SET status = $3,
+                reviewed_by = CASE WHEN $5 THEN accommodation.reviewed_by ELSE $4 END,
+                reviewed_at = CASE WHEN $5 THEN accommodation.reviewed_at ELSE now() END,
+                updated_at = now()
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE accommodation.tenant_id = $1
+            AND accommodation.id = $2
+            AND application.id = accommodation.application_id
+            AND ($5::boolean = false OR candidate.user_id = $4)
+         RETURNING ${QUALIFIED_COLUMNS}`,
+        [actor.tenantId, id, input.status, actor.userId, actor.roles.includes('candidate')],
       );
 
       const row = res.rows[0];

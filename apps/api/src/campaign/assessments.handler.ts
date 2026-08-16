@@ -77,7 +77,11 @@ export async function handlePostAssessment(
   req: { actor: Actor; body: unknown },
 ): Promise<HttpResponse> {
   const correlationId = ensureCorrelationId();
-  const parsed = parseAssessmentCreate(req.body);
+  const body =
+    req.body !== null && typeof req.body === 'object' && !Array.isArray(req.body)
+      ? { ...(req.body as Record<string, unknown>), ownerUserId: req.actor.userId }
+      : req.body;
+  const parsed = parseAssessmentCreate(body);
   if (!parsed.ok)
     return problemResponse({
       status: 422,

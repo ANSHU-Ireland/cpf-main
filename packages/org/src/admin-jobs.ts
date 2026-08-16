@@ -11,6 +11,7 @@ export interface JobRecord {
   readonly id: string;
   readonly type: string;
   readonly status: JobStatus;
+  readonly attemptCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

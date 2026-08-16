@@ -1,4 +1,13 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import {
+  callPlatform,
+  platformErrorResponse,
+  projectPlatform,
+} from '../../../lib/platform-api.server';
+import {
+  readiness,
+  readinessUpdate,
+  type PlatformReadiness,
+} from '../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -6,8 +15,11 @@ interface ReadinessBody {
   readonly itemId?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getReadiness());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<PlatformReadiness, unknown>(
+    { request, path: '/organization/deployer-readiness', method: 'GET' },
+    readiness,
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -18,9 +30,33 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
   const itemId = typeof payload.itemId === 'string' ? payload.itemId : '';
-  const updated = employerStore.resolveReadiness(itemId);
-  if (updated === null) {
-    return Response.json({ error: 'Readiness item not found.' }, { status: 404 });
+  try {
+    const current = await callPlatform<PlatformReadiness>({
+      request,
+      path: '/organization/deployer-readiness',
+      method: 'GET',
+    });
+    const body = readinessUpdate(current.data, itemId);
+    if (body === null) {
+      return Response.json({ error: 'Readiness item not found.' }, { status: 404 });
+    }
+    const updated = await callPlatform<PlatformReadiness>({
+      request,
+      path: '/organization/deployer-readiness',
+      method: 'PUT',
+      body,
+      correlationId: current.correlationId,
+    });
+    const projected = readiness(updated.data).items.find((item) => item.id === itemId);
+    if (projected === undefined) {
+      return Response.json({ error: 'Readiness item not found.' }, { status: 404 });
+    }
+    return Response.json(projected, {
+      headers: { 'x-correlation-id': updated.correlationId },
+    });
+  } catch (error) {
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
+    throw error;
   }
-  return Response.json(updated);
 }

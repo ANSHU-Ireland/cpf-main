@@ -1,14 +1,21 @@
-import { reviewStore } from '../../../../lib/synthetic.server';
+import { projectPlatform } from '../../../../lib/platform-api.server';
+import {
+  reviewerAssignment,
+  type PlatformReviewAssignment,
+} from '../../../../lib/review-api.server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  const assignment = reviewStore.getAssignment(params.id);
-  if (assignment === null) {
-    return Response.json({ error: 'Assignment not found.' }, { status: 404 });
-  }
-  return Response.json(assignment);
+  return projectPlatform<PlatformReviewAssignment, unknown>(
+    {
+      request,
+      path: `/review-assignments/${encodeURIComponent(params.id)}`,
+      method: 'GET',
+    },
+    reviewerAssignment,
+  );
 }

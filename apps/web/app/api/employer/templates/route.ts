@@ -1,4 +1,5 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { template, templates, type PlatformTemplate } from '../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +8,11 @@ interface TemplateBody {
   readonly subject?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getTemplates());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformTemplate[]; total: number }, unknown>(
+    { request, path: '/notification-templates', method: 'GET' },
+    templates,
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -20,11 +24,22 @@ export async function POST(request: Request): Promise<Response> {
   }
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
   const subject = typeof payload.subject === 'string' ? payload.subject.trim() : '';
-  if (name.length < 2) {
-    return Response.json({ error: 'A template name is required.' }, { status: 422 });
+  if (name.length < 2 || subject.length < 2) {
+    return Response.json({ error: 'A template name and subject are required.' }, { status: 422 });
   }
-  if (subject.length < 2) {
-    return Response.json({ error: 'A subject line is required.' }, { status: 422 });
-  }
-  return Response.json(employerStore.createTemplate(name, subject), { status: 201 });
+  return projectPlatform<PlatformTemplate, unknown>(
+    {
+      request,
+      path: '/notification-templates',
+      method: 'POST',
+      body: {
+        templateCode: name,
+        channel: 'email',
+        subject,
+        bodyHtml: '<p>{{message}}</p>',
+      },
+    },
+    template,
+    201,
+  );
 }

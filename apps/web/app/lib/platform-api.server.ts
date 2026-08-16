@@ -50,6 +50,10 @@ export class PlatformApiError extends Error {
   }
 }
 
+export function platformErrorResponse(error: unknown): Response | null {
+  return error instanceof PlatformApiError ? error.toResponse() : null;
+}
+
 function statusTitle(status: number): string {
   switch (status) {
     case 400:

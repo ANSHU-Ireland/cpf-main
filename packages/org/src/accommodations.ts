@@ -97,7 +97,7 @@ function checkWrite(actor: Actor) {
 export async function listAccommodations(
   deps: AccommodationDeps,
   actor: Actor,
-  applicationId: string,
+  applicationId: string | null,
 ): Promise<Result<{ items: readonly unknown[]; total: number }>> {
   const decision = checkRead(actor);
   if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
@@ -108,12 +108,13 @@ export async function listAccommodations(
 export async function createAccommodation(
   deps: AccommodationDeps,
   actor: Actor,
-  applicationId: string,
+  applicationId: string | null,
   input: AccommodationCreate,
 ): Promise<Result<{ accommodation: unknown }>> {
   const decision = checkWrite(actor);
   if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
   const record = await deps.repository.createAccommodation(actor, applicationId, input);
+  if (record === null) return { ok: false, status: 404, reason: 'application_not_found' };
   return { ok: true, accommodation: record };
 }
 

@@ -31,9 +31,13 @@ const fieldStyle: React.CSSProperties = {
 export default function PromptsPage(): React.JSX.Element {
   const headingId = useId();
   const nameId = useId();
+  const purposeId = useId();
+  const bodyId = useId();
   const load = useCallback(() => apiClient.getPromptVersions(), []);
   const { state, reload, setData } = useAsync<Collection<PromptVersionView>>(load);
-  const [name, setName] = useState('');
+  const [promptCode, setPromptCode] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +45,11 @@ export default function PromptsPage(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const created = await apiClient.createPromptVersion(name.trim());
+      const created = await apiClient.createPromptVersion(
+        promptCode.trim(),
+        purpose.trim(),
+        body.trim(),
+      );
       // This is immutable: the new version supersedes the prior active one.
       const updated = current.items.map((p) =>
         p.name === created.name && p.status === 'active'
@@ -49,7 +57,9 @@ export default function PromptsPage(): React.JSX.Element {
           : p,
       );
       setData({ items: [created, ...updated], total: current.total + 1 });
-      setName('');
+      setPromptCode('');
+      setPurpose('');
+      setBody('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not create the prompt version.');
     } finally {
@@ -87,12 +97,35 @@ export default function PromptsPage(): React.JSX.Element {
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <label htmlFor={nameId} style={{ fontWeight: 600 }}>
-                    Prompt name
+                    Prompt code
                   </label>
                   <input
                     id={nameId}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={promptCode}
+                    onChange={(e) => setPromptCode(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={purposeId} style={{ fontWeight: 600 }}>
+                    Intended purpose
+                  </label>
+                  <input
+                    id={purposeId}
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={bodyId} style={{ fontWeight: 600 }}>
+                    System prompt
+                  </label>
+                  <textarea
+                    id={bodyId}
+                    rows={6}
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
                     style={fieldStyle}
                   />
                 </div>
@@ -103,7 +136,12 @@ export default function PromptsPage(): React.JSX.Element {
                 ) : null}
                 <div>
                   <Button
-                    disabled={busy || name.trim().length < 2}
+                    disabled={
+                      busy ||
+                      promptCode.trim().length < 2 ||
+                      purpose.trim().length < 4 ||
+                      body.trim().length < 8
+                    }
                     onClick={() => void createVersion(data)}
                   >
                     {busy ? 'Creating…' : 'Create version'}

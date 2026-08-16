@@ -6,6 +6,7 @@ import {
   handlePostAcceptAssignment,
   handlePostStopAssignmentAi,
   handlePostDeclineAssignment,
+  handlePutAssignmentConflict,
   handlePostAssignmentAnnotation,
   handlePostAssignmentClarification,
   type ReviewAssignmentService,
@@ -39,6 +40,7 @@ function service(overrides: Partial<ReviewAssignmentService> = {}): ReviewAssign
     stopAi: () => Promise.resolve({ ok: true as const, assignment: dto }),
     decline: () =>
       Promise.resolve({ ok: true as const, assignment: { ...dto, status: 'cancelled' as const } }),
+    setConflict: () => Promise.resolve({ ok: true as const, assignment: dto }),
     addAnnotation: () =>
       Promise.resolve({
         ok: true as const,
@@ -130,6 +132,17 @@ describe('handlePostDeclineAssignment', () => {
       actor,
       assignmentId: VALID_ID,
       body: { reason: 'x' },
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('handlePutAssignmentConflict', () => {
+  it('routes conflict declarations separately from decline', async () => {
+    const res = await handlePutAssignmentConflict(service(), {
+      actor,
+      assignmentId: VALID_ID,
+      body: { declared: true, reason: 'Prior relationship' },
     });
     expect(res.status).toBe(200);
   });

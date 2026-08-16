@@ -1,4 +1,8 @@
-import { reviewStore } from '../../../../../lib/synthetic.server';
+import { mutateThenProject } from '../../../../../lib/platform-api.server';
+import {
+  reviewerAssignment,
+  type PlatformReviewAssignment,
+} from '../../../../../lib/review-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,9 +15,6 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (reviewStore.getAssignment(params.id) === null) {
-    return Response.json({ error: 'Assignment not found.' }, { status: 404 });
-  }
   let payload: RespondBody;
   try {
     payload = (await request.json()) as RespondBody;
@@ -31,9 +32,20 @@ export async function POST(
       { status: 422 },
     );
   }
-  const updated = reviewStore.respond(params.id, kind);
-  if (updated === null) {
-    return Response.json({ error: 'Assignment not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
+  const id = encodeURIComponent(params.id);
+  return mutateThenProject<PlatformReviewAssignment, unknown>({
+    mutation: {
+      request,
+      path: `/review-assignments/${id}/${kind}`,
+      method: kind === 'conflict' ? 'PUT' : 'POST',
+      body:
+        kind === 'accept'
+          ? {}
+          : kind === 'conflict'
+            ? { declared: true, reason: note }
+            : { reason: note },
+    },
+    read: { request, path: `/review-assignments/${id}`, method: 'GET' },
+    project: reviewerAssignment,
+  });
 }

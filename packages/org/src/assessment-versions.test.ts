@@ -79,6 +79,8 @@ function verRepo(
   overrides: Partial<AssessmentVersionRepository> = {},
 ): AssessmentVersionRepository {
   return {
+    createVersionForAssessment: () =>
+      Promise.resolve({ ...version, id: 'new-ver', status: 'draft' }),
     activateVersion: () => Promise.resolve(version),
     previewVersion: () => Promise.resolve(preview),
     duplicateVersion: () => Promise.resolve({ ...version, id: 'new-ver', status: 'draft' }),

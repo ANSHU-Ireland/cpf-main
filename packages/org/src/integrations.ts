@@ -57,10 +57,25 @@ export function parseIntegrationCreate(
     errors.push('connectionType required');
   if (typeof obj['provider'] !== 'string' || obj['provider'].length === 0)
     errors.push('provider required');
+  if (
+    obj.config !== undefined &&
+    (obj.config === null || typeof obj.config !== 'object' || Array.isArray(obj.config))
+  ) {
+    errors.push('config must be an object');
+  }
   if (errors.length > 0) return { ok: false, errors };
   return {
     ok: true,
-    value: { connectionType: obj['connectionType'] as string, provider: obj['provider'] as string },
+    value: {
+      connectionType: obj['connectionType'] as string,
+      provider: obj['provider'] as string,
+      ...(obj.config !== undefined &&
+      obj.config !== null &&
+      typeof obj.config === 'object' &&
+      !Array.isArray(obj.config)
+        ? { config: obj.config as Record<string, unknown> }
+        : {}),
+    },
   };
 }
 

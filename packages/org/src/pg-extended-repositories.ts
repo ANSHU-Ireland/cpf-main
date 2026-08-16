@@ -4,9 +4,10 @@
  * and satisfies its interface exactly (field names verified against the domain modules).
  */
 import { createHash, randomUUID } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
 import { PgAuditWriter } from '@cpf/audit';
+import { AesGcmCandidateImportCodec } from './candidate-import-repository.js';
 import type { Actor } from './types.js';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -44,6 +45,12 @@ interface TenantRow {
   status: string;
   data_region: string;
   plan_id: string | null;
+  plan_name: string | null;
+  staff_count: string;
+  seats_used: string;
+  seats_limit: number;
+  subscription_starts_at: Date | null;
+  subscription_ends_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -55,6 +62,12 @@ function toTenant(r: TenantRow): TenantRecord {
     status: r.status as TenantRecord['status'],
     dataRegion: r.data_region,
     subscriptionPlanId: r.plan_id,
+    subscriptionPlanName: r.plan_name,
+    staffCount: Number(r.staff_count),
+    seatsUsed: Number(r.seats_used),
+    seatsLimit: r.seats_limit,
+    subscriptionStartsAt: r.subscription_starts_at?.toISOString() ?? null,
+    subscriptionEndsAt: r.subscription_ends_at?.toISOString() ?? null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
   };
@@ -63,16 +76,48 @@ function toTenant(r: TenantRow): TenantRecord {
 export class PgTenantRepository implements TenantRepository {
   constructor(private readonly pool: Pool) {}
 
+  private readonly columns = `o.id, o.slug, o.legal_name, o.status, o.data_region,
+    subscription.plan_id, plan.name AS plan_name,
+    COALESCE(member_counts.staff_count, 0)::text AS staff_count,
+    COALESCE(member_counts.seats_used, 0)::text AS seats_used,
+    COALESCE(NULLIF(subscription.overrides->>'seatLimit', '')::integer,
+             NULLIF(plan.entitlements->>'seatLimit', '')::integer, 0) AS seats_limit,
+    subscription.starts_at AS subscription_starts_at,
+    subscription.ends_at AS subscription_ends_at,
+    o.created_at, o.updated_at`;
+
+  private readonly joins = `
+    LEFT JOIN LATERAL (
+      SELECT s.plan_id, s.overrides, s.starts_at, s.ends_at
+        FROM tenant.subscriptions s
+       WHERE s.tenant_id = o.id AND s.status IN ('trial', 'active', 'past_due')
+       ORDER BY s.starts_at DESC
+       LIMIT 1
+    ) subscription ON true
+    LEFT JOIN tenant.plans plan ON plan.id = subscription.plan_id
+    LEFT JOIN LATERAL (
+      SELECT count(*) FILTER (WHERE membership.status <> 'revoked') AS staff_count,
+             count(*) FILTER (WHERE membership.status = 'active') AS seats_used
+        FROM iam.memberships membership
+       WHERE membership.tenant_id = o.id
+    ) member_counts ON true`;
+
   async listTenants(_a: Actor): Promise<{ items: readonly TenantRecord[]; total: number }> {
     const r = await this.pool.query<TenantRow>(
-      `SELECT o.id, o.slug, o.legal_name, o.status, o.data_region, s.plan_id, o.created_at, o.updated_at FROM tenant.organizations o LEFT JOIN tenant.subscriptions s ON s.organization_id = o.id AND s.status = 'active' ORDER BY o.created_at DESC LIMIT 200`,
+      `SELECT ${this.columns}
+         FROM tenant.organizations o
+         ${this.joins}
+        ORDER BY o.created_at DESC LIMIT 200`,
     );
     return { items: r.rows.map(toTenant), total: r.rows.length };
   }
 
   async getTenant(_a: Actor, id: string): Promise<TenantRecord | null> {
     const r = await this.pool.query<TenantRow>(
-      `SELECT o.id, o.slug, o.legal_name, o.status, o.data_region, s.plan_id, o.created_at, o.updated_at FROM tenant.organizations o LEFT JOIN tenant.subscriptions s ON s.organization_id = o.id AND s.status = 'active' WHERE o.id = $1`,
+      `SELECT ${this.columns}
+         FROM tenant.organizations o
+         ${this.joins}
+        WHERE o.id = $1`,
       [id],
     );
     return r.rows[0] ? toTenant(r.rows[0]) : null;
@@ -80,7 +125,13 @@ export class PgTenantRepository implements TenantRepository {
 
   async createTenant(_a: Actor, input: TenantCreate): Promise<TenantRecord> {
     const r = await this.pool.query<TenantRow>(
-      `INSERT INTO tenant.organizations (id, slug, legal_name, status, data_region, metadata) VALUES ($1,$2,$3,'draft',$4,'{}'::jsonb) RETURNING id, slug, legal_name, status, data_region, NULL::uuid AS plan_id, created_at, updated_at`,
+      `INSERT INTO tenant.organizations
+         (id, slug, legal_name, display_name, status, data_region)
+       VALUES ($1,$2,$3,$3,'draft',$4)
+       RETURNING id, slug, legal_name, status, data_region, NULL::uuid AS plan_id,
+                 NULL::text AS plan_name, 0::text AS staff_count, 0::text AS seats_used,
+                 0::integer AS seats_limit, NULL::timestamptz AS subscription_starts_at,
+                 NULL::timestamptz AS subscription_ends_at, created_at, updated_at`,
       [randomUUID(), input.slug, input.legalName, input.dataRegion],
     );
     if (!r.rows[0]) throw new Error('tenant row missing');
@@ -102,7 +153,11 @@ export class PgTenantRepository implements TenantRepository {
     sets.push('updated_at = now()');
     params.push(id);
     const r = await this.pool.query<TenantRow>(
-      `UPDATE tenant.organizations SET ${sets.join(',')} WHERE id = $${params.length} RETURNING id, slug, legal_name, status, data_region, NULL::uuid AS plan_id, created_at, updated_at`,
+      `UPDATE tenant.organizations SET ${sets.join(',')} WHERE id = $${params.length}
+       RETURNING id, slug, legal_name, status, data_region, NULL::uuid AS plan_id,
+                 NULL::text AS plan_name, 0::text AS staff_count, 0::text AS seats_used,
+                 0::integer AS seats_limit, NULL::timestamptz AS subscription_starts_at,
+                 NULL::timestamptz AS subscription_ends_at, created_at, updated_at`,
       params,
     );
     return r.rows[0] ? toTenant(r.rows[0]) : null;
@@ -114,7 +169,15 @@ export class PgTenantRepository implements TenantRepository {
     input: TenantStatusChange,
   ): Promise<TenantRecord | null> {
     const r = await this.pool.query<TenantRow>(
-      `UPDATE tenant.organizations SET status = $1, updated_at = now() WHERE id = $2 RETURNING id, slug, legal_name, status, data_region, NULL::uuid AS plan_id, created_at, updated_at`,
+      `UPDATE tenant.organizations
+          SET status = $1, updated_at = now(),
+              suspended_at = CASE WHEN $1 = 'suspended' THEN now() ELSE suspended_at END,
+              terminated_at = CASE WHEN $1 = 'terminated' THEN now() ELSE terminated_at END
+        WHERE id = $2
+      RETURNING id, slug, legal_name, status, data_region, NULL::uuid AS plan_id,
+                NULL::text AS plan_name, 0::text AS staff_count, 0::text AS seats_used,
+                0::integer AS seats_limit, NULL::timestamptz AS subscription_starts_at,
+                NULL::timestamptz AS subscription_ends_at, created_at, updated_at`,
       [input.status, id],
     );
     return r.rows[0] ? toTenant(r.rows[0]) : null;
@@ -130,11 +193,25 @@ export class PgTenantRepository implements TenantRepository {
       [id],
     );
     if (!r.rows[0]) return null;
+    const currentStatus = r.rows[0].status as TenantRecord['status'];
+    const allowedTargets: Readonly<
+      Record<TenantRecord['status'], readonly TenantRecord['status'][]>
+    > = {
+      draft: ['pending_approval', 'terminated'],
+      pending_approval: ['active', 'suspended', 'terminated'],
+      active: ['suspended', 'terminated'],
+      suspended: ['active', 'terminated'],
+      terminated: [],
+    };
+    const allowed =
+      currentStatus === input.status || allowedTargets[currentStatus].includes(input.status);
     return {
-      currentStatus: r.rows[0].status as TenantRecord['status'],
+      currentStatus,
       targetStatus: input.status,
-      allowed: true,
-      effects: [`Status: ${r.rows[0].status} → ${input.status}`],
+      allowed,
+      effects: allowed
+        ? [`Status: ${currentStatus} → ${input.status}`]
+        : [`Transition from ${currentStatus} to ${input.status} is not permitted.`],
     };
   }
 
@@ -143,10 +220,44 @@ export class PgTenantRepository implements TenantRepository {
     id: string,
     input: TenantSubscriptionChange,
   ): Promise<TenantRecord | null> {
-    await this.pool.query(
-      `INSERT INTO tenant.subscriptions (id, organization_id, plan_id, status, started_at) VALUES ($1,$2,$3,'active',now()) ON CONFLICT (organization_id) DO UPDATE SET plan_id=$3, status='active', updated_at=now()`,
-      [randomUUID(), id, input.planId],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const tenant = await client.query<{ id: string }>(
+        'SELECT id FROM tenant.organizations WHERE id = $1 FOR UPDATE',
+        [id],
+      );
+      if (tenant.rows[0] === undefined) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const plan = await client.query<{ id: string }>(
+        `SELECT id FROM tenant.plans WHERE id = $1 AND status = 'active'`,
+        [input.planId],
+      );
+      if (plan.rows[0] === undefined) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query(
+        `UPDATE tenant.subscriptions
+            SET status = 'ended', ends_at = COALESCE(ends_at, now()), updated_at = now()
+          WHERE tenant_id = $1 AND status IN ('trial', 'active', 'past_due')`,
+        [id],
+      );
+      await client.query(
+        `INSERT INTO tenant.subscriptions
+           (id, tenant_id, plan_id, status, starts_at)
+         VALUES ($1,$2,$3,'active',now())`,
+        [randomUUID(), id, input.planId],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
     return this.getTenant(_a, id);
   }
 }
@@ -293,15 +404,22 @@ export class PgPlanRepository implements PlanRepository {
 
   async listPlans(_a: Actor): Promise<{ items: readonly PlanRecord[]; total: number }> {
     const r = await this.pool.query<PlanRow>(
-      `SELECT id, code, display_name AS name, 0 AS price_cents, true AS active, created_at, updated_at FROM tenant.plans ORDER BY created_at DESC`,
+      `SELECT id, code, name,
+              COALESCE(NULLIF(entitlements->>'priceCents', '')::integer, 0) AS price_cents,
+              status = 'active' AS active, created_at, updated_at
+         FROM tenant.plans ORDER BY created_at DESC`,
     );
     return { items: r.rows.map(toPlan), total: r.rows.length };
   }
 
   async createPlan(_a: Actor, input: PlanCreate): Promise<PlanRecord> {
     const r = await this.pool.query<PlanRow>(
-      `INSERT INTO tenant.plans (id, code, display_name, seat_limit) VALUES ($1,$2,$3,100) RETURNING id, code, display_name AS name, 0 AS price_cents, true AS active, created_at, updated_at`,
-      [randomUUID(), input.code, input.name],
+      `INSERT INTO tenant.plans (id, code, name, entitlements, status)
+       VALUES ($1,$2,$3,jsonb_build_object('priceCents',$4),'active')
+       RETURNING id, code, name,
+                 COALESCE(NULLIF(entitlements->>'priceCents', '')::integer, 0) AS price_cents,
+                 status = 'active' AS active, created_at, updated_at`,
+      [randomUUID(), input.code, input.name, input.priceCents],
     );
     if (!r.rows[0]) throw new Error('plan row missing');
     return toPlan(r.rows[0]);
@@ -312,13 +430,26 @@ export class PgPlanRepository implements PlanRepository {
     const params: unknown[] = [];
     if (input.name) {
       params.push(input.name);
-      sets.push(`display_name = $${params.length}`);
+      sets.push(`name = $${params.length}`);
+    }
+    if (input.priceCents !== undefined) {
+      params.push(input.priceCents);
+      sets.push(
+        `entitlements = jsonb_set(entitlements, '{priceCents}', to_jsonb($${params.length}::integer), true)`,
+      );
+    }
+    if (input.active !== undefined) {
+      params.push(input.active ? 'active' : 'inactive');
+      sets.push(`status = $${params.length}`);
     }
     if (!sets.length) return (await this.listPlans(_a)).items.find((p) => p.id === id) ?? null;
     sets.push('updated_at = now()');
     params.push(id);
     const r = await this.pool.query<PlanRow>(
-      `UPDATE tenant.plans SET ${sets.join(',')} WHERE id = $${params.length} RETURNING id, code, display_name AS name, 0 AS price_cents, true AS active, created_at, updated_at`,
+      `UPDATE tenant.plans SET ${sets.join(',')} WHERE id = $${params.length}
+       RETURNING id, code, name,
+                 COALESCE(NULLIF(entitlements->>'priceCents', '')::integer, 0) AS price_cents,
+                 status = 'active' AS active, created_at, updated_at`,
       params,
     );
     return r.rows[0] ? toPlan(r.rows[0]) : null;
@@ -336,7 +467,7 @@ import type {
 
 interface FlagRow {
   id: string;
-  flag_code: string;
+  flag_key: string;
   description: string;
   enabled: boolean;
   created_at: Date;
@@ -346,7 +477,7 @@ interface FlagRow {
 function toFlag(r: FlagRow): FeatureFlagRecord {
   return {
     id: r.id,
-    key: r.flag_code,
+    key: r.flag_key,
     description: r.description ?? '',
     enabled: r.enabled,
     createdAt: r.created_at.toISOString(),
@@ -359,15 +490,19 @@ export class PgFeatureFlagRepository implements FeatureFlagRepository {
 
   async listFlags(_a: Actor): Promise<{ items: readonly FeatureFlagRecord[]; total: number }> {
     const r = await this.pool.query<FlagRow>(
-      `SELECT id, flag_code, COALESCE(description, flag_code) AS description, enabled, created_at, updated_at FROM tenant.feature_flags ORDER BY created_at DESC LIMIT 200`,
+      `SELECT id, flag_key, reason AS description, enabled, created_at, updated_at
+         FROM tenant.feature_flags ORDER BY created_at DESC LIMIT 200`,
     );
     return { items: r.rows.map(toFlag), total: r.rows.length };
   }
 
   async createFlag(_a: Actor, input: FeatureFlagCreate): Promise<FeatureFlagRecord> {
     const r = await this.pool.query<FlagRow>(
-      `INSERT INTO tenant.feature_flags (id, flag_code, description, enabled) VALUES ($1,$2,$3,$4) RETURNING id, flag_code, description, enabled, created_at, updated_at`,
-      [randomUUID(), input.key, input.description, input.enabled],
+      `INSERT INTO tenant.feature_flags
+         (id, tenant_id, flag_key, environment, enabled, owner_user_id, reason)
+       VALUES ($1,NULL,$2,'production',$3,$4,$5)
+       RETURNING id, flag_key, reason AS description, enabled, created_at, updated_at`,
+      [randomUUID(), input.key, input.enabled, _a.userId, input.description],
     );
     if (!r.rows[0]) throw new Error('flag row missing');
     return toFlag(r.rows[0]);
@@ -379,8 +514,10 @@ export class PgFeatureFlagRepository implements FeatureFlagRepository {
     input: FeatureFlagUpdate,
   ): Promise<FeatureFlagRecord | null> {
     const r = await this.pool.query<FlagRow>(
-      `UPDATE tenant.feature_flags SET enabled = $1, updated_at = now() WHERE id = $2 RETURNING id, flag_code, COALESCE(description, flag_code) AS description, enabled, created_at, updated_at`,
-      [input.enabled, id],
+      `UPDATE tenant.feature_flags SET enabled = $1, approved_by = $3, updated_at = now()
+        WHERE id = $2
+      RETURNING id, flag_key, reason AS description, enabled, created_at, updated_at`,
+      [input.enabled, id, _a.userId],
     );
     return r.rows[0] ? toFlag(r.rows[0]) : null;
   }
@@ -394,15 +531,15 @@ export class PgReleaseRepository implements ReleaseRepository {
   constructor(private readonly pool: Pool) {}
 
   async listReleases(_a: Actor): Promise<{ items: readonly ReleaseRecord[]; total: number }> {
-    const r = await this.pool.query<{ id: string; action: string; created_at: Date }>(
-      `SELECT id, action, created_at FROM audit.events WHERE action LIKE 'release.%' ORDER BY created_at DESC LIMIT 100`,
+    const r = await this.pool.query<{ id: string; action: string; occurred_at: Date }>(
+      `SELECT id, action, occurred_at FROM audit.events WHERE action LIKE 'release.%' ORDER BY occurred_at DESC LIMIT 100`,
     );
     const items: ReleaseRecord[] = r.rows.map((row) => ({
       id: row.id,
       version: row.action.replace('release.', '') || '0.0.0',
       channel: 'stable',
       notes: '',
-      releasedAt: row.created_at.toISOString(),
+      releasedAt: row.occurred_at.toISOString(),
     }));
     return { items, total: items.length };
   }
@@ -421,16 +558,19 @@ export class PgAdminAuditRepository implements AdminAuditRepository {
       actor_id: string;
       action: string;
       resource_type: string;
-      created_at: Date;
+      occurred_at: Date;
+      resource_id: string | null;
     }>(
-      `SELECT id, actor_id, action, resource_type, created_at FROM audit.events ORDER BY created_at DESC LIMIT 500`,
+      `SELECT id, actor_id, action, resource_type, resource_id, occurred_at
+         FROM audit.events ORDER BY occurred_at DESC LIMIT 500`,
     );
     const items: AuditEventRecord[] = r.rows.map((row) => ({
       id: row.id,
       actorId: row.actor_id,
       action: row.action,
       resourceType: row.resource_type,
-      occurredAt: row.created_at.toISOString(),
+      resourceId: row.resource_id ?? undefined,
+      occurredAt: row.occurred_at.toISOString(),
     }));
     return { items, total: items.length };
   }
@@ -455,26 +595,81 @@ export class PgAdminJobRepository implements AdminJobRepository {
       id: string;
       event_type: string;
       status: string;
+      attempt_count: number;
       created_at: Date;
+      published_at: Date | null;
     }>(
-      `SELECT id, event_type, status, created_at FROM audit.outbox_events ORDER BY created_at DESC LIMIT 100`,
+      `SELECT id, event_type, status, attempt_count, created_at, published_at
+         FROM audit.outbox_events ORDER BY created_at DESC LIMIT 100`,
     );
     const items: JobRecord[] = r.rows.map((row) => ({
       id: row.id,
       type: row.event_type,
-      status: row.status === 'published' ? 'succeeded' : ('queued' as JobRecord['status']),
+      status:
+        row.status === 'published'
+          ? 'succeeded'
+          : row.status === 'publishing'
+            ? 'running'
+            : row.status === 'failed'
+              ? 'failed'
+              : row.status === 'dead_letter'
+                ? 'cancelled'
+                : 'queued',
+      attemptCount: row.attempt_count,
       createdAt: row.created_at.toISOString(),
-      updatedAt: row.created_at.toISOString(),
+      updatedAt: (row.published_at ?? row.created_at).toISOString(),
     }));
     return { items, total: items.length };
   }
 
   async cancelJob(_a: Actor, id: string): Promise<JobRecord | null> {
-    return { id, type: 'job', status: 'cancelled', createdAt: nowIso(), updatedAt: nowIso() };
+    const r = await this.pool.query<{
+      id: string;
+      event_type: string;
+      attempt_count: number;
+      created_at: Date;
+    }>(
+      `UPDATE audit.outbox_events SET status = 'dead_letter'
+        WHERE id = $1 AND status IN ('pending','failed')
+      RETURNING id, event_type, attempt_count, created_at`,
+      [id],
+    );
+    const row = r.rows[0];
+    return row
+      ? {
+          id: row.id,
+          type: row.event_type,
+          status: 'cancelled',
+          attemptCount: row.attempt_count,
+          createdAt: row.created_at.toISOString(),
+          updatedAt: nowIso(),
+        }
+      : null;
   }
 
   async retryJob(_a: Actor, id: string): Promise<JobRecord | null> {
-    return { id, type: 'job', status: 'queued', createdAt: nowIso(), updatedAt: nowIso() };
+    const r = await this.pool.query<{
+      id: string;
+      event_type: string;
+      attempt_count: number;
+      created_at: Date;
+    }>(
+      `UPDATE audit.outbox_events SET status = 'pending', available_at = now()
+        WHERE id = $1 AND status IN ('failed','dead_letter')
+      RETURNING id, event_type, attempt_count, created_at`,
+      [id],
+    );
+    const row = r.rows[0];
+    return row
+      ? {
+          id: row.id,
+          type: row.event_type,
+          status: 'queued',
+          attemptCount: row.attempt_count,
+          createdAt: row.created_at.toISOString(),
+          updatedAt: nowIso(),
+        }
+      : null;
   }
 }
 
@@ -515,9 +710,14 @@ interface SupportCaseRow {
   id: string;
   case_reference: string;
   subject: string;
+  tenant_name: string;
+  severity: string;
+  category: string;
+  requester_user_id: string;
   status: string;
   assigned_to: string | null;
   created_at: Date;
+  updated_at: Date;
 }
 
 function toSupportCase(r: SupportCaseRow): AdminSupportCaseRecord {
@@ -525,9 +725,14 @@ function toSupportCase(r: SupportCaseRow): AdminSupportCaseRecord {
     id: r.id,
     caseReference: r.case_reference ?? r.id.slice(0, 8).toUpperCase(),
     subject: r.subject,
+    tenantName: r.tenant_name,
+    severity: r.severity as AdminSupportCaseRecord['severity'],
+    category: r.category,
+    requesterUserId: r.requester_user_id,
     status: r.status as AdminSupportCaseRecord['status'],
     assigneeId: r.assigned_to,
     createdAt: r.created_at.toISOString(),
+    updatedAt: r.updated_at.toISOString(),
   };
 }
 
@@ -536,7 +741,14 @@ export class PgAdminSupportCaseRepository implements AdminSupportCaseRepository 
 
   async listCases(_a: Actor): Promise<{ items: readonly AdminSupportCaseRecord[]; total: number }> {
     const r = await this.pool.query<SupportCaseRow>(
-      `SELECT id, id AS case_reference, subject, status, assigned_to, created_at FROM support.cases ORDER BY created_at DESC LIMIT 200`,
+      `SELECT support_case.id, support_case.case_reference, support_case.subject,
+              COALESCE(organization.display_name, 'Platform') AS tenant_name,
+              support_case.severity, support_case.category, support_case.requester_user_id,
+              support_case.status, support_case.assigned_to, support_case.created_at,
+              support_case.updated_at
+         FROM support.cases AS support_case
+         LEFT JOIN tenant.organizations AS organization ON organization.id = support_case.tenant_id
+        ORDER BY support_case.created_at DESC LIMIT 200`,
     );
     return { items: r.rows.map(toSupportCase), total: r.rows.length };
   }
@@ -547,7 +759,17 @@ export class PgAdminSupportCaseRepository implements AdminSupportCaseRepository 
     input: { assigneeId: string },
   ): Promise<AdminSupportCaseRecord | null> {
     const r = await this.pool.query<SupportCaseRow>(
-      `UPDATE support.cases SET assigned_to = $1, updated_at = now() WHERE id = $2 RETURNING id, id AS case_reference, subject, status, assigned_to, created_at`,
+      `WITH updated AS (
+         UPDATE support.cases SET assigned_to = $1, updated_at = now() WHERE id = $2
+         RETURNING id, tenant_id, case_reference, subject, severity, category,
+                   requester_user_id, status, assigned_to, created_at, updated_at
+       )
+       SELECT updated.id, updated.case_reference, updated.subject,
+              COALESCE(organization.display_name, 'Platform') AS tenant_name,
+              updated.severity, updated.category, updated.requester_user_id,
+              updated.status, updated.assigned_to, updated.created_at, updated.updated_at
+         FROM updated
+         LEFT JOIN tenant.organizations AS organization ON organization.id = updated.tenant_id`,
       [input.assigneeId, id],
     );
     return r.rows[0] ? toSupportCase(r.rows[0]) : null;
@@ -559,7 +781,20 @@ export class PgAdminSupportCaseRepository implements AdminSupportCaseRepository 
     input: { status: string; note?: string },
   ): Promise<AdminSupportCaseRecord | null> {
     const r = await this.pool.query<SupportCaseRow>(
-      `UPDATE support.cases SET status = $1, updated_at = now() WHERE id = $2 RETURNING id, id AS case_reference, subject, status, assigned_to, created_at`,
+      `WITH updated AS (
+         UPDATE support.cases
+            SET status = $1, updated_at = now(),
+                resolved_at = CASE WHEN $1 IN ('resolved','closed') THEN now() ELSE resolved_at END
+          WHERE id = $2
+         RETURNING id, tenant_id, case_reference, subject, severity, category,
+                   requester_user_id, status, assigned_to, created_at, updated_at
+       )
+       SELECT updated.id, updated.case_reference, updated.subject,
+              COALESCE(organization.display_name, 'Platform') AS tenant_name,
+              updated.severity, updated.category, updated.requester_user_id,
+              updated.status, updated.assigned_to, updated.created_at, updated.updated_at
+         FROM updated
+         LEFT JOIN tenant.organizations AS organization ON organization.id = updated.tenant_id`,
       [input.status, id],
     );
     return r.rows[0] ? toSupportCase(r.rows[0]) : null;
@@ -658,8 +893,10 @@ export class PgAiSystemRepository implements AiSystemRepository {
   ): Promise<{ items: readonly AiSystemRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiSystemRow>(
-        `SELECT id, system_code, name, provider_legal_name, intended_purpose, version, lifecycle_status, owner_user_id, created_at, updated_at FROM governance.ai_system_records WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2`,
-        [actor.tenantId, limit],
+        `SELECT id, system_code, name, provider_legal_name, intended_purpose, version,
+                lifecycle_status, owner_user_id, created_at, updated_at
+           FROM governance.ai_system_records ORDER BY created_at DESC LIMIT $1`,
+        [limit],
       );
       return { items: r.rows.map(toAiSystem), total: r.rows.length };
     });
@@ -668,8 +905,10 @@ export class PgAiSystemRepository implements AiSystemRepository {
   async getSystem(actor: Actor, id: string): Promise<AiSystemRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiSystemRow>(
-        `SELECT id, system_code, name, provider_legal_name, intended_purpose, version, lifecycle_status, owner_user_id, created_at, updated_at FROM governance.ai_system_records WHERE tenant_id = $1 AND id = $2`,
-        [actor.tenantId, id],
+        `SELECT id, system_code, name, provider_legal_name, intended_purpose, version,
+                lifecycle_status, owner_user_id, created_at, updated_at
+           FROM governance.ai_system_records WHERE id = $1`,
+        [id],
       );
       return r.rows[0] ? toAiSystem(r.rows[0]) : null;
     });
@@ -678,10 +917,13 @@ export class PgAiSystemRepository implements AiSystemRepository {
   async createSystem(actor: Actor, input: AiSystemCreate): Promise<AiSystemRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiSystemRow>(
-        `INSERT INTO governance.ai_system_records (id, tenant_id, system_code, name, provider_legal_name, intended_purpose, version, lifecycle_status, owner_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,'design',$8) RETURNING id, system_code, name, provider_legal_name, intended_purpose, version, lifecycle_status, owner_user_id, created_at, updated_at`,
+        `INSERT INTO governance.ai_system_records
+           (id, system_code, name, provider_legal_name, intended_purpose, version, lifecycle_status, owner_user_id)
+         VALUES ($1,$2,$3,$4,$5,$6,'design',$7)
+         RETURNING id, system_code, name, provider_legal_name, intended_purpose, version,
+                   lifecycle_status, owner_user_id, created_at, updated_at`,
         [
           randomUUID(),
-          actor.tenantId,
           input.systemCode,
           input.name,
           input.providerLegalName,
@@ -718,15 +960,23 @@ export class PgAiSystemRepository implements AiSystemRepository {
       const versionNo = Number(vRes.rows[0]?.n ?? '0') + 1;
       const id = randomUUID();
       await client.query(
-        `INSERT INTO governance.classification_records (id, tenant_id, ai_system_id, version_no, high_risk_conclusion, territorial_scope, confidence, status) VALUES ($1,$2,$3,$4,$5,$6,$7,'draft')`,
+        `INSERT INTO governance.classification_records
+           (id, ai_system_id, version_no, ai_system_conclusion, territorial_scope,
+            organization_roles, article_5_review, annex_iii_category, high_risk_conclusion,
+            article_50_review, gpai_role_review, legal_snapshot_at, confidence, status, prepared_by)
+         SELECT $1, system.id, $3, true, $5, '[]'::jsonb, '{}'::jsonb,
+                CASE WHEN $4 THEN 'employment_and_worker_management' ELSE NULL END,
+                $4, '{}'::jsonb, '{}'::jsonb, CURRENT_DATE, $6, 'draft', $7
+           FROM governance.ai_system_records AS system
+          WHERE system.id = $2`,
         [
           id,
-          actor.tenantId,
           systemId,
           versionNo,
           input.highRiskConclusion,
           input.territorialScope,
           input.confidence,
+          actor.userId,
         ],
       );
       return {
@@ -1108,7 +1358,9 @@ interface AiModelRow {
   limitations: string;
   data_region: string | null;
   status: string;
+  evaluation_summary: Record<string, unknown>;
   approved_by: string | null;
+  approved_at: Date | null;
   created_at: Date;
 }
 
@@ -1123,9 +1375,9 @@ function toAiModel(r: AiModelRow): AiModelRecord {
     limitations: r.limitations,
     dataRegion: r.data_region,
     status: r.status as AiModelRecord['status'],
-    evaluationSummary: {},
+    evaluationSummary: r.evaluation_summary,
     approvedBy: r.approved_by,
-    approvedAt: null,
+    approvedAt: r.approved_at?.toISOString() ?? null,
     createdAt: r.created_at.toISOString(),
   };
 }
@@ -1143,8 +1395,8 @@ export class PgAiModelRepository implements AiModelRepository {
   ): Promise<AiModelListResult> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiModelRow>(
-        `SELECT id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, approved_by, created_at, updated_at FROM assessment.model_registry WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2`,
-        [actor.tenantId, limit],
+        `SELECT id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, evaluation_summary, approved_by, approved_at, created_at FROM assessment.model_registry ORDER BY created_at DESC LIMIT $1`,
+        [limit],
       );
       return { items: r.rows.map(toAiModel), total: r.rows.length, hasMore: false };
     });
@@ -1153,8 +1405,8 @@ export class PgAiModelRepository implements AiModelRepository {
   async getModel(actor: Actor, id: string): Promise<AiModelRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiModelRow>(
-        `SELECT id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, approved_by, created_at, updated_at FROM assessment.model_registry WHERE tenant_id = $1 AND id = $2`,
-        [actor.tenantId, id],
+        `SELECT id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, evaluation_summary, approved_by, approved_at, created_at FROM assessment.model_registry WHERE id = $1`,
+        [id],
       );
       return r.rows[0] ? toAiModel(r.rows[0]) : null;
     });
@@ -1163,10 +1415,9 @@ export class PgAiModelRepository implements AiModelRepository {
   async createModel(actor: Actor, input: AiModelCreate): Promise<AiModelRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiModelRow>(
-        `INSERT INTO assessment.model_registry (id, tenant_id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft') RETURNING id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, approved_by, created_at, updated_at`,
+        `INSERT INTO assessment.model_registry (id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'draft') RETURNING id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, evaluation_summary, approved_by, approved_at, created_at`,
         [
           randomUUID(),
-          actor.tenantId,
           input.provider,
           input.modelKey,
           input.displayName,
@@ -1181,11 +1432,61 @@ export class PgAiModelRepository implements AiModelRepository {
     });
   }
 
+  async recordEvaluation(
+    actor: Actor,
+    id: string,
+    input: { readonly outcome: string; readonly rationale: string },
+  ): Promise<AiModelRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const r = await client.query<AiModelRow>(
+        `UPDATE assessment.model_registry
+            SET evaluation_summary = $1::jsonb,
+                status = CASE WHEN status = 'draft' THEN 'evaluating' ELSE status END
+          WHERE id = $2 AND status NOT IN ('active', 'retired')
+        RETURNING id, provider, model_key, display_name, model_version, intended_purpose,
+                  limitations, data_region, status, evaluation_summary, approved_by,
+                  approved_at, created_at`,
+        [
+          JSON.stringify({
+            recorded: true,
+            outcome: input.outcome,
+            rationale: input.rationale,
+            recordedBy: actor.userId,
+            recordedAt: nowIso(),
+          }),
+          id,
+        ],
+      );
+      const row = r.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'ai_model.evaluation_recorded',
+        resourceType: 'ai_model',
+        resourceId: id,
+        outcome: 'success',
+        metadata: { outcome: input.outcome },
+      });
+      return toAiModel(row);
+    });
+  }
+
   async activateModel(actor: Actor, id: string): Promise<AiModelRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiModelRow>(
-        `UPDATE assessment.model_registry SET status = 'active', approved_by = $1, updated_at = now() WHERE tenant_id = $2 AND id = $3 RETURNING id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, approved_by, created_at, updated_at`,
-        [actor.userId, actor.tenantId, id],
+        `UPDATE assessment.model_registry
+            SET status = 'active', approved_by = $1, approved_at = now()
+          WHERE id = $2
+            AND status IN ('evaluating', 'approved', 'suspended')
+            AND evaluation_summary ? 'outcome'
+            AND lower(evaluation_summary->>'outcome') NOT LIKE '%fail%'
+            AND lower(evaluation_summary->>'outcome') NOT LIKE '%reject%'
+        RETURNING id, provider, model_key, display_name, model_version, intended_purpose,
+                  limitations, data_region, status, evaluation_summary, approved_by,
+                  approved_at, created_at`,
+        [actor.userId, id],
       );
       return r.rows[0] ? toAiModel(r.rows[0]) : null;
     });
@@ -1194,8 +1495,8 @@ export class PgAiModelRepository implements AiModelRepository {
   async suspendModel(actor: Actor, id: string): Promise<AiModelRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AiModelRow>(
-        `UPDATE assessment.model_registry SET status = 'suspended', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, approved_by, created_at, updated_at`,
-        [actor.tenantId, id],
+        `UPDATE assessment.model_registry SET status = 'suspended' WHERE id = $1 RETURNING id, provider, model_key, display_name, model_version, intended_purpose, limitations, data_region, status, evaluation_summary, approved_by, approved_at, created_at`,
+        [id],
       );
       return r.rows[0] ? toAiModel(r.rows[0]) : null;
     });
@@ -1217,6 +1518,26 @@ import type {
   AssessmentValidationRecord,
 } from './assessment-version-types.js';
 
+interface AssessmentVersionRow {
+  id: string;
+  assessment_id: string;
+  version_no: number;
+  status: string;
+  duration_seconds: number;
+  created_at: Date;
+}
+
+function toAssessmentVersion(row: AssessmentVersionRow): AssessmentVersionRecord {
+  return {
+    id: row.id,
+    assessmentId: row.assessment_id,
+    versionNo: row.version_no,
+    status: row.status as AssessmentVersionRecord['status'],
+    durationSeconds: row.duration_seconds,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 export class PgAssessmentVersionRepository
   implements AssessmentVersionRepository, AssessmentValidationRepository
 {
@@ -1225,67 +1546,188 @@ export class PgAssessmentVersionRepository
     private readonly role?: string,
   ) {}
 
-  private async queryVersion(actor: Actor, id: string): Promise<AssessmentVersionRecord | null> {
-    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        assessment_id: string;
-        version_no: number;
-        status: string;
-        duration_seconds: number;
-        created_at: Date;
-      }>(
-        `SELECT id, assessment_id, version_no, status, duration_seconds, created_at FROM assessment.assessment_versions WHERE tenant_id = $1 AND id = $2`,
-        [actor.tenantId, id],
+  private async queryVersion(
+    client: PoolClient,
+    actor: Actor,
+    id: string,
+  ): Promise<AssessmentVersionRecord | null> {
+    const result = await client.query<AssessmentVersionRow>(
+      `SELECT av.id, av.assessment_id, av.version_no, av.status,
+              av.duration_seconds, av.created_at
+         FROM assessment.assessment_versions av
+         JOIN assessment.assessments a ON a.id = av.assessment_id
+        WHERE a.tenant_id = $1 AND av.id = $2`,
+      [actor.tenantId, id],
+    );
+    return result.rows[0] === undefined ? null : toAssessmentVersion(result.rows[0]);
+  }
+
+  private async cloneVersion(
+    client: PoolClient,
+    actor: Actor,
+    sourceId: string,
+    rationale: string,
+  ): Promise<AssessmentVersionRecord | null> {
+    const source = await this.queryVersion(client, actor, sourceId);
+    if (source === null) return null;
+    const versionResult = await client.query<AssessmentVersionRow>(
+      `INSERT INTO assessment.assessment_versions
+         (id, assessment_id, version_no, competency_framework_version_id,
+          rubric_version_id, default_model_id, default_prompt_version_id,
+          duration_seconds, instructions, technical_requirements,
+          accessibility_config, monitoring_policy, status, content_hash)
+       SELECT $1, source.assessment_id,
+              (SELECT COALESCE(max(existing.version_no), 0) + 1
+                 FROM assessment.assessment_versions existing
+                WHERE existing.assessment_id = source.assessment_id),
+              source.competency_framework_version_id, source.rubric_version_id,
+              source.default_model_id, source.default_prompt_version_id,
+              source.duration_seconds, source.instructions, source.technical_requirements,
+              source.accessibility_config, source.monitoring_policy, 'draft', source.content_hash
+         FROM assessment.assessment_versions source
+         JOIN assessment.assessments a ON a.id = source.assessment_id
+        WHERE source.id = $2 AND a.tenant_id = $3
+      RETURNING id, assessment_id, version_no, status, duration_seconds, created_at`,
+      [randomUUID(), sourceId, actor.tenantId],
+    );
+    const newVersion = versionResult.rows[0];
+    if (newVersion === undefined) return null;
+    const sections = await client.query<{
+      id: string;
+      section_type: string;
+      title: string;
+      instructions: unknown;
+      duration_seconds: number | null;
+      display_order: number;
+      config: unknown;
+    }>(
+      `SELECT id, section_type, title, instructions, duration_seconds, display_order, config
+         FROM assessment.assessment_sections
+        WHERE assessment_version_id = $1
+        ORDER BY display_order`,
+      [sourceId],
+    );
+    for (const section of sections.rows) {
+      const sectionId = randomUUID();
+      await client.query(
+        `INSERT INTO assessment.assessment_sections
+           (id, assessment_version_id, section_type, title, instructions,
+            duration_seconds, display_order, config)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::jsonb)`,
+        [
+          sectionId,
+          newVersion.id,
+          section.section_type,
+          section.title,
+          JSON.stringify(section.instructions),
+          section.duration_seconds,
+          section.display_order,
+          JSON.stringify(section.config),
+        ],
       );
-      if (!r.rows[0]) return null;
-      const row = r.rows[0];
-      return {
-        id: row.id,
-        assessmentId: row.assessment_id,
-        versionNo: row.version_no,
-        status: row.status as AssessmentVersionRecord['status'],
-        durationSeconds: row.duration_seconds,
-        createdAt: row.created_at.toISOString(),
-      };
+      await client.query(
+        `INSERT INTO assessment.assessment_items
+           (id, section_id, item_type, title, prompt, expected_artifacts, config,
+            display_order, content_hash)
+         SELECT gen_random_uuid(), $1, item_type, title, prompt, expected_artifacts,
+                config, display_order, content_hash
+           FROM assessment.assessment_items
+          WHERE section_id = $2`,
+        [sectionId, section.id],
+      );
+    }
+    await client.query(
+      `INSERT INTO assessment.assessment_tool_policies
+         (id, assessment_version_id, plugin_id, model_id, prompt_version_id,
+          tool_type, is_allowed, limits)
+       SELECT gen_random_uuid(), $1, plugin_id, model_id, prompt_version_id,
+              tool_type, is_allowed, limits
+         FROM assessment.assessment_tool_policies
+        WHERE assessment_version_id = $2`,
+      [newVersion.id, sourceId],
+    );
+    await new PgAuditWriter(client).append({
+      tenantId: actor.tenantId,
+      actorType: 'user',
+      actorId: actor.userId,
+      action: 'assessment_version.create',
+      resourceType: 'assessment_version',
+      resourceId: newVersion.id,
+      outcome: 'success',
+      metadata: { sourceVersionId: sourceId, rationale },
+    });
+    return toAssessmentVersion(newVersion);
+  }
+
+  async createVersionForAssessment(
+    actor: Actor,
+    assessmentId: string,
+    rationale: string,
+  ): Promise<AssessmentVersionRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const source = await client.query<{ id: string }>(
+        `SELECT av.id
+           FROM assessment.assessment_versions av
+           JOIN assessment.assessments a ON a.id = av.assessment_id
+          WHERE a.tenant_id = $1 AND a.id = $2
+          ORDER BY av.version_no DESC
+          LIMIT 1`,
+        [actor.tenantId, assessmentId],
+      );
+      const sourceId = source.rows[0]?.id;
+      return sourceId === undefined ? null : this.cloneVersion(client, actor, sourceId, rationale);
     });
   }
 
   async activateVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        assessment_id: string;
-        version_no: number;
-        status: string;
-        duration_seconds: number;
-        created_at: Date;
-      }>(
-        `UPDATE assessment.assessment_versions SET status = 'active', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, assessment_id, version_no, status, duration_seconds, created_at`,
+      const r = await client.query<AssessmentVersionRow>(
+        `UPDATE assessment.assessment_versions av
+            SET status = 'active'
+           FROM assessment.assessments a
+          WHERE av.assessment_id = a.id
+            AND a.tenant_id = $1
+            AND av.id = $2
+            AND av.status IN ('draft', 'approved', 'suspended')
+            AND NOT EXISTS (
+              SELECT 1
+                FROM (VALUES
+                  ('job_relevance'), ('accessibility'), ('privacy'), ('security'),
+                  ('fairness'), ('technical')
+                ) AS required(validation_type)
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM assessment.assessment_validations validation
+                  WHERE validation.assessment_version_id = av.id
+                    AND validation.validation_type = required.validation_type
+                    AND validation.status IN ('passed', 'passed_with_conditions')
+                    AND (validation.expires_at IS NULL OR validation.expires_at > now())
+               )
+            )
+        RETURNING av.id, av.assessment_id, av.version_no, av.status,
+                  av.duration_seconds, av.created_at`,
         [actor.tenantId, versionId],
       );
       if (!r.rows[0]) return null;
-      const row = r.rows[0];
-      return {
-        id: row.id,
-        assessmentId: row.assessment_id,
-        versionNo: row.version_no,
-        status: row.status as AssessmentVersionRecord['status'],
-        durationSeconds: row.duration_seconds,
-        createdAt: row.created_at.toISOString(),
-      };
+      return toAssessmentVersion(r.rows[0]);
     });
   }
 
   async previewVersion(actor: Actor, versionId: string): Promise<AssessmentVersionPreview | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const vr = await client.query<{ id: string; duration_seconds: number }>(
-        `SELECT id, duration_seconds FROM assessment.assessment_versions WHERE tenant_id = $1 AND id = $2`,
+        `SELECT av.id, av.duration_seconds
+           FROM assessment.assessment_versions av
+           JOIN assessment.assessments a ON a.id = av.assessment_id
+          WHERE a.tenant_id = $1 AND av.id = $2`,
         [actor.tenantId, versionId],
       );
       if (!vr.rows[0]) return null;
       const ir = await client.query<{ id: string; prompt: string }>(
-        `SELECT ai.id, ai.prompt FROM assessment.assessment_items ai JOIN assessment.assessment_sections s ON s.id = ai.section_id WHERE s.assessment_version_id = $1 ORDER BY ai.position_no`,
+        `SELECT item.id, item.prompt::text AS prompt
+           FROM assessment.assessment_items item
+           JOIN assessment.assessment_sections section ON section.id = item.section_id
+          WHERE section.assessment_version_id = $1
+          ORDER BY section.display_order, item.display_order`,
         [versionId],
       );
       return {
@@ -1299,52 +1741,23 @@ export class PgAssessmentVersionRepository
 
   async duplicateVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const src = await this.queryVersion(actor, versionId);
-      if (!src) return null;
-      const maxRes = await client.query<{ m: string }>(
-        `SELECT max(version_no)::text AS m FROM assessment.assessment_versions WHERE tenant_id = $1 AND assessment_id = $2`,
-        [actor.tenantId, src.assessmentId],
-      );
-      const newVer = Number(maxRes.rows[0]?.m ?? '0') + 1;
-      const newId = randomUUID();
-      await client.query(
-        `INSERT INTO assessment.assessment_versions (id, tenant_id, assessment_id, version_no, status, duration_seconds) VALUES ($1,$2,$3,$4,'draft',$5)`,
-        [newId, actor.tenantId, src.assessmentId, newVer, src.durationSeconds],
-      );
-      return {
-        id: newId,
-        assessmentId: src.assessmentId,
-        versionNo: newVer,
-        status: 'draft',
-        durationSeconds: src.durationSeconds,
-        createdAt: nowIso(),
-      };
+      return this.cloneVersion(client, actor, versionId, 'Duplicated from an existing version.');
     });
   }
 
   async suspendVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        assessment_id: string;
-        version_no: number;
-        status: string;
-        duration_seconds: number;
-        created_at: Date;
-      }>(
-        `UPDATE assessment.assessment_versions SET status = 'suspended', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, assessment_id, version_no, status, duration_seconds, created_at`,
+      const r = await client.query<AssessmentVersionRow>(
+        `UPDATE assessment.assessment_versions av
+            SET status = 'suspended'
+           FROM assessment.assessments a
+          WHERE av.assessment_id = a.id AND a.tenant_id = $1 AND av.id = $2
+        RETURNING av.id, av.assessment_id, av.version_no, av.status,
+                  av.duration_seconds, av.created_at`,
         [actor.tenantId, versionId],
       );
       if (!r.rows[0]) return null;
-      const row = r.rows[0];
-      return {
-        id: row.id,
-        assessmentId: row.assessment_id,
-        versionNo: row.version_no,
-        status: row.status as AssessmentVersionRecord['status'],
-        durationSeconds: row.duration_seconds,
-        createdAt: row.created_at.toISOString(),
-      };
+      return toAssessmentVersion(r.rows[0]);
     });
   }
 
@@ -1354,10 +1767,14 @@ export class PgAssessmentVersionRepository
     input: AssessmentDefectCreate,
   ): Promise<AssessmentDefectRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const version = await this.queryVersion(client, actor, versionId);
+      if (version === null) return null;
       const id = randomUUID();
       await client.query(
-        `INSERT INTO governance.assessment_defects (id, tenant_id, assessment_version_id, severity, summary, status, reported_by) VALUES ($1,$2,$3,$4,$5,'open',$6)`,
-        [id, actor.tenantId, versionId, input.severity, input.summary, actor.userId],
+        `INSERT INTO governance.assessment_defects
+           (id, assessment_version_id, defect_type, severity, description, status)
+         VALUES ($1,$2,'content_or_configuration',$3,$4,'reported')`,
+        [id, versionId, input.severity, input.summary],
       );
       return {
         id,
@@ -1376,11 +1793,16 @@ export class PgAssessmentVersionRepository
   ): Promise<AssessmentValidationRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const id = randomUUID();
+      const version = await this.queryVersion(client, actor, versionId);
+      if (version === null) throw new Error('assessment version not found');
       await client.query(
-        `INSERT INTO assessment.assessment_validations (id, tenant_id, assessment_version_id, validation_type, status, evidence_uri, summary, reviewer_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        `INSERT INTO assessment.assessment_validations
+           (id, assessment_version_id, validation_type, status, evidence_uri,
+            summary, reviewer_user_id, reviewed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,
+                 CASE WHEN $4 = 'pending' THEN NULL ELSE now() END)`,
         [
           id,
-          actor.tenantId,
           versionId,
           input.validationType,
           input.status,
@@ -1397,7 +1819,7 @@ export class PgAssessmentVersionRepository
         evidenceUri: input.evidenceUri ?? null,
         summary: input.summary ?? null,
         reviewerUserId: actor.userId,
-        reviewedAt: null,
+        reviewedAt: input.status === 'pending' ? null : nowIso(),
         expiresAt: null,
         createdAt: nowIso(),
       };
@@ -1484,27 +1906,31 @@ export class PgAuditEvidenceRepository implements AuditEvidenceRepository {
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────
 
-import type { BookingRecord, BookingCreate, BookingRepository } from './bookings.js';
+import type { BookingRecord, BookingCreate, BookingUpdate, BookingRepository } from './bookings.js';
 
 interface BookingRow {
   id: string;
   application_id: string;
-  assessment_id: string;
   status: string;
   start_at: Date;
   end_at: Date;
+  candidate_timezone: string;
+  reschedule_count: number;
   created_at: Date;
+  updated_at: Date;
 }
 
 function toBooking(r: BookingRow): BookingRecord {
   return {
     id: r.id,
     applicationId: r.application_id,
-    assessmentId: r.assessment_id,
     status: r.status as BookingRecord['status'],
     startAt: r.start_at.toISOString(),
     endAt: r.end_at.toISOString(),
+    candidateTimezone: r.candidate_timezone,
+    rescheduleCount: r.reschedule_count,
     createdAt: r.created_at.toISOString(),
+    updatedAt: r.updated_at.toISOString(),
   };
 }
 
@@ -1514,30 +1940,61 @@ export class PgBookingRepository implements BookingRepository {
     private readonly role?: string,
   ) {}
 
-  async listBookings(actor: Actor): Promise<{ items: readonly BookingRecord[]; total: number }> {
+  async listBookings(
+    actor: Actor,
+    applicationId: string,
+  ): Promise<{ items: readonly BookingRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<BookingRow>(
-        `SELECT id, application_id, assessment_id, status, start_at, end_at, created_at FROM hiring.assessment_bookings WHERE tenant_id = $1 ORDER BY start_at DESC LIMIT 100`,
-        [actor.tenantId],
+        `SELECT booking.id, booking.application_id, booking.status, booking.start_at, booking.end_at,
+                booking.candidate_timezone, booking.reschedule_count, booking.created_at,
+                booking.updated_at
+           FROM hiring.assessment_bookings AS booking
+           JOIN hiring.applications AS application
+             ON application.id = booking.application_id
+            AND application.tenant_id = booking.tenant_id
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE booking.tenant_id = $1
+            AND booking.application_id = $2
+            AND ($3::boolean = false OR candidate.user_id = $4)
+          ORDER BY booking.start_at DESC
+          LIMIT 100`,
+        [actor.tenantId, applicationId, actor.roles.includes('candidate'), actor.userId],
       );
       return { items: r.rows.map(toBooking), total: r.rows.length };
     });
   }
 
-  async createBooking(actor: Actor, input: BookingCreate): Promise<BookingRecord> {
+  async createBooking(actor: Actor, input: BookingCreate): Promise<BookingRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<BookingRow>(
-        `INSERT INTO hiring.assessment_bookings (id, tenant_id, application_id, assessment_id, status, start_at, end_at) VALUES ($1,$2,$3,$4,'confirmed',$5,$6) RETURNING id, application_id, assessment_id, status, start_at, end_at, created_at`,
+        `INSERT INTO hiring.assessment_bookings
+           (id, tenant_id, application_id, status, start_at, end_at, candidate_timezone, created_by)
+         SELECT $1, $2, application.id, 'confirmed', $4, $5, $6, $7
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE application.tenant_id = $2
+            AND application.id = $3
+            AND ($8::boolean = false OR candidate.user_id = $7)
+            AND application.status NOT IN ('withdrawn', 'cancelled')
+         RETURNING id, application_id, status, start_at, end_at, candidate_timezone,
+                   reschedule_count, created_at, updated_at`,
         [
           randomUUID(),
           actor.tenantId,
           input.applicationId,
-          input.assessmentId,
           new Date(input.startAt),
           new Date(input.endAt),
+          input.candidateTimezone,
+          actor.userId,
+          actor.roles.includes('candidate'),
         ],
       );
-      if (!r.rows[0]) throw new Error('booking row missing');
+      if (!r.rows[0]) return null;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -1549,6 +2006,59 @@ export class PgBookingRepository implements BookingRepository {
         metadata: {},
       });
       return toBooking(r.rows[0]);
+    });
+  }
+
+  async updateBooking(
+    actor: Actor,
+    bookingId: string,
+    input: BookingUpdate,
+  ): Promise<BookingRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<BookingRow>(
+        `UPDATE hiring.assessment_bookings AS booking
+            SET status = $3,
+                start_at = COALESCE($4, booking.start_at),
+                end_at = COALESCE($5, booking.end_at),
+                candidate_timezone = COALESCE($6, booking.candidate_timezone),
+                reschedule_count = booking.reschedule_count + CASE WHEN $3 = 'rescheduled' THEN 1 ELSE 0 END,
+                updated_at = now()
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = application.candidate_id
+            AND candidate.tenant_id = application.tenant_id
+          WHERE booking.tenant_id = $1
+            AND booking.id = $2
+            AND application.id = booking.application_id
+            AND ($7::boolean = false OR candidate.user_id = $8)
+            AND booking.status NOT IN ('cancelled', 'expired', 'completed')
+         RETURNING booking.id, booking.application_id, booking.status, booking.start_at,
+                   booking.end_at, booking.candidate_timezone, booking.reschedule_count,
+                   booking.created_at, booking.updated_at`,
+        [
+          actor.tenantId,
+          bookingId,
+          input.status,
+          input.startAt === undefined ? null : new Date(input.startAt),
+          input.endAt === undefined ? null : new Date(input.endAt),
+          input.candidateTimezone ?? null,
+          actor.roles.includes('candidate'),
+          actor.userId,
+        ],
+      );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: input.status === 'cancelled' ? 'booking.cancel' : 'booking.reschedule',
+        resourceType: 'assessment_booking',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { status: input.status },
+      });
+      return toBooking(row);
     });
   }
 }
@@ -1569,46 +2079,129 @@ export class PgCampaignDashboardRepository implements CampaignDashboardRepositor
 
   async getDashboard(actor: Actor, campaignId: string): Promise<CampaignDashboardData | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const [appRes, invRes, attRes] = await Promise.all([
-        client.query<{ n: string }>(
-          `SELECT count(*)::text AS n FROM hiring.applications WHERE tenant_id = $1 AND campaign_id = $2`,
+      const campaign = await client.query<{ id: string }>(
+        `SELECT id FROM hiring.campaigns WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, campaignId],
+      );
+      if (campaign.rows[0] === undefined) return null;
+      const [appRes, reviewerRes, unassignedRes, scoreRes] = await Promise.all([
+        client.query<{ status: string; count: string }>(
+          `SELECT status, count(*)::text AS count
+             FROM hiring.applications
+            WHERE tenant_id = $1 AND campaign_id = $2
+            GROUP BY status`,
           [actor.tenantId, campaignId],
         ),
-        client.query<{ n: string }>(
-          `SELECT count(*)::text AS n FROM hiring.invitations WHERE tenant_id = $1 AND campaign_id = $2`,
+        client.query<{ count: string }>(
+          `SELECT count(*)::text AS count
+             FROM hiring.campaign_reviewers
+            WHERE tenant_id = $1 AND campaign_id = $2 AND active = true`,
           [actor.tenantId, campaignId],
         ),
-        client.query<{ total: string; completed: string }>(
-          `SELECT count(*)::text AS total, count(*) FILTER (WHERE status='submitted')::text AS completed FROM runtime.attempts WHERE tenant_id = $1 AND campaign_id = $2`,
+        client.query<{ count: string }>(
+          `SELECT count(*)::text AS count
+             FROM hiring.applications AS application
+             JOIN runtime.attempts AS attempt ON attempt.application_id = application.id
+             JOIN runtime.submissions AS submission ON submission.attempt_id = attempt.id
+            WHERE application.tenant_id = $1
+              AND application.campaign_id = $2
+              AND submission.status IN ('submitted', 'accepted')
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM review.reviewer_assignments AS assignment
+                 WHERE assignment.submission_id = submission.id
+                   AND assignment.tenant_id = application.tenant_id
+                   AND assignment.status NOT IN ('reassigned', 'cancelled')
+              )`,
+          [actor.tenantId, campaignId],
+        ),
+        client.query<{ average: string | null }>(
+          `SELECT avg(score.total_score)::text AS average
+             FROM hiring.applications AS application
+             JOIN runtime.attempts AS attempt ON attempt.application_id = application.id
+             JOIN runtime.submissions AS submission ON submission.attempt_id = attempt.id
+             JOIN review.aggregate_scores AS score ON score.submission_id = submission.id
+            WHERE application.tenant_id = $1 AND application.campaign_id = $2
+              AND score.tenant_id = application.tenant_id
+              AND score.status = 'final'`,
           [actor.tenantId, campaignId],
         ),
       ]);
-      const totalInvitations = Number(invRes.rows[0]?.n ?? 0);
-      const totalAttempts = Number(attRes.rows[0]?.total ?? 0);
-      const totalCompleted = Number(attRes.rows[0]?.completed ?? 0);
+      const statusBreakdown = Object.fromEntries(
+        appRes.rows.map((row) => [row.status, Number(row.count)]),
+      );
       return {
         campaignId,
-        totalApplications: Number(appRes.rows[0]?.n ?? 0),
-        totalReviewers: 0,
-        averageScore: null,
-        statusBreakdown: {
-          invited: totalInvitations,
-          in_progress: totalAttempts,
-          submitted: totalCompleted,
-        },
+        totalApplications: Object.values(statusBreakdown).reduce((sum, count) => sum + count, 0),
+        totalReviewers: Number(reviewerRes.rows[0]?.count ?? 0),
+        unassignedReviews: Number(unassignedRes.rows[0]?.count ?? 0),
+        averageScore:
+          scoreRes.rows[0]?.average === null || scoreRes.rows[0]?.average === undefined
+            ? null
+            : Number(scoreRes.rows[0].average),
+        statusBreakdown,
       };
     });
   }
 
   async getComparison(actor: Actor, campaignId: string): Promise<CampaignComparisonData | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{ id: string }>(
-        `SELECT DISTINCT a.candidate_user_id AS id FROM hiring.applications a WHERE a.tenant_id = $1 AND a.campaign_id = $2 ORDER BY a.candidate_user_id LIMIT 50`,
+      const exists = await client.query<{ id: string }>(
+        `SELECT id FROM hiring.campaigns WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, campaignId],
+      );
+      if (exists.rows[0] === undefined) return null;
+      const r = await client.query<{
+        candidate_id: string;
+        application_id: string;
+        candidate_reference: string;
+        review_status: string;
+        criteria_scored: string;
+        criteria_total: string;
+        score: string | null;
+      }>(
+        `SELECT candidate.id AS candidate_id, application.id AS application_id,
+                COALESCE(candidate.external_reference,
+                  'candidate-' || left(md5(candidate.id::text), 12)) AS candidate_reference,
+                application.status AS review_status,
+                count(criterion_score.id) FILTER (
+                  WHERE criterion_score.human_score IS NOT NULL
+                     OR criterion_score.insufficient_evidence = true
+                )::text AS criteria_scored,
+                count(criterion.id)::text AS criteria_total,
+                max(aggregate.total_score)::text AS score
+           FROM hiring.applications AS application
+           JOIN hiring.candidates AS candidate ON candidate.id = application.candidate_id
+      LEFT JOIN runtime.attempts AS attempt ON attempt.application_id = application.id
+      LEFT JOIN runtime.submissions AS submission ON submission.attempt_id = attempt.id
+      LEFT JOIN review.reviewer_assignments AS assignment
+             ON assignment.submission_id = submission.id
+      LEFT JOIN review.scorecards AS scorecard ON scorecard.assignment_id = assignment.id
+      LEFT JOIN assessment.rubric_criteria AS criterion
+             ON criterion.rubric_version_id = scorecard.rubric_version_id
+      LEFT JOIN review.criterion_scores AS criterion_score
+             ON criterion_score.scorecard_id = scorecard.id
+            AND criterion_score.criterion_id = criterion.id
+      LEFT JOIN review.aggregate_scores AS aggregate
+             ON aggregate.submission_id = submission.id AND aggregate.status = 'final'
+          WHERE application.tenant_id = $1 AND application.campaign_id = $2
+          GROUP BY candidate.id, application.id
+          ORDER BY max(aggregate.total_score) DESC NULLS LAST, application.id
+          LIMIT 50`,
         [actor.tenantId, campaignId],
       );
       return {
         campaignId,
-        candidates: r.rows.map((row, i) => ({ candidateId: row.id, score: null, rank: i + 1 })),
+        candidates: r.rows.map((row, i) => ({
+          candidateId: row.candidate_id,
+          applicationId: row.application_id,
+          candidateReference: row.candidate_reference,
+          reviewStatus: row.review_status,
+          criteriaScored: Number(row.criteria_scored),
+          criteriaTotal: Number(row.criteria_total),
+          score: row.score === null ? null : Number(row.score),
+          rank: i + 1,
+        })),
       };
     });
   }
@@ -1881,6 +2474,7 @@ import type {
   CandidateProfileData,
   CandidateInvitationData,
   CandidateApplicationStatusData,
+  CandidatePracticeModuleData,
 } from './candidate-portal.js';
 
 interface CandidateApplicationStatusRow {
@@ -2075,6 +2669,46 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
       return toCandidateApplicationStatus(row);
     });
   }
+
+  async listPracticeModules(actor: Actor): Promise<readonly CandidatePracticeModuleData[]> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        id: string;
+        title: string;
+        instructions: Record<string, unknown>;
+        duration_seconds: number;
+        task_count: string;
+      }>(
+        `SELECT version.id,
+                assessment.title,
+                version.instructions,
+                version.duration_seconds,
+                count(item.id)::text AS task_count
+           FROM assessment.assessment_versions AS version
+           JOIN assessment.assessments AS assessment ON assessment.id = version.assessment_id
+      LEFT JOIN assessment.assessment_sections AS section
+             ON section.assessment_version_id = version.id
+      LEFT JOIN assessment.assessment_items AS item ON item.section_id = section.id
+          WHERE version.status = 'active'
+            AND assessment.lifecycle_status = 'active'
+            AND (assessment.tenant_id IS NULL OR assessment.tenant_id = $1)
+            AND (assessment.code ILIKE 'PRACTICE%' OR version.instructions->>'practice' = 'true')
+          GROUP BY version.id, assessment.title
+          ORDER BY assessment.title, version.version_no DESC`,
+        [actor.tenantId],
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        description:
+          typeof row.instructions.description === 'string'
+            ? row.instructions.description
+            : 'Practice module for the controlled assessment environment.',
+        durationSeconds: row.duration_seconds,
+        taskCount: Number(row.task_count),
+      }));
+    });
+  }
 }
 
 // ─── Data Rights ──────────────────────────────────────────────────────────────
@@ -2215,22 +2849,56 @@ export class PgDeployerReadinessRepository implements DeployerReadinessRepositor
   ) {}
 
   async getReadiness(actor: Actor): Promise<DeployerReadinessRecord | null> {
-    await withTenant(this.pool, ctx(actor, this.role), async () => {}); // ensure RLS
-    return {
-      tenantId: actor.tenantId,
-      humanOversightConfirmed: false,
-      monitoringConfirmed: false,
-      recordKeepingConfirmed: false,
-      status: 'incomplete',
-      updatedAt: nowIso(),
-    };
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        settings: Record<string, unknown>;
+        updated_at: Date;
+      }>(`SELECT settings, updated_at FROM tenant.organizations WHERE id = $1`, [actor.tenantId]);
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      const value =
+        row.settings.deployerReadiness !== null &&
+        typeof row.settings.deployerReadiness === 'object' &&
+        !Array.isArray(row.settings.deployerReadiness)
+          ? (row.settings.deployerReadiness as Record<string, unknown>)
+          : {};
+      const humanOversightConfirmed = value.humanOversightConfirmed === true;
+      const monitoringConfirmed = value.monitoringConfirmed === true;
+      const recordKeepingConfirmed = value.recordKeepingConfirmed === true;
+      return {
+        tenantId: actor.tenantId,
+        humanOversightConfirmed,
+        monitoringConfirmed,
+        recordKeepingConfirmed,
+        status:
+          humanOversightConfirmed && monitoringConfirmed && recordKeepingConfirmed
+            ? 'complete'
+            : 'incomplete',
+        updatedAt: row.updated_at.toISOString(),
+      };
+    });
   }
 
   async updateReadiness(
     actor: Actor,
     input: DeployerReadinessUpdate,
   ): Promise<DeployerReadinessRecord> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{ updated_at: Date }>(
+        `UPDATE tenant.organizations
+            SET settings = jsonb_set(
+                  settings,
+                  '{deployerReadiness}',
+                  $2::jsonb,
+                  true
+                ),
+                updated_at = now()
+          WHERE id = $1
+        RETURNING updated_at`,
+        [actor.tenantId, JSON.stringify(input)],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('Organization not found for deployer readiness.');
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2241,15 +2909,15 @@ export class PgDeployerReadinessRepository implements DeployerReadinessRepositor
         outcome: 'success',
         metadata: input as unknown as Record<string, unknown>,
       });
+      const allConfirmed =
+        input.humanOversightConfirmed && input.monitoringConfirmed && input.recordKeepingConfirmed;
+      return {
+        tenantId: actor.tenantId,
+        ...input,
+        status: allConfirmed ? 'complete' : 'incomplete',
+        updatedAt: row.updated_at.toISOString(),
+      };
     });
-    const allConfirmed =
-      input.humanOversightConfirmed && input.monitoringConfirmed && input.recordKeepingConfirmed;
-    return {
-      tenantId: actor.tenantId,
-      ...input,
-      status: allConfirmed ? 'complete' : 'incomplete',
-      updatedAt: nowIso(),
-    };
   }
 }
 
@@ -2313,8 +2981,17 @@ export class PgIntegrationRepository implements IntegrationRepository {
   async createIntegration(actor: Actor, input: IntegrationCreate): Promise<IntegrationRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<IntegrationRow>(
-        `INSERT INTO integration.connections (id, tenant_id, connection_type, provider, status) VALUES ($1,$2,$3,$4,'active') RETURNING id, connection_type, provider, status, created_at, updated_at`,
-        [randomUUID(), actor.tenantId, input.connectionType, input.provider],
+        `INSERT INTO integration.connections
+           (id, tenant_id, connection_type, provider, config, status)
+         VALUES ($1, $2, $3, $4, $5::jsonb, 'draft')
+         RETURNING id, connection_type, provider, status, created_at, updated_at`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          input.connectionType,
+          input.provider,
+          JSON.stringify(input.config ?? {}),
+        ],
       );
       if (!r.rows[0]) throw new Error('integration row missing');
       return toIntegration(r.rows[0]);
@@ -2328,10 +3005,32 @@ export class PgIntegrationRepository implements IntegrationRepository {
   ): Promise<IntegrationRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<IntegrationRow>(
-        `UPDATE integration.connections SET updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, connection_type, provider, status, created_at, updated_at`,
-        [actor.tenantId, id],
+        `UPDATE integration.connections
+            SET status = COALESCE($3, status),
+                config = CASE WHEN $4::boolean THEN $5::jsonb ELSE config END,
+                updated_at = now()
+          WHERE tenant_id = $1 AND id = $2
+        RETURNING id, connection_type, provider, status, created_at, updated_at`,
+        [
+          actor.tenantId,
+          id,
+          input.status ?? null,
+          input.config !== undefined,
+          JSON.stringify(input.config ?? {}),
+        ],
       );
-      void input;
+      if (r.rows[0] !== undefined) {
+        await new PgAuditWriter(client).append({
+          tenantId: actor.tenantId,
+          actorType: 'user',
+          actorId: actor.userId,
+          action: 'integration.update',
+          resourceType: 'integration',
+          resourceId: id,
+          outcome: 'success',
+          metadata: { fields: Object.keys(input) },
+        });
+      }
       return r.rows[0] ? toIntegration(r.rows[0]) : null;
     });
   }
@@ -2366,17 +3065,42 @@ import type {
 } from './member-invitations.js';
 
 export class PgMemberInvitationRepository implements MemberInvitationRepository {
+  private readonly codec: AesGcmCandidateImportCodec;
+
   constructor(
     private readonly pool: Pool,
     private readonly role?: string,
-  ) {}
+    dataKey = 'cpf-synthetic-demo-import-key-v1',
+  ) {
+    this.codec = new AesGcmCandidateImportCodec(dataKey);
+  }
 
   async createInvitation(
     actor: Actor,
     input: MemberInvitationCreate,
   ): Promise<MemberInvitationRecord> {
     const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const email = input.email.trim().toLowerCase();
+      const result = await client.query<{
+        status: string;
+        created_at: Date;
+      }>(
+        `INSERT INTO iam.staff_invitations
+           (id, tenant_id, email_hash, encrypted_email, role_codes, token_hash,
+            invited_by, status, expires_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, 'sent', now() + interval '7 days')
+         RETURNING status, created_at`,
+        [
+          id,
+          actor.tenantId,
+          contentHash(email),
+          this.codec.encode(email),
+          JSON.stringify(input.roles),
+          contentHash(randomUUID()),
+          actor.userId,
+        ],
+      );
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2385,20 +3109,37 @@ export class PgMemberInvitationRepository implements MemberInvitationRepository 
         resourceType: 'member_invitation',
         resourceId: id,
         outcome: 'success',
-        metadata: { email: input.email },
+        metadata: { emailHash: contentHash(email), roles: input.roles },
       });
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('Member invitation insert returned no row.');
+      return {
+        id,
+        email,
+        roles: input.roles,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+      };
     });
-    return {
-      id,
-      email: input.email,
-      roles: input.roles as string[],
-      status: 'pending',
-      createdAt: nowIso(),
-    };
   }
 
   async resendInvitation(actor: Actor, id: string): Promise<MemberInvitationRecord | null> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        encrypted_email: Buffer;
+        role_codes: string[];
+        status: string;
+        created_at: Date;
+      }>(
+        `UPDATE iam.staff_invitations
+            SET token_hash = $3, status = 'sent', expires_at = now() + interval '7 days'
+          WHERE tenant_id = $1 AND id = $2
+            AND status IN ('created', 'sent', 'expired', 'failed')
+        RETURNING encrypted_email, role_codes, status, created_at`,
+        [actor.tenantId, id, contentHash(randomUUID())],
+      );
+      const row = result.rows[0];
+      if (row === undefined) return null;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2409,12 +3150,25 @@ export class PgMemberInvitationRepository implements MemberInvitationRepository 
         outcome: 'success',
         metadata: {},
       });
+      return {
+        id,
+        email: this.codec.decode(row.encrypted_email),
+        roles: row.role_codes,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+      };
     });
-    return { id, email: '', roles: [], status: 'pending', createdAt: nowIso() };
   }
 
   async revokeInvitation(actor: Actor, id: string): Promise<boolean> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query(
+        `UPDATE iam.staff_invitations
+            SET status = 'revoked', revoked_at = now()
+          WHERE tenant_id = $1 AND id = $2 AND status <> 'accepted'`,
+        [actor.tenantId, id],
+      );
+      if ((result.rowCount ?? 0) === 0) return false;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2425,8 +3179,8 @@ export class PgMemberInvitationRepository implements MemberInvitationRepository 
         outcome: 'success',
         metadata: {},
       });
+      return true;
     });
-    return true;
   }
 }
 
@@ -2443,24 +3197,43 @@ import type {
 interface TemplateRow {
   id: string;
   template_code: string;
-  channel: string;
-  subject: string;
-  body_html: string;
-  status: string | null;
+  version_no: number;
+  locale: string;
+  subject_template: string;
+  body_template: string;
+  allowed_variables: Record<string, unknown>;
+  status: string;
   created_at: Date;
-  updated_at: Date;
 }
 
 function toTemplate(r: TemplateRow): NotificationTemplateRecord {
+  const configuredChannel = r.allowed_variables.__channel;
   return {
     id: r.id,
     templateCode: r.template_code,
-    channel: r.channel,
-    subject: r.subject,
-    bodyHtml: r.body_html,
-    status: r.status ?? 'draft',
+    channel:
+      configuredChannel === 'sms' || configuredChannel === 'in_app' ? configuredChannel : 'email',
+    subject: r.subject_template,
+    bodyHtml: r.body_template,
+    status: r.status,
     createdAt: r.created_at.toISOString(),
   };
+}
+
+const TEMPLATE_COLUMNS = `id, template_code, version_no, locale, subject_template,
+  body_template, allowed_variables, status, created_at`;
+
+function renderTemplate(template: string, variables: Record<string, unknown>): string {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, key: string) => {
+    const value = variables[key];
+    if (value === undefined || value === null) return '';
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  });
 }
 
 export class PgNotificationTemplateRepository implements NotificationTemplateRepository {
@@ -2474,7 +3247,11 @@ export class PgNotificationTemplateRepository implements NotificationTemplateRep
   ): Promise<{ items: readonly NotificationTemplateRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<TemplateRow>(
-        `SELECT id, template_code, channel, subject, body_html, status, created_at, updated_at FROM integration.notification_templates WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
+        `SELECT ${TEMPLATE_COLUMNS}
+           FROM integration.notification_templates
+          WHERE tenant_id = $1
+          ORDER BY created_at DESC, id
+          LIMIT 100`,
         [actor.tenantId],
       );
       return { items: r.rows.map(toTemplate), total: r.rows.length };
@@ -2487,7 +3264,13 @@ export class PgNotificationTemplateRepository implements NotificationTemplateRep
   ): Promise<NotificationTemplateRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<TemplateRow>(
-        `INSERT INTO integration.notification_templates (id, tenant_id, template_code, channel, subject, body_html, status) VALUES ($1,$2,$3,$4,$5,$6,'draft') RETURNING id, template_code, channel, subject, body_html, status, created_at, updated_at`,
+        `INSERT INTO integration.notification_templates
+           (id, tenant_id, template_code, version_no, locale, subject_template,
+            body_template, allowed_variables, accessibility_review, status, created_by)
+         VALUES ($1, $2, $3, 1, 'en-IE', $5, $6,
+                 jsonb_build_object('__channel', $4::text),
+                 '{"status":"pending"}'::jsonb, 'draft', $7)
+         RETURNING ${TEMPLATE_COLUMNS}`,
         [
           randomUUID(),
           actor.tenantId,
@@ -2495,9 +3278,20 @@ export class PgNotificationTemplateRepository implements NotificationTemplateRep
           input.channel,
           input.subject,
           input.bodyHtml,
+          actor.userId,
         ],
       );
       if (!r.rows[0]) throw new Error('template row missing');
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'notification_template.create',
+        resourceType: 'notification_template',
+        resourceId: r.rows[0].id,
+        outcome: 'success',
+        metadata: { templateCode: input.templateCode, channel: input.channel },
+      });
       return toTemplate(r.rows[0]);
     });
   }
@@ -2505,22 +3299,58 @@ export class PgNotificationTemplateRepository implements NotificationTemplateRep
   async activateTemplate(actor: Actor, id: string): Promise<NotificationTemplateRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<TemplateRow>(
-        `UPDATE integration.notification_templates SET status = 'active', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, template_code, channel, subject, body_html, status, created_at, updated_at`,
+        `UPDATE integration.notification_templates
+            SET status = 'active'
+          WHERE tenant_id = $1 AND id = $2 AND status = 'approved'
+        RETURNING ${TEMPLATE_COLUMNS}`,
         [actor.tenantId, id],
       );
+      if (r.rows[0] !== undefined) {
+        await new PgAuditWriter(client).append({
+          tenantId: actor.tenantId,
+          actorType: 'user',
+          actorId: actor.userId,
+          action: 'notification_template.activate',
+          resourceType: 'notification_template',
+          resourceId: id,
+          outcome: 'success',
+          metadata: {},
+        });
+      }
       return r.rows[0] ? toTemplate(r.rows[0]) : null;
     });
   }
 
   async previewTemplate(
-    _actor: Actor,
-    _id: string,
-    _input: NotificationTemplatePreview,
-  ): Promise<NotificationTemplateRendered> {
-    return {
-      subject: 'Preview subject',
-      bodyHtml: '<p>Preview rendering not yet implemented.</p>',
-    };
+    actor: Actor,
+    id: string,
+    input: NotificationTemplatePreview,
+  ): Promise<NotificationTemplateRendered | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<TemplateRow>(
+        `SELECT ${TEMPLATE_COLUMNS}
+           FROM integration.notification_templates
+          WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, id],
+      );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      const variables = input.variables ?? {};
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'notification_template.preview',
+        resourceType: 'notification_template',
+        resourceId: id,
+        outcome: 'success',
+        metadata: { variables: Object.keys(variables) },
+      });
+      return {
+        subject: renderTemplate(row.subject_template, variables),
+        bodyHtml: renderTemplate(row.body_template, variables),
+      };
+    });
   }
 
   async testSendTemplate(
@@ -2528,7 +3358,28 @@ export class PgNotificationTemplateRepository implements NotificationTemplateRep
     id: string,
     input: { recipient: string },
   ): Promise<{ queued: boolean } | null> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const template = await client.query<TemplateRow>(
+        `SELECT ${TEMPLATE_COLUMNS}
+           FROM integration.notification_templates
+          WHERE tenant_id = $1 AND id = $2 AND status = 'active'`,
+        [actor.tenantId, id],
+      );
+      const row = template.rows[0];
+      if (row === undefined) return null;
+      await client.query(
+        `INSERT INTO integration.outbound_messages
+           (id, tenant_id, template_code, template_version, recipient_hash, status, payload)
+         VALUES ($1, $2, $3, $4, $5, 'queued', $6::jsonb)`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          row.template_code,
+          String(row.version_no),
+          contentHash(input.recipient.trim().toLowerCase()),
+          JSON.stringify({ test: true, locale: row.locale }),
+        ],
+      );
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2537,10 +3388,10 @@ export class PgNotificationTemplateRepository implements NotificationTemplateRep
         resourceType: 'notification_template',
         resourceId: id,
         outcome: 'success',
-        metadata: { recipient: input.recipient },
+        metadata: { recipientHash: contentHash(input.recipient.trim().toLowerCase()) },
       });
+      return { queued: true };
     });
-    return { queued: true };
   }
 }
 
@@ -2556,20 +3407,25 @@ import type {
 interface PluginRow {
   id: string;
   code: string;
+  provider: string;
   name: string;
+  version: string;
+  permissions: Record<string, unknown>;
   status: string;
   created_at: Date;
-  updated_at: Date;
 }
 
 function toPlugin(r: PluginRow): PluginRecord {
   return {
     id: r.id,
     code: r.code,
+    provider: r.provider,
     name: r.name,
+    version: r.version,
+    permissions: r.permissions,
     status: r.status as PluginRecord['status'],
     createdAt: r.created_at.toISOString(),
-    updatedAt: r.updated_at.toISOString(),
+    updatedAt: r.created_at.toISOString(),
   };
 }
 
@@ -2582,8 +3438,8 @@ export class PgPluginRepository implements PluginRepository {
   async listPlugins(actor: Actor): Promise<{ items: readonly PluginRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<PluginRow>(
-        `SELECT id, plugin_code AS code, display_name AS name, status, created_at, updated_at FROM assessment.plugin_registry WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
-        [actor.tenantId],
+        `SELECT id, code, provider, name, version, permissions, status, created_at
+           FROM assessment.plugin_registry ORDER BY created_at DESC LIMIT 100`,
       );
       return { items: r.rows.map(toPlugin), total: r.rows.length };
     });
@@ -2592,8 +3448,11 @@ export class PgPluginRepository implements PluginRepository {
   async createPlugin(actor: Actor, input: PluginCreate): Promise<PluginRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<PluginRow>(
-        `INSERT INTO assessment.plugin_registry (id, tenant_id, plugin_code, display_name, status) VALUES ($1,$2,$3,$4,'draft') RETURNING id, plugin_code AS code, display_name AS name, status, created_at, updated_at`,
-        [randomUUID(), actor.tenantId, input.code, input.name],
+        `INSERT INTO assessment.plugin_registry
+           (id, code, provider, name, version, permissions, security_review, privacy_review, accessibility_review, status)
+         VALUES ($1,$2,$3,$4,$5,$6,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'draft')
+         RETURNING id, code, provider, name, version, permissions, status, created_at`,
+        [randomUUID(), input.code, input.provider, input.name, input.version, input.permissions],
       );
       if (!r.rows[0]) throw new Error('plugin row missing');
       return toPlugin(r.rows[0]);
@@ -2607,8 +3466,9 @@ export class PgPluginRepository implements PluginRepository {
   ): Promise<PluginRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<PluginRow>(
-        `UPDATE assessment.plugin_registry SET status = $1, updated_at = now() WHERE tenant_id = $2 AND id = $3 RETURNING id, plugin_code AS code, display_name AS name, status, created_at, updated_at`,
-        [input.status, actor.tenantId, id],
+        `UPDATE assessment.plugin_registry SET status = $1 WHERE id = $2
+         RETURNING id, code, provider, name, version, permissions, status, created_at`,
+        [input.status, id],
       );
       return r.rows[0] ? toPlugin(r.rows[0]) : null;
     });
@@ -2625,20 +3485,24 @@ import type {
 
 interface PromptRow {
   id: string;
-  prompt_code: string;
+  code: string;
   version: number;
   status: string;
-  body: string;
+  system_prompt: string;
+  purpose: string;
+  safety_policy: Record<string, unknown>;
   created_at: Date;
 }
 
 function toPrompt(r: PromptRow): PromptVersionRecord {
   return {
     id: r.id,
-    promptCode: r.prompt_code,
+    promptCode: r.code,
     version: r.version,
     status: r.status as PromptVersionRecord['status'],
-    body: r.body,
+    body: r.system_prompt,
+    purpose: r.purpose,
+    safetyPolicy: r.safety_policy,
     createdAt: r.created_at.toISOString(),
   };
 }
@@ -2654,8 +3518,8 @@ export class PgPromptVersionRepository implements PromptVersionRepository {
   ): Promise<{ items: readonly PromptVersionRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<PromptRow>(
-        `SELECT id, prompt_code, version_no AS version, status, body, created_at FROM assessment.prompt_versions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
-        [actor.tenantId],
+        `SELECT id, code, version_no AS version, status, system_prompt, purpose, safety_policy, created_at
+           FROM assessment.prompt_versions ORDER BY created_at DESC LIMIT 100`,
       );
       return { items: r.rows.map(toPrompt), total: r.rows.length };
     });
@@ -2664,13 +3528,16 @@ export class PgPromptVersionRepository implements PromptVersionRepository {
   async createVersion(actor: Actor, input: PromptVersionCreate): Promise<PromptVersionRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const maxRes = await client.query<{ m: string }>(
-        `SELECT max(version_no)::text AS m FROM assessment.prompt_versions WHERE tenant_id = $1 AND prompt_code = $2`,
-        [actor.tenantId, input.promptCode],
+        `SELECT max(version_no)::text AS m FROM assessment.prompt_versions WHERE code = $1`,
+        [input.promptCode],
       );
       const versionNo = Number(maxRes.rows[0]?.m ?? '0') + 1;
       const r = await client.query<PromptRow>(
-        `INSERT INTO assessment.prompt_versions (id, tenant_id, prompt_code, version_no, status, body) VALUES ($1,$2,$3,$4,'draft',$5) RETURNING id, prompt_code, version_no AS version, status, body, created_at`,
-        [randomUUID(), actor.tenantId, input.promptCode, versionNo, input.body],
+        `INSERT INTO assessment.prompt_versions
+           (id, code, version_no, purpose, system_prompt, safety_policy, status)
+         VALUES ($1,$2,$3,$4,$5,$6,'draft')
+         RETURNING id, code, version_no AS version, status, system_prompt, purpose, safety_policy, created_at`,
+        [randomUUID(), input.promptCode, versionNo, input.purpose, input.body, input.safetyPolicy],
       );
       if (!r.rows[0]) throw new Error('prompt row missing');
       return toPrompt(r.rows[0]);
@@ -2680,8 +3547,11 @@ export class PgPromptVersionRepository implements PromptVersionRepository {
   async activateVersion(actor: Actor, id: string): Promise<PromptVersionRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<PromptRow>(
-        `UPDATE assessment.prompt_versions SET status = 'active', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, prompt_code, version_no AS version, status, body, created_at`,
-        [actor.tenantId, id],
+        `UPDATE assessment.prompt_versions
+            SET status = 'active', approved_by = COALESCE(approved_by, $1), approved_at = COALESCE(approved_at, now())
+          WHERE id = $2 AND status IN ('approved','active')
+         RETURNING id, code, version_no AS version, status, system_prompt, purpose, safety_policy, created_at`,
+        [actor.userId, id],
       );
       return r.rows[0] ? toPrompt(r.rows[0]) : null;
     });
@@ -2760,6 +3630,7 @@ import type { ReviewAssignmentRecord, ReviewAssignmentCreate } from './review-as
 import type {
   ReviewAssignmentRepository,
   AssignmentDeclineInput,
+  AssignmentConflictInput,
   AssignmentAnnotationInput,
   AssignmentAnnotationRecord,
   AssignmentClarificationInput,
@@ -2777,6 +3648,11 @@ interface AssignmentRow {
   assigned_at: Date;
   due_at: Date | null;
   submitted_at: Date | null;
+  assessment_title?: string;
+  candidate_reference?: string;
+  criterion_count?: string | number;
+  evidence_count?: string | number;
+  total_count?: string | number;
 }
 
 function toAssignment(r: AssignmentRow): ReviewAssignmentRecord {
@@ -2791,6 +3667,10 @@ function toAssignment(r: AssignmentRow): ReviewAssignmentRecord {
     assignedAt: r.assigned_at.toISOString(),
     dueAt: r.due_at?.toISOString() ?? null,
     submittedAt: r.submitted_at?.toISOString() ?? null,
+    ...(r.assessment_title === undefined ? {} : { assessmentTitle: r.assessment_title }),
+    ...(r.candidate_reference === undefined ? {} : { candidateReference: r.candidate_reference }),
+    ...(r.criterion_count === undefined ? {} : { criterionCount: Number(r.criterion_count) }),
+    ...(r.evidence_count === undefined ? {} : { evidenceCount: Number(r.evidence_count) }),
   };
 }
 
@@ -2803,7 +3683,7 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
   async listAssignments(
     actor: Actor,
     limit: number,
-    _cursor: string | null,
+    cursor: string | null,
   ): Promise<{
     items: readonly ReviewAssignmentRecord[];
     total: number;
@@ -2812,13 +3692,50 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
   }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AssignmentRow>(
-        `SELECT id, tenant_id, submission_id, reviewer_profile_id, assignment_type, blind_group, status, assigned_at, due_at, submitted_at FROM review.reviewer_assignments WHERE tenant_id = $1 ORDER BY assigned_at DESC LIMIT $2`,
-        [actor.tenantId, limit],
+        `SELECT assignment.id, assignment.tenant_id, assignment.submission_id,
+                assignment.reviewer_profile_id, assignment.assignment_type,
+                assignment.blind_group, assignment.status, assignment.assigned_at,
+                assignment.due_at, assignment.submitted_at,
+                assessment.title AS assessment_title,
+                COALESCE(candidate.external_reference,
+                  'candidate-' || left(md5(candidate.id::text), 12)) AS candidate_reference,
+                (SELECT count(*)::text FROM assessment.rubric_criteria AS criterion
+                  WHERE criterion.rubric_version_id = binding.rubric_version_id) AS criterion_count,
+                (SELECT count(*)::text FROM evidence.evidence_objects AS evidence
+                  WHERE evidence.tenant_id = assignment.tenant_id
+                    AND evidence.attempt_id = attempt.id) AS evidence_count,
+                count(*) OVER() AS total_count
+           FROM review.reviewer_assignments AS assignment
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+           JOIN runtime.submissions AS submission ON submission.id = assignment.submission_id
+           JOIN runtime.attempts AS attempt ON attempt.id = submission.attempt_id
+           JOIN runtime.attempt_version_bindings AS binding ON binding.attempt_id = attempt.id
+           JOIN assessment.assessment_versions AS assessment_version
+             ON assessment_version.id = binding.assessment_version_id
+           JOIN assessment.assessments AS assessment
+             ON assessment.id = assessment_version.assessment_id
+           JOIN hiring.applications AS application ON application.id = attempt.application_id
+           JOIN hiring.candidates AS candidate ON candidate.id = application.candidate_id
+          WHERE assignment.tenant_id = $1
+            AND ($3::boolean = false OR reviewer.user_id = $4)
+            AND ($5::uuid IS NULL OR assignment.id < $5)
+          ORDER BY assignment.assigned_at DESC, assignment.id DESC
+          LIMIT $2`,
+        [
+          actor.tenantId,
+          limit + 1,
+          actor.roles.includes('employer_reviewer'),
+          actor.userId,
+          cursor,
+        ],
       );
+      const hasMore = r.rows.length > limit;
       return {
-        items: r.rows.map(toAssignment),
-        total: r.rows.length,
-        hasMore: false,
+        items: r.rows.slice(0, limit).map(toAssignment),
+        total: Number(r.rows[0]?.total_count ?? 0),
+        hasMore,
         nextCursor: null,
       };
     });
@@ -2827,10 +3744,128 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
   async getAssignment(actor: Actor, id: string): Promise<ReviewAssignmentRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AssignmentRow>(
-        `SELECT id, tenant_id, submission_id, reviewer_profile_id, assignment_type, blind_group, status, assigned_at, due_at, submitted_at FROM review.reviewer_assignments WHERE tenant_id = $1 AND id = $2`,
+        `SELECT assignment.id, assignment.tenant_id, assignment.submission_id,
+                assignment.reviewer_profile_id, assignment.assignment_type,
+                assignment.blind_group, assignment.status, assignment.assigned_at,
+                assignment.due_at, assignment.submitted_at,
+                assessment.title AS assessment_title,
+                COALESCE(candidate.external_reference,
+                  'candidate-' || left(md5(candidate.id::text), 12)) AS candidate_reference,
+                (SELECT count(*)::text FROM assessment.rubric_criteria AS criterion
+                  WHERE criterion.rubric_version_id = binding.rubric_version_id) AS criterion_count,
+                (SELECT count(*)::text FROM evidence.evidence_objects AS evidence
+                  WHERE evidence.tenant_id = assignment.tenant_id
+                    AND evidence.attempt_id = attempt.id) AS evidence_count
+           FROM review.reviewer_assignments AS assignment
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+           JOIN runtime.submissions AS submission ON submission.id = assignment.submission_id
+           JOIN runtime.attempts AS attempt ON attempt.id = submission.attempt_id
+           JOIN runtime.attempt_version_bindings AS binding ON binding.attempt_id = attempt.id
+           JOIN assessment.assessment_versions AS assessment_version
+             ON assessment_version.id = binding.assessment_version_id
+           JOIN assessment.assessments AS assessment
+             ON assessment.id = assessment_version.assessment_id
+           JOIN hiring.applications AS application ON application.id = attempt.application_id
+           JOIN hiring.candidates AS candidate ON candidate.id = application.candidate_id
+          WHERE assignment.tenant_id = $1 AND assignment.id = $2
+            AND ($3::boolean = false OR reviewer.user_id = $4)`,
+        [actor.tenantId, id, actor.roles.includes('employer_reviewer'), actor.userId],
+      );
+      const row = r.rows[0];
+      if (row === undefined) return null;
+      const evidence = await client.query<{
+        id: string;
+        evidence_type: string;
+        source_table: string;
+        object_uri: string | null;
+        sha256: string | null;
+        metadata: Record<string, unknown>;
+        created_at: Date;
+        reviewed: boolean;
+      }>(
+        `SELECT evidence.id, evidence.evidence_type, evidence.source_table,
+                evidence.object_uri, evidence.sha256, evidence.metadata, evidence.created_at,
+                EXISTS (
+                  SELECT 1 FROM review.evidence_annotations AS annotation
+                   WHERE annotation.tenant_id = evidence.tenant_id
+                     AND annotation.assignment_id = $2
+                     AND annotation.evidence_object_id = evidence.id
+                     AND annotation.created_by = $3
+                ) AS reviewed
+           FROM evidence.evidence_objects AS evidence
+           JOIN runtime.submissions AS submission ON submission.attempt_id = evidence.attempt_id
+          WHERE evidence.tenant_id = $1 AND submission.id = $4
+          ORDER BY evidence.created_at, evidence.id`,
+        [actor.tenantId, id, actor.userId, row.submission_id],
+      );
+      const integrity = await client.query<{
+        id: string;
+        event_type: string;
+        status: 'unreviewed' | 'under_review' | 'resolved';
+        resolution: string | null;
+        rationale: string | null;
+        occurred_at: Date;
+      }>(
+        `SELECT event.id, event.event_type, event.status,
+                resolution.resolution, resolution.rationale, event.occurred_at
+           FROM evidence.integrity_events AS event
+           JOIN runtime.submissions AS submission ON submission.attempt_id = event.attempt_id
+      LEFT JOIN LATERAL (
+                 SELECT item.resolution, item.rationale
+                   FROM review.integrity_resolutions AS item
+                  WHERE item.tenant_id = event.tenant_id
+                    AND item.integrity_event_id = event.id
+                    AND item.assignment_id = $2
+                  ORDER BY item.resolved_at DESC, item.id DESC
+                  LIMIT 1
+                ) AS resolution ON true
+          WHERE event.tenant_id = $1 AND submission.id = $3
+          ORDER BY event.occurred_at, event.id`,
+        [actor.tenantId, id, row.submission_id],
+      );
+      const clarifications = await client.query<{
+        id: string;
+        request_type: string;
+        question: string;
+        status: string;
+        created_at: Date;
+      }>(
+        `SELECT id, request_type, question, status, created_at
+           FROM review.clarification_requests
+          WHERE tenant_id = $1 AND assignment_id = $2
+          ORDER BY created_at, id`,
         [actor.tenantId, id],
       );
-      return r.rows[0] ? toAssignment(r.rows[0]) : null;
+      return {
+        ...toAssignment(row),
+        evidence: evidence.rows.map((item) => ({
+          id: item.id,
+          evidenceType: item.evidence_type,
+          sourceTable: item.source_table,
+          objectUri: item.object_uri,
+          sha256: item.sha256,
+          metadata: item.metadata,
+          createdAt: item.created_at.toISOString(),
+          reviewed: item.reviewed,
+        })),
+        integrityEvents: integrity.rows.map((event) => ({
+          id: event.id,
+          eventType: event.event_type,
+          status: event.status,
+          resolution: event.resolution,
+          rationale: event.rationale,
+          occurredAt: event.occurred_at.toISOString(),
+        })),
+        clarifications: clarifications.rows.map((item) => ({
+          id: item.id,
+          requestType: item.request_type,
+          question: item.question,
+          status: item.status,
+          createdAt: item.created_at.toISOString(),
+        })),
+      };
     });
   }
 
@@ -2881,8 +3916,19 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
   async acceptAssignment(actor: Actor, id: string): Promise<ReviewAssignmentRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AssignmentRow>(
-        `UPDATE review.reviewer_assignments SET status = 'active', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, tenant_id, submission_id, reviewer_profile_id, assignment_type, blind_group, status, assigned_at, due_at, submitted_at`,
-        [actor.tenantId, id],
+        `UPDATE review.reviewer_assignments AS assignment
+            SET status = 'accepted'
+           FROM hiring.reviewer_profiles AS reviewer
+          WHERE assignment.tenant_id = $1 AND assignment.id = $2
+            AND reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+            AND ($3::boolean = false OR reviewer.user_id = $4)
+            AND assignment.status = 'assigned'
+        RETURNING assignment.id, assignment.tenant_id, assignment.submission_id,
+                  assignment.reviewer_profile_id, assignment.assignment_type,
+                  assignment.blind_group, assignment.status, assignment.assigned_at,
+                  assignment.due_at, assignment.submitted_at`,
+        [actor.tenantId, id, actor.roles.includes('employer_reviewer'), actor.userId],
       );
       return r.rows[0] ? toAssignment(r.rows[0]) : null;
     });
@@ -2890,6 +3936,33 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
 
   async stopAssignmentAi(actor: Actor, id: string): Promise<ReviewAssignmentRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const scoped = await client.query<AssignmentRow>(
+        `SELECT assignment.id, assignment.tenant_id, assignment.submission_id,
+                assignment.reviewer_profile_id, assignment.assignment_type,
+                assignment.blind_group, assignment.status, assignment.assigned_at,
+                assignment.due_at, assignment.submitted_at
+           FROM review.reviewer_assignments AS assignment
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+          WHERE assignment.tenant_id = $1 AND assignment.id = $2
+            AND ($3::boolean = false OR reviewer.user_id = $4)`,
+        [actor.tenantId, id, actor.roles.includes('employer_reviewer'), actor.userId],
+      );
+      const row = scoped.rows[0];
+      if (row === undefined) return null;
+      const assignment = toAssignment(row);
+      await client.query(
+        `UPDATE evidence.ai_conversations AS conversation
+            SET status = 'blocked', ended_at = COALESCE(ended_at, now())
+           FROM runtime.submissions AS submission
+          WHERE submission.tenant_id = $1
+            AND submission.id = $2
+            AND conversation.tenant_id = submission.tenant_id
+            AND conversation.attempt_id = submission.attempt_id
+            AND conversation.status = 'active'`,
+        [actor.tenantId, assignment.submissionId],
+      );
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2900,11 +3973,7 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
         outcome: 'success',
         metadata: {},
       });
-      const r = await client.query<AssignmentRow>(
-        `SELECT id, tenant_id, submission_id, reviewer_profile_id, assignment_type, blind_group, status, assigned_at, due_at, submitted_at FROM review.reviewer_assignments WHERE tenant_id = $1 AND id = $2`,
-        [actor.tenantId, id],
-      );
-      return r.rows[0] ? toAssignment(r.rows[0]) : null;
+      return assignment;
     });
   }
 
@@ -2915,8 +3984,19 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
   ): Promise<ReviewAssignmentRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<AssignmentRow>(
-        `UPDATE review.reviewer_assignments SET status = 'declined', updated_at = now() WHERE tenant_id = $1 AND id = $2 RETURNING id, tenant_id, submission_id, reviewer_profile_id, assignment_type, blind_group, status, assigned_at, due_at, submitted_at`,
-        [actor.tenantId, id],
+        `UPDATE review.reviewer_assignments AS assignment
+            SET status = 'cancelled'
+           FROM hiring.reviewer_profiles AS reviewer
+          WHERE assignment.tenant_id = $1 AND assignment.id = $2
+            AND reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+            AND ($3::boolean = false OR reviewer.user_id = $4)
+            AND assignment.status IN ('assigned', 'accepted')
+        RETURNING assignment.id, assignment.tenant_id, assignment.submission_id,
+                  assignment.reviewer_profile_id, assignment.assignment_type,
+                  assignment.blind_group, assignment.status, assignment.assigned_at,
+                  assignment.due_at, assignment.submitted_at`,
+        [actor.tenantId, id, actor.roles.includes('employer_reviewer'), actor.userId],
       );
       if (r.rows[0])
         await new PgAuditWriter(client).append({
@@ -2927,9 +4007,70 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
           resourceType: 'reviewer_assignment',
           resourceId: id,
           outcome: 'success',
-          metadata: { reason: input.reason },
+          metadata: { reasonHash: contentHash(input.reason) },
         });
       return r.rows[0] ? toAssignment(r.rows[0]) : null;
+    });
+  }
+
+  async setAssignmentConflict(
+    actor: Actor,
+    id: string,
+    input: AssignmentConflictInput,
+  ): Promise<ReviewAssignmentRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<AssignmentRow>(
+        `WITH scoped_assignment AS (
+           SELECT assignment.id, assignment.tenant_id, assignment.submission_id,
+                  assignment.reviewer_profile_id, assignment.assignment_type,
+                  assignment.blind_group, assignment.status, assignment.assigned_at,
+                  assignment.due_at, assignment.submitted_at
+             FROM review.reviewer_assignments AS assignment
+             JOIN hiring.reviewer_profiles AS reviewer
+               ON reviewer.id = assignment.reviewer_profile_id
+              AND reviewer.tenant_id = assignment.tenant_id
+            WHERE assignment.tenant_id = $1 AND assignment.id = $2
+              AND ($3::boolean = false OR reviewer.user_id = $4)
+         ), campaign AS (
+           SELECT attempt.campaign_id
+             FROM scoped_assignment AS assignment
+             JOIN runtime.submissions AS submission ON submission.id = assignment.submission_id
+             JOIN runtime.attempts AS attempt ON attempt.id = submission.attempt_id
+         ), updated AS (
+           UPDATE hiring.campaign_reviewers AS campaign_reviewer
+              SET conflict_status = $5
+             FROM scoped_assignment AS assignment, campaign
+            WHERE campaign_reviewer.tenant_id = $1
+              AND campaign_reviewer.campaign_id = campaign.campaign_id
+              AND campaign_reviewer.reviewer_profile_id = assignment.reviewer_profile_id
+           RETURNING campaign_reviewer.id
+         )
+         SELECT assignment.* FROM scoped_assignment AS assignment
+          WHERE EXISTS (SELECT 1 FROM updated)`,
+        [
+          actor.tenantId,
+          id,
+          actor.roles.includes('employer_reviewer'),
+          actor.userId,
+          input.declared ? 'declared' : 'clear',
+        ],
+      );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'review_assignment.conflict',
+        resourceType: 'reviewer_assignment',
+        resourceId: id,
+        outcome: 'success',
+        metadata: {
+          declared: input.declared,
+          ...(input.reason === undefined ? {} : { reasonHash: contentHash(input.reason) }),
+        },
+      });
+      return toAssignment(row);
     });
   }
 
@@ -2939,12 +4080,34 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
     input: AssignmentAnnotationInput,
   ): Promise<AssignmentAnnotationRecord | null> {
     const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      await client.query(
-        `INSERT INTO review.evidence_annotations (id, tenant_id, assignment_id, body, item_ref, annotated_by) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [id, actor.tenantId, assignmentId, input.body, input.itemId, actor.userId],
+    const inserted = await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query(
+        `INSERT INTO review.evidence_annotations
+           (id, tenant_id, assignment_id, evidence_object_id, annotation_type, visibility,
+            body, evidence_version_hash, created_by)
+         SELECT $1, $2, assignment.id, evidence.id, 'note', 'private', $5,
+                COALESCE(evidence.sha256, encode(digest(evidence.id::text, 'sha256'), 'hex')), $6
+           FROM review.reviewer_assignments AS assignment
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+           JOIN evidence.evidence_objects AS evidence
+             ON evidence.id = $4 AND evidence.tenant_id = assignment.tenant_id
+          WHERE assignment.tenant_id = $2 AND assignment.id = $3
+            AND ($7::boolean = false OR reviewer.user_id = $6)`,
+        [
+          id,
+          actor.tenantId,
+          assignmentId,
+          input.itemId,
+          input.body,
+          actor.userId,
+          actor.roles.includes('employer_reviewer'),
+        ],
       );
+      return (result.rowCount ?? 0) > 0;
     });
+    if (!inserted) return null;
     return { id, assignmentId, itemId: input.itemId, body: input.body, createdAt: nowIso() };
   }
 
@@ -2954,13 +4117,30 @@ export class PgReviewAssignmentRepository implements ReviewAssignmentRepository 
     input: AssignmentClarificationInput,
   ): Promise<AssignmentClarificationRecord | null> {
     const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      await client.query(
-        `INSERT INTO review.clarification_requests (id, tenant_id, assignment_id, question, status, requested_by) VALUES ($1,$2,$3,$4,'pending',$5)`,
-        [id, actor.tenantId, assignmentId, input.question, actor.userId],
+    const inserted = await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query(
+        `INSERT INTO review.clarification_requests
+           (id, tenant_id, assignment_id, request_type, question, status, requested_by)
+         SELECT $1, $2, assignment.id, 'candidate', $4, 'sent', $5
+           FROM review.reviewer_assignments AS assignment
+           JOIN hiring.reviewer_profiles AS reviewer
+             ON reviewer.id = assignment.reviewer_profile_id
+            AND reviewer.tenant_id = assignment.tenant_id
+          WHERE assignment.tenant_id = $2 AND assignment.id = $3
+            AND ($6::boolean = false OR reviewer.user_id = $5)`,
+        [
+          id,
+          actor.tenantId,
+          assignmentId,
+          input.question,
+          actor.userId,
+          actor.roles.includes('employer_reviewer'),
+        ],
       );
+      return (result.rowCount ?? 0) > 0;
     });
-    return { id, assignmentId, question: input.question, status: 'pending', createdAt: nowIso() };
+    if (!inserted) return null;
+    return { id, assignmentId, question: input.question, status: 'sent', createdAt: nowIso() };
   }
 }
 

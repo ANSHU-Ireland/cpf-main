@@ -1,30 +1,20 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-interface ReportBody {
-  readonly name?: unknown;
-  readonly kind?: unknown;
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Employer report directory contract not approved',
+    detail:
+      'The baseline supports reports scoped to a known submission, but not an employer-wide report catalogue or generic report command.',
+    requirementIds: ['FR-EA-18'],
+  });
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getReports());
+export function GET(request: Request): Response {
+  return gap(request);
 }
 
-export async function POST(request: Request): Promise<Response> {
-  let payload: ReportBody;
-  try {
-    payload = (await request.json()) as ReportBody;
-  } catch {
-    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
-  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-  const kind = typeof payload.kind === 'string' ? payload.kind.trim() : '';
-  if (name.length < 2) {
-    return Response.json({ error: 'A report name is required.' }, { status: 422 });
-  }
-  if (kind.length === 0) {
-    return Response.json({ error: 'A report kind is required.' }, { status: 422 });
-  }
-  return Response.json(employerStore.generateReport(name, kind), { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

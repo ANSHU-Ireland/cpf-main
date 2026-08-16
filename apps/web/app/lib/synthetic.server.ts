@@ -956,7 +956,10 @@ function freshReview(): ReviewState {
     profile: {
       displayName: 'Rivka Demo',
       disciplines: ['Backend engineering', 'Systems design'],
-      biography: 'Senior reviewer with a focus on distributed systems and code quality.',
+      maxActiveReviews: 6,
+      trainingStatus: 'passed',
+      calibrationStatus: 'calibrated',
+      conflictDeclarationRequired: true,
     },
     availability: {
       state: 'available',

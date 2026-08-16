@@ -59,7 +59,7 @@ export default function CandidateHomePage(): React.JSX.Element {
       <PageHeader
         title="Your assessments"
         headingId={headingId}
-        description="Track invitations, decisions and everything you need to prepare. All content here is a synthetic demo."
+        description="Track persisted invitations, decisions and the preparation steps for your assessments."
       />
       <AsyncBoundary state={state} onRetry={reload} label="your dashboard">
         {(data) => {

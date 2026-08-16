@@ -1,4 +1,5 @@
-import { adminStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { adminSupportCase, type PlatformAdminSupportCase } from '../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +8,11 @@ interface AssignBody {
   readonly assignee?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(adminStore.getCases());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformAdminSupportCase[]; total: number }, unknown>(
+    { request, path: '/admin/support-cases', method: 'GET' },
+    (data) => ({ items: data.items.map(adminSupportCase), total: data.total }),
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -23,12 +27,16 @@ export async function POST(request: Request): Promise<Response> {
   if (id.length === 0) {
     return Response.json({ error: 'A case id is required.' }, { status: 422 });
   }
-  if (assignee.length < 2) {
-    return Response.json({ error: 'An assignee is required.' }, { status: 422 });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assignee)) {
+    return Response.json({ error: 'A valid assignee user ID is required.' }, { status: 422 });
   }
-  const updated = adminStore.assignCase(id, assignee);
-  if (updated === null) {
-    return Response.json({ error: 'Support case not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
+  return projectPlatform<PlatformAdminSupportCase, unknown>(
+    {
+      request,
+      path: `/admin/support-cases/${encodeURIComponent(id)}/assignment`,
+      method: 'PUT',
+      body: { assigneeId: assignee },
+    },
+    adminSupportCase,
+  );
 }

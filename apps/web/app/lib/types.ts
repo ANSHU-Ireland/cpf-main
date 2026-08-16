@@ -251,7 +251,10 @@ export interface AssignmentView {
 export interface ReviewerProfileView {
   readonly displayName: string;
   readonly disciplines: readonly string[];
-  readonly biography: string;
+  readonly maxActiveReviews: number | null;
+  readonly trainingStatus: string;
+  readonly calibrationStatus: string;
+  readonly conflictDeclarationRequired: boolean;
 }
 
 export type AvailabilityState = 'available' | 'limited' | 'unavailable';
@@ -608,9 +611,9 @@ export interface ReadinessItemView {
 
 export interface AdminDashboardView {
   readonly tenants: number;
-  readonly activeIncidents: number;
+  readonly activeIncidents: number | null;
   readonly failedJobs: number;
-  readonly openAccessGrants: number;
+  readonly openAccessGrants: number | null;
   readonly alerts: readonly {
     readonly id: string;
     readonly severity: string;
@@ -653,8 +656,8 @@ export interface SubscriptionView {
   readonly tenantId: string;
   readonly plan: string;
   readonly seatsLimit: number;
-  readonly effectiveFrom: string;
-  readonly renewsAt: string;
+  readonly effectiveFrom: string | null;
+  readonly renewsAt: string | null;
 }
 
 export interface FeatureFlagView {

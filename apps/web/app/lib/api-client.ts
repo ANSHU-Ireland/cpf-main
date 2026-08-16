@@ -221,10 +221,15 @@ export const apiClient = {
     }),
   getSchedule: (): Promise<Collection<ScheduleSlotView>> =>
     request<Collection<ScheduleSlotView>>('/api/candidate/schedule'),
-  selectSlot: (slotId: string): Promise<Collection<ScheduleSlotView>> =>
+  selectSlot: (
+    applicationId: string,
+    startAt: string,
+    endAt: string,
+    timezone: string,
+  ): Promise<Collection<ScheduleSlotView>> =>
     request<Collection<ScheduleSlotView>>('/api/candidate/schedule', {
       method: 'POST',
-      body: JSON.stringify({ slotId }),
+      body: JSON.stringify({ applicationId, startAt, endAt, timezone }),
     }),
   getDataRights: (): Promise<Collection<DataRightsRequestView>> =>
     request<Collection<DataRightsRequestView>>('/api/candidate/data-rights'),
@@ -600,10 +605,10 @@ export const apiClient = {
 
   getTenants: (): Promise<Collection<TenantView>> =>
     request<Collection<TenantView>>('/api/admin/tenants'),
-  createTenant: (name: string, slug: string): Promise<TenantView> =>
+  createTenant: (name: string, slug: string, dataRegion: string): Promise<TenantView> =>
     request<TenantView>('/api/admin/tenants', {
       method: 'POST',
-      body: JSON.stringify({ name, slug }),
+      body: JSON.stringify({ name, slug, dataRegion }),
     }),
   getTenant: (id: string): Promise<TenantDetailView> =>
     request<TenantDetailView>(`/api/admin/tenants/${id}`),
@@ -623,10 +628,10 @@ export const apiClient = {
 
   getSubscription: (id: string): Promise<SubscriptionView> =>
     request<SubscriptionView>(`/api/admin/tenants/${id}/subscription`),
-  updateSubscription: (id: string, plan: string, seatsLimit: number): Promise<SubscriptionView> =>
+  updateSubscription: (id: string, plan: string): Promise<SubscriptionView> =>
     request<SubscriptionView>(`/api/admin/tenants/${id}/subscription`, {
       method: 'PUT',
-      body: JSON.stringify({ plan, seatsLimit }),
+      body: JSON.stringify({ plan }),
     }),
 
   getFeatureFlags: (): Promise<Collection<FeatureFlagView>> =>
@@ -654,10 +659,10 @@ export const apiClient = {
 
   getReleases: (): Promise<Collection<ReleaseView>> =>
     request<Collection<ReleaseView>>('/api/admin/releases'),
-  scheduleRelease: (title: string, kind: 'maintenance' | 'release'): Promise<ReleaseView> =>
+  scheduleRelease: (description: string, startsAt: string, endsAt: string): Promise<ReleaseView> =>
     request<ReleaseView>('/api/admin/releases', {
       method: 'POST',
-      body: JSON.stringify({ title, kind }),
+      body: JSON.stringify({ description, startsAt, endsAt }),
     }),
 
   getSupportCases: (): Promise<Collection<AdminSupportCaseView>> =>
@@ -687,11 +692,12 @@ export const apiClient = {
   createAssessment: (
     name: string,
     roleFamily: string,
+    seniority: string,
     riskTier: RiskTier,
   ): Promise<AssessmentView> =>
     request<AssessmentView>('/api/admin/assessments', {
       method: 'POST',
-      body: JSON.stringify({ name, roleFamily, riskTier }),
+      body: JSON.stringify({ name, roleFamily, seniority, riskTier }),
     }),
   getAssessment: (id: string): Promise<AssessmentDetailView> =>
     request<AssessmentDetailView>(`/api/admin/assessments/${id}`),
@@ -748,12 +754,14 @@ export const apiClient = {
   registerAiModel: (
     name: string,
     provider: string,
+    modelKey: string,
+    modelVersion: string,
     useCase: string,
     limitations: string,
   ): Promise<AiModelView> =>
     request<AiModelView>('/api/admin/ai-models', {
       method: 'POST',
-      body: JSON.stringify({ name, provider, useCase, limitations }),
+      body: JSON.stringify({ name, provider, modelKey, modelVersion, useCase, limitations }),
     }),
   getAiModel: (id: string): Promise<AiModelDetailView> =>
     request<AiModelDetailView>(`/api/admin/ai-models/${id}`),
@@ -773,22 +781,29 @@ export const apiClient = {
 
   getPromptVersions: (): Promise<Collection<PromptVersionView>> =>
     request<Collection<PromptVersionView>>('/api/admin/prompts'),
-  createPromptVersion: (name: string): Promise<PromptVersionView> =>
+  createPromptVersion: (
+    promptCode: string,
+    purpose: string,
+    body: string,
+  ): Promise<PromptVersionView> =>
     request<PromptVersionView>('/api/admin/prompts', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ promptCode, purpose, body }),
     }),
 
   getPlugins: (): Promise<Collection<PluginView>> =>
     request<Collection<PluginView>>('/api/admin/plugins'),
   registerPlugin: (
+    code: string,
+    provider: string,
     name: string,
+    version: string,
     capabilities: readonly string[],
     dataScope: string,
   ): Promise<PluginView> =>
     request<PluginView>('/api/admin/plugins', {
       method: 'POST',
-      body: JSON.stringify({ name, capabilities, dataScope }),
+      body: JSON.stringify({ code, provider, name, version, capabilities, dataScope }),
     }),
 
   // ── Governance & Audit methods (GOV-01..18, AUD-01..02) ─────────────────────────────────────
@@ -797,13 +812,15 @@ export const apiClient = {
   getAiSystems: (): Promise<Collection<AiSystemView>> =>
     request<Collection<AiSystemView>>('/api/governance/ai-systems'),
   registerAiSystem: (
+    systemCode: string,
     name: string,
-    purpose: string,
-    classification: string,
+    providerLegalName: string,
+    intendedPurpose: string,
+    version: string,
   ): Promise<AiSystemView> =>
     request<AiSystemView>('/api/governance/ai-systems', {
       method: 'POST',
-      body: JSON.stringify({ name, purpose, classification }),
+      body: JSON.stringify({ systemCode, name, providerLegalName, intendedPurpose, version }),
     }),
 
   // GOV-02: AI Act Classification

@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
-import { operationsStore } from '../../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(_request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  await operationsStore.retryIntegrationDelivery(id);
-  return NextResponse.json({ success: true });
+export function POST(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Integration delivery retry contract is missing',
+    detail: 'No approved public API operation can retry a selected integration delivery.',
+    requirementIds: ['OPS-03', 'FR-INT-06'],
+  });
 }

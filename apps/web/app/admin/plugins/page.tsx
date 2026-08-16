@@ -30,12 +30,18 @@ const fieldStyle: React.CSSProperties = {
 
 export default function PluginsPage(): React.JSX.Element {
   const headingId = useId();
+  const codeId = useId();
+  const providerId = useId();
   const nameId = useId();
+  const versionId = useId();
   const capId = useId();
   const scopeId = useId();
   const load = useCallback(() => apiClient.getPlugins(), []);
   const { state, reload, setData } = useAsync<Collection<PluginView>>(load);
+  const [code, setCode] = useState('');
+  const [provider, setProvider] = useState('');
   const [name, setName] = useState('');
+  const [version, setVersion] = useState('');
   const [capabilities, setCapabilities] = useState('');
   const [dataScope, setDataScope] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,9 +55,19 @@ export default function PluginsPage(): React.JSX.Element {
         .split(',')
         .map((c) => c.trim())
         .filter((c) => c.length > 0);
-      const created = await apiClient.registerPlugin(name.trim(), caps, dataScope.trim());
+      const created = await apiClient.registerPlugin(
+        code.trim(),
+        provider.trim(),
+        name.trim(),
+        version.trim(),
+        caps,
+        dataScope.trim(),
+      );
       setData({ items: [created, ...current.items], total: current.total + 1 });
+      setCode('');
+      setProvider('');
       setName('');
+      setVersion('');
       setCapabilities('');
       setDataScope('');
     } catch (e) {
@@ -90,6 +106,29 @@ export default function PluginsPage(): React.JSX.Element {
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={codeId} style={{ fontWeight: 600 }}>
+                    Plugin code
+                  </label>
+                  <input
+                    id={codeId}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toLowerCase())}
+                    placeholder="com.vendor.plugin"
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={providerId} style={{ fontWeight: 600 }}>
+                    Provider
+                  </label>
+                  <input
+                    id={providerId}
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <label htmlFor={nameId} style={{ fontWeight: 600 }}>
                     Plugin name
                   </label>
@@ -97,6 +136,18 @@ export default function PluginsPage(): React.JSX.Element {
                     id={nameId}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor={versionId} style={{ fontWeight: 600 }}>
+                    Version
+                  </label>
+                  <input
+                    id={versionId}
+                    value={version}
+                    onChange={(e) => setVersion(e.target.value)}
+                    placeholder="1.0.0"
                     style={fieldStyle}
                   />
                 </div>
@@ -132,7 +183,10 @@ export default function PluginsPage(): React.JSX.Element {
                   <Button
                     disabled={
                       busy ||
+                      !/^[a-z0-9](?:[a-z0-9._-]{0,80}[a-z0-9])?$/.test(code.trim()) ||
+                      provider.trim().length < 2 ||
                       name.trim().length < 2 ||
+                      version.trim().length < 1 ||
                       capabilities.trim().length === 0 ||
                       dataScope.trim().length < 2
                     }

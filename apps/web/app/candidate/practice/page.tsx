@@ -29,11 +29,6 @@ export default function PracticeCentrePage() {
 
   const { state, reload } = useAsync<{ modules: PracticeModule[] }>(loader);
 
-  const handleStart = async (moduleId: string) => {
-    // The synthetic catalogue has no executable module route yet.
-    void moduleId;
-  };
-
   return (
     <>
       <PageHeader
@@ -95,14 +90,14 @@ export default function PracticeCentrePage() {
                     </div>
                     <Button
                       variant={module.completed ? 'secondary' : 'primary'}
-                      onClick={() => handleStart(module.id)}
+                      disabled
+                      title="The baseline contract exposes the practice catalogue but no launch operation."
                     >
-                      {module.completed ? 'Practice again' : 'Start practice'}
+                      Launch unavailable
                     </Button>
                   </div>
                 </Card>
               ))}
-              \n{' '}
             </div>
           </div>
         )}

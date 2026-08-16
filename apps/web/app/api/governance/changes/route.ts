@@ -1,38 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const collection = governanceStore.getChangeRequests();
-  return NextResponse.json(collection);
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Change-control directory contract is incomplete',
+    detail:
+      'The approved API can submit a change decision but has no list operation or complete canonical change-impact payload for this screen.',
+    requirementIds: ['GOV-18', 'FR-GOV-24'],
+  });
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const { title, significance, affectedControls } = body;
+export function GET(request: Request): Response {
+  return gap(request);
+}
 
-  const SIGNIFICANCES = ['minor', 'major', 'substantial'];
-  if (typeof title !== 'string' || title.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid title; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-  if (typeof significance !== 'string' || !SIGNIFICANCES.includes(significance)) {
-    return NextResponse.json({ error: 'Invalid significance.' }, { status: 422 });
-  }
-  if (typeof affectedControls !== 'string' || affectedControls.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid affected controls; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-
-  const change = governanceStore.submitChangeRequest(
-    title.trim(),
-    significance as 'minor' | 'major' | 'substantial',
-    affectedControls.trim(),
-  );
-  return NextResponse.json(change, { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

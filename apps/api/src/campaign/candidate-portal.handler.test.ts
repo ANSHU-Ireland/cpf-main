@@ -3,6 +3,7 @@ import {
   handleGetCandidateProfile,
   handleGetCandidateInvitation,
   handleGetCandidateApplicationStatus,
+  handleGetCandidatePractice,
   type CandidatePortalService,
 } from './candidate-portal.handler.js';
 import type { Actor } from '@cpf/org';
@@ -37,6 +38,7 @@ function service(overrides: Partial<CandidatePortalService> = {}): CandidatePort
           decision: null,
         },
       }),
+    listPractice: () => Promise.resolve({ ok: true as const, modules: [] }),
     ...overrides,
   };
 }
@@ -80,5 +82,11 @@ describe('handleGetCandidateApplicationStatus', () => {
       applicationId: VALID_ID,
     });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('handleGetCandidatePractice', () => {
+  it('returns 200', async () => {
+    expect((await handleGetCandidatePractice(service(), { actor })).status).toBe(200);
   });
 });

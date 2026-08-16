@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
-import { governanceStore } from '../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, { params }: { params: { systemId: string } }) {
-  const assessment = governanceStore.getImpactAssessment(params.systemId);
-  if (!assessment) {
-    return NextResponse.json({ error: 'Impact assessment not found.' }, { status: 404 });
-  }
-  return NextResponse.json(assessment);
+export function GET(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Impact-assessment read contract is incomplete',
+    detail:
+      'The approved API exposes a collection but not the system-and-assessment-type read model required by this checkpoint screen.',
+    requirementIds: ['GOV-08', 'FR-GOV-12'],
+  });
 }

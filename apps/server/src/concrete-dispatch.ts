@@ -24,7 +24,7 @@ import {
   PgNoticeRepository,
   PgAssessmentRepository,
   PgCampaignReviewerRepository,
-  PgCampaignStatsRepository,
+  PgCampaignReadinessRepository,
   PgCampaignDashboardRepository,
   PgBookingRepository,
   PgAiModelRepository,
@@ -331,7 +331,7 @@ export class ConcreteDispatcher {
   readonly #attempts;
   readonly #campaigns;
   readonly #campaignLifecycle;
-  readonly #campaignStats;
+  readonly #campaignReadiness;
   readonly #candidates;
   readonly #candidateImports;
   readonly #invitations;
@@ -396,9 +396,9 @@ export class ConcreteDispatcher {
     this.#campaignLifecycle = api.createCampaignLifecycleService({
       repository: campaignRepository,
     });
-    this.#campaignStats = api.createCampaignStatsService({
-      repository: new PgCampaignStatsRepository(pool, options),
-    });
+    this.#campaignReadiness = api.createCampaignReadinessService(
+      new PgCampaignReadinessRepository(pool, role),
+    );
     this.#candidates = api.createCandidateService({
       repository: new PgCandidateRepository(pool, options),
     });
@@ -476,7 +476,11 @@ export class ConcreteDispatcher {
       repository: new PgDeployerReadinessRepository(pool, role),
     });
     this.#memberInvitations = api.createMemberInvitationService({
-      repository: new PgMemberInvitationRepository(pool, role),
+      repository: new PgMemberInvitationRepository(
+        pool,
+        role,
+        options.importDataKey ?? 'cpf-synthetic-demo-import-key-v1',
+      ),
     });
     this.#integrations = api.createIntegrationService({
       repository: new PgIntegrationRepository(pool, role),
@@ -636,8 +640,15 @@ export class ConcreteDispatcher {
       case 'get_campaigns_campaignId_comparison':
         return api.handleGetCampaignComparison(this.#campaignDashboard, { actor, campaignId });
       case 'get_campaigns_campaignId_activation_preflight':
+        return api.handleGetCampaignActivationPreflight(this.#campaignReadiness, {
+          actor,
+          campaignId,
+        });
       case 'get_campaigns_campaignId_candidate_preview':
-        return api.handleGetCampaignStats(this.#campaignStats, { actor, campaignId });
+        return api.handleGetCampaignCandidatePreview(this.#campaignReadiness, {
+          actor,
+          campaignId,
+        });
       case 'get_campaigns_campaignId_reviewers':
         return api.handleGetCampaignReviewers(this.#campaignReviewers, {
           actor,
@@ -727,10 +738,15 @@ export class ConcreteDispatcher {
       case 'delete_invitations_invitationId':
         return api.handleRevokeInvitation(this.#invitations, { actor, invitationId });
       case 'get_applications_applicationId_bookings':
-        return api.handleListBookings(this.#bookings, { actor });
+        return api.handleListBookings(this.#bookings, { actor, applicationId });
       case 'post_applications_applicationId_bookings':
+        return api.handleCreateBooking(this.#bookings, { actor, applicationId, body });
       case 'put_bookings_bookingId':
-        return api.handleCreateBooking(this.#bookings, { actor, body });
+        return api.handleUpdateBooking(this.#bookings, {
+          actor,
+          bookingId: p('bookingId'),
+          body,
+        });
 
       // ── Scorecards ────────────────────────────────────────────────────────
       case 'get_review_assignments_assignmentId_scorecard':
@@ -740,20 +756,22 @@ export class ConcreteDispatcher {
 
       // ── Accommodations ────────────────────────────────────────────────────
       case 'get_accommodations':
-      case 'get_candidate_accommodations':
         return api.handleGetAccommodations(this.#accommodations, {
           actor,
-          applicationId: applicationId || '',
+          applicationId,
         });
+      case 'get_candidate_accommodations':
+        return api.handleGetCandidateAccommodations(this.#accommodations, { actor });
       case 'post_candidate_accommodations':
-        return api.handlePostAccommodation(this.#accommodations, {
+        return api.handlePostCandidateAccommodation(this.#accommodations, { actor, body });
+      case 'put_accommodations_accommodationId_decision':
+        return api.handlePatchAccommodationStatus(this.#accommodations, {
           actor,
-          applicationId: applicationId || '',
+          accommodationId,
           body,
         });
-      case 'put_accommodations_accommodationId_decision':
       case 'put_candidate_accommodations_accommodationId':
-        return api.handlePatchAccommodationStatus(this.#accommodations, {
+        return api.handlePutCandidateAccommodation(this.#accommodations, {
           actor,
           accommodationId,
           body,
@@ -761,13 +779,13 @@ export class ConcreteDispatcher {
 
       // ── Notices ───────────────────────────────────────────────────────────
       case 'get_candidate_notices':
-        return api.handleGetNotices(this.#notices, { actor, applicationId: applicationId || '' });
+        return api.handleGetAccountNotices(this.#notices, { actor });
       case 'get_me_notices':
         return api.handleGetAccountNotices(this.#notices, { actor });
       case 'post_candidate_notices_noticeId_acknowledgement':
-        return api.handlePostNotice(this.#notices, {
+        return api.handlePostCandidateNoticeAcknowledgement(this.#notices, {
           actor,
-          applicationId: applicationId || '',
+          noticeId: p('noticeId'),
           body,
         });
 
@@ -779,9 +797,10 @@ export class ConcreteDispatcher {
       case 'post_assessments':
         return api.handlePostAssessment(this.#assessments, { actor, body });
       case 'post_assessments_assessmentId_versions':
-        return api.handlePostDuplicateVersion(this.#assessmentVersions, {
+        return api.handlePostAssessmentVersion(this.#assessmentVersions, {
           actor,
-          versionId: assessmentId,
+          assessmentId,
+          body,
         });
 
       // ── Assessment Versions ───────────────────────────────────────────────
@@ -806,8 +825,9 @@ export class ConcreteDispatcher {
       case 'get_ai_models':
         return api.handleGetAiModels(this.#aiModels, { actor, query: query as never });
       case 'post_ai_models':
-      case 'post_ai_models_modelId_evaluations':
         return api.handlePostAiModel(this.#aiModels, { actor, body });
+      case 'post_ai_models_modelId_evaluations':
+        return api.handlePostAiModelEvaluation(this.#aiModels, { actor, modelId, body });
       case 'post_ai_models_modelId_activate':
         return api.handlePostActivateAiModel(this.#aiModels, { actor, modelId });
       case 'post_ai_models_modelId_suspend':
@@ -888,8 +908,9 @@ export class ConcreteDispatcher {
 
       // ── Candidate Portal ──────────────────────────────────────────────────
       case 'get_candidate_profile':
-      case 'get_candidate_practice':
         return api.handleGetCandidateProfile(this.#candidatePortal, { actor });
+      case 'get_candidate_practice':
+        return api.handleGetCandidatePractice(this.#candidatePortal, { actor });
       case 'get_candidate_invitation':
       case 'post_candidate_invitation_recovery':
       case 'post_candidate_invitations_exchange':
@@ -984,14 +1005,19 @@ export class ConcreteDispatcher {
           body,
         });
       case 'post_review_assignments_assignmentId_decline':
-      case 'put_review_assignments_assignmentId_conflict':
         return api.handlePostDeclineAssignment(this.#reviewAssignments, {
           actor,
           assignmentId,
           body,
         });
+      case 'put_review_assignments_assignmentId_conflict':
+        return api.handlePutAssignmentConflict(this.#reviewAssignments, {
+          actor,
+          assignmentId,
+          body,
+        });
       case 'post_review_assignments_assignmentId_submit':
-        return api.handlePutScorecard(this.#scorecards, { actor, assignmentId, body });
+        return api.handleSubmitScorecard(this.#scorecards, { actor, assignmentId });
 
       // ── Reviewer Profile ──────────────────────────────────────────────────
       case 'get_reviewer_profile':

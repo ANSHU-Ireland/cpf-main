@@ -13,12 +13,16 @@ export interface PromptVersionRecord {
   readonly version: number;
   readonly status: PromptVersionStatus;
   readonly body: string;
+  readonly purpose: string;
+  readonly safetyPolicy: Readonly<Record<string, unknown>>;
   readonly createdAt: string;
 }
 
 export interface PromptVersionCreate {
   readonly promptCode: string;
+  readonly purpose: string;
   readonly body: string;
+  readonly safetyPolicy: Readonly<Record<string, unknown>>;
 }
 
 export interface PromptVersionRepository {
@@ -33,11 +37,27 @@ export function parsePromptVersionCreate(
   if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
   const obj = raw as Record<string, unknown>;
   const errors: string[] = [];
-  for (const k of ['promptCode', 'body'] as const) {
+  for (const k of ['promptCode', 'purpose', 'body'] as const) {
     if (typeof obj[k] !== 'string' || (obj[k] as string).length === 0) errors.push(`${k} required`);
   }
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, value: { promptCode: obj.promptCode as string, body: obj.body as string } };
+  if (
+    obj['safetyPolicy'] === null ||
+    typeof obj['safetyPolicy'] !== 'object' ||
+    Array.isArray(obj['safetyPolicy'])
+  ) {
+    errors.push('safetyPolicy must be an object');
+  }
+  if (errors.length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      promptCode: obj.promptCode as string,
+      purpose: obj.purpose as string,
+      body: obj.body as string,
+      safetyPolicy: obj.safetyPolicy as Readonly<Record<string, unknown>>,
+    },
+  };
 }
 
 export function parsePromptVersionId(raw: string): string | null {

@@ -34,6 +34,11 @@ function service(overrides: Partial<AiModelService> = {}): AiModelService {
     listModels: () => Promise.resolve({ ok: true as const, page }),
     getModel: () => Promise.resolve({ ok: true as const, model: modelDto }),
     createModel: () => Promise.resolve({ ok: true as const, model: modelDto }),
+    recordEvaluation: () =>
+      Promise.resolve({
+        ok: true as const,
+        model: { ...modelDto, status: 'evaluating' as const },
+      }),
     activateModel: () =>
       Promise.resolve({ ok: true as const, model: { ...modelDto, status: 'active' as const } }),
     suspendModel: () =>

@@ -3,6 +3,7 @@ import {
   getCandidateProfile,
   getCandidateInvitation,
   getCandidateApplicationStatus,
+  listCandidatePractice,
 } from './candidate-portal.js';
 import type {
   CandidatePortalRepository,
@@ -50,6 +51,7 @@ function repo(overrides: Partial<CandidatePortalRepository> = {}): CandidatePort
     getProfile: () => Promise.resolve(profile),
     getInvitation: () => Promise.resolve(invitation),
     getApplicationStatus: () => Promise.resolve(application),
+    listPracticeModules: () => Promise.resolve([]),
     ...overrides,
   };
 }
@@ -99,5 +101,12 @@ describe('getCandidateApplicationStatus', () => {
       'a2',
     );
     expect(result).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe('listCandidatePractice', () => {
+  it('returns the persistent practice catalogue', async () => {
+    const result = await listCandidatePractice({ repository: repo() }, admin);
+    expect(result).toEqual({ ok: true, modules: [] });
   });
 });
