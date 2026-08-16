@@ -21,12 +21,14 @@ const CHECKS: readonly { label: string; detail: string }[] = [
   },
 ];
 
+const DEMO_ATTEMPT_ID = '11111111-0000-4000-8000-000000000300';
+
 export default function ReadinessPage(): React.JSX.Element {
   const headingId = useId();
   const router = useRouter();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const loader = useCallback(() => apiClient.getAttempt('att_frontend_demo'), []);
+  const loader = useCallback(() => apiClient.getAttempt(DEMO_ATTEMPT_ID), []);
   const { state, reload } = useAsync(loader);
 
   async function start(attempt: AttemptView): Promise<void> {

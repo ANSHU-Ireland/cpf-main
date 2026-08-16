@@ -11,6 +11,7 @@ export interface PlatformCallInput {
   readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly idempotencyKey?: string;
+  readonly correlationId?: string;
 }
 
 export interface PlatformResult<T> {
@@ -136,7 +137,7 @@ async function errorDetail(response: Response): Promise<string> {
 }
 
 export async function callPlatform<T>(input: PlatformCallInput): Promise<PlatformResult<T>> {
-  const traceId = correlationId(input.request);
+  const traceId = input.correlationId?.trim() || correlationId(input.request);
   const authorization = bearerCredential(input.request);
   if (authorization === null) {
     throw new PlatformApiError(401, traceId, 'An authenticated session is required.');
@@ -188,6 +189,27 @@ export async function forwardPlatform(input: PlatformCallInput): Promise<Respons
     }
     return Response.json(result.data, {
       status: result.status,
+      headers: { [CORRELATION_HEADER]: result.correlationId },
+    });
+  } catch (error) {
+    if (error instanceof PlatformApiError) return error.toResponse();
+    throw error;
+  }
+}
+
+export async function mutateThenProject<T, U>(input: {
+  readonly mutation: PlatformCallInput;
+  readonly read: PlatformCallInput;
+  readonly project: (data: T) => U;
+}): Promise<Response> {
+  try {
+    const mutation = await callPlatform<unknown>(input.mutation);
+    const result = await callPlatform<T>({
+      ...input.read,
+      correlationId: mutation.correlationId,
+    });
+    return Response.json(input.project(result.data), {
+      status: 200,
       headers: { [CORRELATION_HEADER]: result.correlationId },
     });
   } catch (error) {

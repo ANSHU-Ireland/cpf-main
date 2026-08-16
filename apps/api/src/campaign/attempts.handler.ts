@@ -1,5 +1,7 @@
 import {
   getAttempt,
+  getLatestAttemptPrecheck,
+  getAttemptSubmissionPreview,
   startAttempt,
   submitAttempt,
   saveAttemptResponse,
@@ -31,6 +33,8 @@ import { ensureCorrelationId, jsonResponse, problemResponse, type HttpResponse }
 
 export interface AttemptService {
   get(actor: Actor, attemptId: string): Promise<HttpResponse>;
+  latestPrecheck(actor: Actor, attemptId: string): Promise<HttpResponse>;
+  submissionPreview(actor: Actor, attemptId: string): Promise<HttpResponse>;
   start(actor: Actor, attemptId: string): Promise<HttpResponse>;
   submit(actor: Actor, attemptId: string): Promise<HttpResponse>;
   saveResponse(
@@ -77,6 +81,22 @@ export function createAttemptService(deps: { repository: AttemptRepository }): A
       const r = await getAttempt(deps, actor, aid);
       if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
       return jsonResponse(200, r.attempt, correlationId);
+    },
+    latestPrecheck: async (actor, attemptId) => {
+      const correlationId = ensureCorrelationId();
+      const aid = parseAttemptId(attemptId);
+      if (aid === null) return invalidId(correlationId, 'attemptId must be a valid UUID.');
+      const r = await getLatestAttemptPrecheck(deps, actor, aid);
+      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
+      return jsonResponse(200, r.precheck, correlationId);
+    },
+    submissionPreview: async (actor, attemptId) => {
+      const correlationId = ensureCorrelationId();
+      const aid = parseAttemptId(attemptId);
+      if (aid === null) return invalidId(correlationId, 'attemptId must be a valid UUID.');
+      const r = await getAttemptSubmissionPreview(deps, actor, aid);
+      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
+      return jsonResponse(200, r.preview, correlationId);
     },
     start: async (actor, attemptId) => {
       const correlationId = ensureCorrelationId();
@@ -206,6 +226,20 @@ export async function handleGetAttempt(
   req: { actor: Actor; attemptId: string },
 ): Promise<HttpResponse> {
   return svc.get(req.actor, req.attemptId);
+}
+
+export async function handleGetLatestAttemptPrecheck(
+  svc: AttemptService,
+  req: { actor: Actor; attemptId: string },
+): Promise<HttpResponse> {
+  return svc.latestPrecheck(req.actor, req.attemptId);
+}
+
+export async function handleGetAttemptSubmissionPreview(
+  svc: AttemptService,
+  req: { actor: Actor; attemptId: string },
+): Promise<HttpResponse> {
+  return svc.submissionPreview(req.actor, req.attemptId);
 }
 
 export async function handleStartAttempt(

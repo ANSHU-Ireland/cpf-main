@@ -4,6 +4,18 @@ import type { DataRightsType } from '../../../lib/types';
 export const dynamic = 'force-dynamic';
 
 const TYPES = new Set<DataRightsType>(['export', 'rectification', 'erasure', 'restriction']);
+const TO_PLATFORM_TYPE: Readonly<Record<DataRightsType, string>> = {
+  export: 'access',
+  rectification: 'correction',
+  erasure: 'deletion',
+  restriction: 'restriction',
+};
+const FROM_PLATFORM_TYPE: Readonly<Record<string, DataRightsType>> = {
+  access: 'export',
+  correction: 'rectification',
+  deletion: 'erasure',
+  restriction: 'restriction',
+};
 
 interface CreateBody {
   readonly type?: unknown;
@@ -13,7 +25,14 @@ interface CreateBody {
 interface DataRightRecord {
   readonly id: string;
   readonly requestType: string;
-  readonly status: 'pending' | 'in_progress' | 'completed' | 'rejected';
+  readonly status:
+    | 'received'
+    | 'identity_verification'
+    | 'in_progress'
+    | 'fulfilled'
+    | 'partially_fulfilled'
+    | 'rejected'
+    | 'closed';
   readonly createdAt: string;
 }
 
@@ -29,13 +48,15 @@ export function GET(request: Request): Promise<Response> {
       total: page.total,
       items: page.items.map((item) => ({
         id: item.id,
-        type: item.requestType,
+        type: FROM_PLATFORM_TYPE[item.requestType] ?? 'export',
         status:
-          item.status === 'pending'
-            ? 'received'
+          item.status === 'fulfilled' || item.status === 'closed'
+            ? 'completed'
             : item.status === 'rejected'
               ? 'refused'
-              : item.status,
+              : item.status === 'identity_verification' || item.status === 'partially_fulfilled'
+                ? 'in_progress'
+                : item.status,
         submittedAt: item.createdAt,
         note: null,
       })),
@@ -60,7 +81,7 @@ export async function POST(request: Request): Promise<Response> {
     path: '/candidate/data-rights-requests',
     method: 'POST',
     body: {
-      requestType: type,
+      requestType: TO_PLATFORM_TYPE[type as DataRightsType],
       justification: note.trim() || 'Candidate self-service request.',
     },
   });

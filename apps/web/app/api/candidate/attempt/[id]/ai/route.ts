@@ -1,4 +1,5 @@
-import { runtimeStore } from '../../../../../lib/synthetic.server';
+import { attemptAiMessages, type PlatformAttempt } from '../../../../../lib/attempt-api.server';
+import { mutateThenProject, projectPlatform } from '../../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,22 +8,19 @@ interface AiBody {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
-  return Response.json(runtimeStore.getAiMessages());
+  return projectPlatform<PlatformAttempt, object>(
+    { request, path: `/attempts/${encodeURIComponent(params.id)}`, method: 'GET' },
+    attemptAiMessages,
+  );
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
   let payload: AiBody;
   try {
     payload = (await request.json()) as AiBody;
@@ -33,5 +31,15 @@ export async function POST(
   if (message.length < 2) {
     return Response.json({ error: 'Enter a message to send.' }, { status: 422 });
   }
-  return Response.json(runtimeStore.sendAiMessage(message));
+  const id = encodeURIComponent(params.id);
+  return mutateThenProject<PlatformAttempt, object>({
+    mutation: {
+      request,
+      path: `/attempts/${id}/ai/messages`,
+      method: 'POST',
+      body: { content: message },
+    },
+    read: { request, path: `/attempts/${id}`, method: 'GET' },
+    project: attemptAiMessages,
+  });
 }

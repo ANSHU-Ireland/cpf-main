@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   getAttempt,
+  getLatestAttemptPrecheck,
+  getAttemptSubmissionPreview,
   startAttempt,
   submitAttempt,
   saveAttemptResponse,
@@ -36,6 +38,8 @@ import {
   type AttemptPrecheckRecord,
   type AttemptAiMessageRecord,
   type AttemptPluginExecutionRecord,
+  type AttemptSubmissionPreviewRecord,
+  AttemptSubmissionConflictError,
 } from './attempts.js';
 import type { Actor } from './types.js';
 
@@ -64,6 +68,10 @@ const attemptSession: AttemptSessionRecord = {
   tasks: [],
   activeItemId: null,
   receiptRef: null,
+  aiMessages: [],
+  artifacts: [],
+  pluginExecutions: [],
+  breakActive: false,
 };
 const response: AttemptResponseRecord = { attemptId: ID, itemId: ITEM, value: 42, savedAt: '' };
 const flag: AttemptItemFlagRecord = { attemptId: ID, itemId: ITEM, flagged: true };
@@ -83,6 +91,14 @@ const incident: AttemptIncidentRecord = {
   recordedAt: '',
 };
 const precheck: AttemptPrecheckRecord = { attemptId: ID, passed: true, checks: { camera: true } };
+const preview: AttemptSubmissionPreviewRecord = {
+  attemptId: ID,
+  ready: true,
+  incompleteItemIds: [],
+  blockers: [],
+  responseCount: 1,
+  artifactCount: 0,
+};
 const aiMessage: AttemptAiMessageRecord = {
   id: 'm1',
   attemptId: ID,
@@ -101,6 +117,8 @@ const execution: AttemptPluginExecutionRecord = {
 function repo(overrides: Partial<AttemptRepository> = {}): AttemptRepository {
   return {
     getAttempt: () => Promise.resolve(attemptSession),
+    getLatestPrecheck: () => Promise.resolve(precheck),
+    getSubmissionPreview: () => Promise.resolve(preview),
     startAttempt: () => Promise.resolve(attempt),
     submitAttempt: () => Promise.resolve({ ...attempt, status: 'submitted' }),
     saveResponse: () => Promise.resolve(response),
@@ -130,6 +148,17 @@ describe('getAttempt', () => {
   it('404 when missing', async () => {
     const r = await getAttempt(deps({ getAttempt: () => Promise.resolve(null) }), admin, ID);
     expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('attempt readiness reads', () => {
+  it('returns the latest precheck', async () =>
+    expect((await getLatestAttemptPrecheck(deps(), admin, ID)).ok).toBe(true));
+  it('returns a submission preview', async () =>
+    expect((await getAttemptSubmissionPreview(deps(), admin, ID)).ok).toBe(true));
+  it('does not expose readiness to an unauthorised role', async () => {
+    expect((await getLatestAttemptPrecheck(deps(), noRole, ID)).ok).toBe(false);
+    expect((await getAttemptSubmissionPreview(deps(), noRole, ID)).ok).toBe(false);
   });
 });
 
@@ -202,6 +231,17 @@ describe('submitAttempt', () => {
   it('404 when missing', async () => {
     const r = await submitAttempt(deps({ submitAttempt: () => Promise.resolve(null) }), admin, ID);
     expect(r.ok === false && r.status).toBe(404);
+  });
+  it('returns a conflict when required content is incomplete', async () => {
+    const r = await submitAttempt(
+      deps({
+        submitAttempt: () =>
+          Promise.reject(new AttemptSubmissionConflictError('responses incomplete')),
+      }),
+      admin,
+      ID,
+    );
+    expect(r.ok === false && r.status).toBe(409);
   });
 });
 

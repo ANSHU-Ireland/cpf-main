@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   callPlatform,
   forwardPlatform,
+  mutateThenProject,
   PlatformApiError,
   projectPlatform,
 } from './platform-api.server.js';
@@ -123,5 +124,32 @@ describe('platform API adapter', () => {
     >({ request, path: '/projection' }, (data) => ({ doubled: data.value * 2 }));
 
     await expect(response.json()).resolves.toEqual({ doubled: 4 });
+  });
+
+  it('mutates then rehydrates the authoritative read model with one trace', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ status: 'saved' }, { headers: { 'x-correlation-id': 'mutation-trace' } }),
+      )
+      .mockResolvedValueOnce(Response.json({ value: 2 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const request = new Request('http://web.test/api/example', {
+      method: 'POST',
+      headers: { authorization: 'Bearer token' },
+    });
+
+    const response = await mutateThenProject<
+      { readonly value: number },
+      { readonly doubled: number }
+    >({
+      mutation: { request, path: '/projection', method: 'POST', body: { value: 2 } },
+      read: { request, path: '/projection', method: 'GET' },
+      project: (data) => ({ doubled: data.value * 2 }),
+    });
+
+    await expect(response.json()).resolves.toEqual({ doubled: 4 });
+    const headers = new Headers((fetchMock.mock.calls[1]?.[1] as RequestInit).headers);
+    expect(headers.get('x-correlation-id')).toBe('mutation-trace');
   });
 });

@@ -1,4 +1,5 @@
-import { runtimeStore } from '../../../../../lib/synthetic.server';
+import { attemptPluginRuns, type PlatformAttempt } from '../../../../../lib/attempt-api.server';
+import { mutateThenProject, projectPlatform } from '../../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,22 +9,19 @@ interface PluginBody {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
-  return Response.json(runtimeStore.getPluginRuns());
+  return projectPlatform<PlatformAttempt, object>(
+    { request, path: `/attempts/${encodeURIComponent(params.id)}`, method: 'GET' },
+    attemptPluginRuns,
+  );
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
   let payload: PluginBody;
   try {
     payload = (await request.json()) as PluginBody;
@@ -33,7 +31,18 @@ export async function POST(
   const name =
     typeof payload.name === 'string' && payload.name.trim() !== ''
       ? payload.name.trim()
-      : 'Sample test runner';
+      : 'cpf.demo.workspace';
   const input = typeof payload.input === 'string' ? payload.input : '';
-  return Response.json(runtimeStore.runPlugin(name, input), { status: 201 });
+  const pluginCode = name === 'Sample test runner' ? 'cpf.demo.workspace' : name;
+  const id = encodeURIComponent(params.id);
+  return mutateThenProject<PlatformAttempt, object>({
+    mutation: {
+      request,
+      path: `/attempts/${id}/plugins/${encodeURIComponent(pluginCode)}/execute`,
+      method: 'POST',
+      body: { input: { text: input } },
+    },
+    read: { request, path: `/attempts/${id}`, method: 'GET' },
+    project: attemptPluginRuns,
+  });
 }

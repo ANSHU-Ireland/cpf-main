@@ -575,8 +575,9 @@ export class ConcreteDispatcher {
       case 'get_attempts_attemptId':
         return api.handleGetAttempt(this.#attempts, { actor, attemptId });
       case 'get_attempts_attemptId_prechecks_latest':
+        return api.handleGetLatestAttemptPrecheck(this.#attempts, { actor, attemptId });
       case 'get_attempts_attemptId_submission_preview':
-        return api.handleGetAttempt(this.#attempts, { actor, attemptId });
+        return api.handleGetAttemptSubmissionPreview(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_start':
         return api.handleStartAttempt(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_submit':

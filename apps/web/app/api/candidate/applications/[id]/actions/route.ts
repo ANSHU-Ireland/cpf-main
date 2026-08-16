@@ -1,4 +1,4 @@
-import { candidateStore } from '../../../../../lib/synthetic.server';
+import { forwardPlatform } from '../../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,12 +32,16 @@ export async function POST(
     );
   }
 
-  const updated = candidateStore.applicationAction(
-    params.id,
-    action as 'withdraw' | 'explanation' | 'human_review',
-  );
-  if (updated === null) {
-    return Response.json({ error: 'Application not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
+  const suffix =
+    action === 'withdraw'
+      ? 'withdrawal'
+      : action === 'human_review'
+        ? 'human-review'
+        : 'explanations';
+  return forwardPlatform({
+    request,
+    path: `/candidate/applications/${encodeURIComponent(params.id)}/${suffix}`,
+    method: 'POST',
+    body: { reason: reason || 'Withdrawn by candidate.' },
+  });
 }

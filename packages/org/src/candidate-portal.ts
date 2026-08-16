@@ -6,11 +6,7 @@ export interface CandidateProfileData {
   readonly candidateId: string;
   readonly email: string;
   readonly displayName: string;
-  readonly applications: readonly {
-    applicationId: string;
-    campaignTitle: string;
-    status: string;
-  }[];
+  readonly applications: readonly CandidateApplicationStatusData[];
 }
 
 export interface CandidateInvitationData {

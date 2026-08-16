@@ -65,6 +65,19 @@ export interface AttemptSessionRecord extends AttemptRecord {
   readonly tasks: readonly AttemptSessionTaskRecord[];
   readonly activeItemId: string | null;
   readonly receiptRef: string | null;
+  readonly aiMessages: readonly AttemptAiMessageRecord[];
+  readonly artifacts: readonly AttemptSessionArtifactRecord[];
+  readonly pluginExecutions: readonly AttemptSessionPluginExecutionRecord[];
+  readonly breakActive: boolean;
+}
+
+export interface AttemptSessionArtifactRecord extends AttemptArtifactRecord {
+  readonly scanStatus: 'pending' | 'clean' | 'infected' | 'error';
+}
+
+export interface AttemptSessionPluginExecutionRecord extends AttemptPluginExecutionRecord {
+  readonly input: unknown;
+  readonly startedAt: string;
 }
 
 export interface AttemptResponseRecord {
@@ -107,6 +120,15 @@ export interface AttemptPrecheckRecord {
   readonly attemptId: string;
   readonly passed: boolean;
   readonly checks: Record<string, boolean>;
+}
+
+export interface AttemptSubmissionPreviewRecord {
+  readonly attemptId: string;
+  readonly ready: boolean;
+  readonly incompleteItemIds: readonly string[];
+  readonly blockers: readonly string[];
+  readonly responseCount: number;
+  readonly artifactCount: number;
 }
 
 export interface AttemptAiMessageRecord {
@@ -161,6 +183,11 @@ export interface AttemptPluginExecuteInput {
 
 export interface AttemptRepository {
   getAttempt(actor: Actor, attemptId: string): Promise<AttemptSessionRecord | null>;
+  getLatestPrecheck(actor: Actor, attemptId: string): Promise<AttemptPrecheckRecord | null>;
+  getSubmissionPreview(
+    actor: Actor,
+    attemptId: string,
+  ): Promise<AttemptSubmissionPreviewRecord | null>;
   startAttempt(actor: Actor, attemptId: string): Promise<AttemptRecord | null>;
   submitAttempt(actor: Actor, attemptId: string): Promise<AttemptRecord | null>;
   saveResponse(
@@ -208,6 +235,13 @@ export interface AttemptRepository {
     pluginCode: string,
     input: AttemptPluginExecuteInput,
   ): Promise<AttemptPluginExecutionRecord | null>;
+}
+
+export class AttemptSubmissionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AttemptSubmissionConflictError';
+  }
 }
 
 const VALID_KINDS: ReadonlySet<string> = new Set(ARTIFACT_KINDS);
@@ -337,6 +371,28 @@ export async function getAttempt(
   return { ok: true, attempt };
 }
 
+export async function getLatestAttemptPrecheck(
+  deps: { repository: AttemptRepository },
+  actor: Actor,
+  attemptId: string,
+): Promise<Result<{ precheck: AttemptPrecheckRecord }>> {
+  if (!authorize(actor, 'read')) return { ok: false, status: 403, reason: 'forbidden' };
+  const precheck = await deps.repository.getLatestPrecheck(actor, attemptId);
+  if (precheck === null) return { ok: false, status: 404, reason: 'not_found' };
+  return { ok: true, precheck };
+}
+
+export async function getAttemptSubmissionPreview(
+  deps: { repository: AttemptRepository },
+  actor: Actor,
+  attemptId: string,
+): Promise<Result<{ preview: AttemptSubmissionPreviewRecord }>> {
+  if (!authorize(actor, 'read')) return { ok: false, status: 403, reason: 'forbidden' };
+  const preview = await deps.repository.getSubmissionPreview(actor, attemptId);
+  if (preview === null) return { ok: false, status: 404, reason: 'not_found' };
+  return { ok: true, preview };
+}
+
 export async function startAttempt(
   deps: { repository: AttemptRepository },
   actor: Actor,
@@ -354,9 +410,16 @@ export async function submitAttempt(
   attemptId: string,
 ): Promise<Result<{ attempt: AttemptRecord }>> {
   if (!authorize(actor, 'write')) return { ok: false, status: 403, reason: 'forbidden' };
-  const r = await deps.repository.submitAttempt(actor, attemptId);
-  if (r === null) return { ok: false, status: 404, reason: 'not_found' };
-  return { ok: true, attempt: r };
+  try {
+    const r = await deps.repository.submitAttempt(actor, attemptId);
+    if (r === null) return { ok: false, status: 404, reason: 'not_found' };
+    return { ok: true, attempt: r };
+  } catch (error) {
+    if (error instanceof AttemptSubmissionConflictError) {
+      return { ok: false, status: 409, reason: error.message };
+    }
+    throw error;
+  }
 }
 
 export async function saveAttemptResponse(

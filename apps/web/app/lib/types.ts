@@ -1093,7 +1093,7 @@ export interface NotificationPreference {
 export interface CandidateProfile {
   readonly fullName: string;
   readonly email: string;
-  readonly dateOfBirth: string;
+  readonly dateOfBirth?: string;
   readonly phone?: string;
 }
 

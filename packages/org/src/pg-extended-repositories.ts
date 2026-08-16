@@ -1883,6 +1883,45 @@ import type {
   CandidateApplicationStatusData,
 } from './candidate-portal.js';
 
+interface CandidateApplicationStatusRow {
+  application_id: string;
+  employer_name: string;
+  role_name: string;
+  assessment_title: string;
+  status: string;
+  applied_at: Date;
+  invited_at: Date | null;
+  due_at: Date | null;
+  decision: string | null;
+  reason: string | null;
+  decided_by: string | null;
+  issued_at: Date | null;
+}
+
+function toCandidateApplicationStatus(
+  row: CandidateApplicationStatusRow,
+): CandidateApplicationStatusData {
+  return {
+    applicationId: row.application_id,
+    employerName: row.employer_name,
+    roleName: row.role_name,
+    assessmentTitle: row.assessment_title,
+    status: row.status,
+    appliedAt: row.applied_at.toISOString(),
+    invitedAt: row.invited_at?.toISOString() ?? null,
+    dueAt: row.due_at?.toISOString() ?? null,
+    decision:
+      row.decision === null || row.issued_at === null
+        ? null
+        : {
+            outcome: row.decision,
+            rationale: row.reason ?? '',
+            decidedBy: row.decided_by ?? 'Named human decision owner',
+            issuedAt: row.issued_at.toISOString(),
+          },
+  };
+}
+
 export class PgCandidatePortalRepository implements CandidatePortalRepository {
   constructor(
     private readonly pool: Pool,
@@ -1896,19 +1935,46 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
         [actor.userId],
       );
       if (!ur.rows[0]) return null;
-      const ar = await client.query<{
-        application_id: string;
-        campaign_title: string;
-        status: string;
-      }>(
+      const ar = await client.query<CandidateApplicationStatusRow>(
         `SELECT application.id AS application_id,
-                COALESCE(campaign.title, 'Campaign') AS campaign_title,
-                application.status
+                organization.display_name AS employer_name,
+                campaign.role_name,
+                COALESCE(assessment.title, campaign.title) AS assessment_title,
+                application.status,
+                application.created_at AS applied_at,
+                invitation.sent_at AS invited_at,
+                invitation.expires_at AS due_at,
+                decision.decision,
+                decision.reason,
+                COALESCE(decider.display_name, decider_profile.full_name) AS decided_by,
+                decision.issued_at
            FROM hiring.applications AS application
            JOIN hiring.candidates AS candidate
              ON candidate.id = application.candidate_id
             AND candidate.tenant_id = application.tenant_id
-      LEFT JOIN hiring.campaigns AS campaign ON campaign.id = application.campaign_id
+           JOIN hiring.campaigns AS campaign ON campaign.id = application.campaign_id
+           JOIN tenant.organizations AS organization ON organization.id = application.tenant_id
+      LEFT JOIN hiring.campaign_versions AS campaign_version
+             ON campaign_version.campaign_id = campaign.id
+            AND campaign_version.version_no = campaign.current_version_no
+      LEFT JOIN assessment.assessment_versions AS assessment_version
+             ON assessment_version.id = campaign_version.assessment_version_id
+      LEFT JOIN assessment.assessments AS assessment
+             ON assessment.id = assessment_version.assessment_id
+      LEFT JOIN LATERAL (
+                SELECT sent_at, expires_at
+                  FROM hiring.invitations
+                 WHERE application_id = application.id
+                 ORDER BY created_at DESC LIMIT 1
+                ) AS invitation ON true
+      LEFT JOIN LATERAL (
+                SELECT decision, reason, decided_by, issued_at
+                  FROM review.progression_decisions
+                 WHERE application_id = application.id AND status = 'issued'
+                 ORDER BY issued_at DESC NULLS LAST LIMIT 1
+                ) AS decision ON true
+      LEFT JOIN iam.users AS decider ON decider.id = decision.decided_by
+      LEFT JOIN iam.user_profiles AS decider_profile ON decider_profile.user_id = decision.decided_by
           WHERE application.tenant_id = $1 AND candidate.user_id = $2
           ORDER BY application.created_at DESC LIMIT 10`,
         [actor.tenantId, actor.userId],
@@ -1917,11 +1983,7 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
         candidateId: ur.rows[0].id,
         email: ur.rows[0].email,
         displayName: ur.rows[0].full_name ?? '',
-        applications: ar.rows.map((r) => ({
-          applicationId: r.application_id,
-          campaignTitle: r.campaign_title,
-          status: r.status,
-        })),
+        applications: ar.rows.map(toCandidateApplicationStatus),
       };
     });
   }
@@ -1963,20 +2025,7 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
     applicationId: string,
   ): Promise<CandidateApplicationStatusData | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const result = await client.query<{
-        application_id: string;
-        employer_name: string;
-        role_name: string;
-        assessment_title: string;
-        status: string;
-        applied_at: Date;
-        invited_at: Date | null;
-        due_at: Date | null;
-        decision: string | null;
-        reason: string | null;
-        decided_by: string | null;
-        issued_at: Date | null;
-      }>(
+      const result = await client.query<CandidateApplicationStatusRow>(
         `SELECT application.id AS application_id,
                 organization.display_name AS employer_name,
                 campaign.role_name,
@@ -2023,25 +2072,7 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
       );
       const row = result.rows[0];
       if (row === undefined) return null;
-      return {
-        applicationId: row.application_id,
-        employerName: row.employer_name,
-        roleName: row.role_name,
-        assessmentTitle: row.assessment_title,
-        status: row.status,
-        appliedAt: row.applied_at.toISOString(),
-        invitedAt: row.invited_at?.toISOString() ?? null,
-        dueAt: row.due_at?.toISOString() ?? null,
-        decision:
-          row.decision === null || row.issued_at === null
-            ? null
-            : {
-                outcome: row.decision,
-                rationale: row.reason ?? '',
-                decidedBy: row.decided_by ?? 'Named human decision owner',
-                issuedAt: row.issued_at.toISOString(),
-              },
-      };
+      return toCandidateApplicationStatus(row);
     });
   }
 }
@@ -2060,8 +2091,8 @@ interface DataRightRow {
   id: string;
   request_type: string;
   status: string;
-  actor_id: string;
-  created_at: Date;
+  candidate_id: string;
+  received_at: Date;
 }
 
 export class PgDataRightsRepository implements DataRightsRepository {
@@ -2075,15 +2106,22 @@ export class PgDataRightsRepository implements DataRightsRepository {
   ): Promise<{ items: readonly DataRightRequestRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<DataRightRow>(
-        `SELECT id, request_type, status, actor_id, created_at FROM governance.data_subject_requests WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
-        [actor.tenantId],
+        `SELECT request.id, request.request_type, request.status,
+                request.candidate_id, request.received_at
+           FROM governance.data_subject_requests AS request
+           JOIN hiring.candidates AS candidate
+             ON candidate.id = request.candidate_id
+            AND candidate.tenant_id = request.tenant_id
+          WHERE request.tenant_id = $1 AND candidate.user_id = $2
+          ORDER BY request.received_at DESC LIMIT 100`,
+        [actor.tenantId, actor.userId],
       );
       const items: DataRightRequestRecord[] = r.rows.map((row) => ({
         id: row.id,
-        requestType: row.request_type,
+        requestType: row.request_type as DataRightRequestRecord['requestType'],
         status: row.status as DataRightRequestRecord['status'],
-        candidateId: row.actor_id,
-        createdAt: row.created_at.toISOString(),
+        candidateId: row.candidate_id,
+        createdAt: row.received_at.toISOString(),
       }));
       return { items, total: items.length };
     });
@@ -2092,13 +2130,20 @@ export class PgDataRightsRepository implements DataRightsRepository {
   async createDataRight(
     actor: Actor,
     input: DataRightRequestCreate,
-  ): Promise<DataRightRequestRecord> {
+  ): Promise<DataRightRequestRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const id = randomUUID();
-      await client.query(
-        `INSERT INTO governance.data_subject_requests (id, tenant_id, request_type, status, actor_id, deadline_at) VALUES ($1,$2,$3,'pending',$4,now()+interval '30 days')`,
-        [id, actor.tenantId, input.requestType, actor.userId],
+      const inserted = await client.query<{ candidate_id: string; received_at: Date }>(
+        `INSERT INTO governance.data_subject_requests
+           (id, tenant_id, candidate_id, request_type, status, details, due_at)
+         SELECT $1, $2, candidate.id, $3, 'received', $4, now() + interval '30 days'
+           FROM hiring.candidates AS candidate
+          WHERE candidate.tenant_id = $2 AND candidate.user_id = $5
+        RETURNING candidate_id, received_at`,
+        [id, actor.tenantId, input.requestType, input.justification, actor.userId],
       );
+      const row = inserted.rows[0];
+      if (row === undefined) return null;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2112,28 +2157,46 @@ export class PgDataRightsRepository implements DataRightsRepository {
       return {
         id,
         requestType: input.requestType,
-        status: 'pending',
-        candidateId: actor.userId,
-        createdAt: nowIso(),
+        status: 'received',
+        candidateId: row.candidate_id,
+        createdAt: row.received_at.toISOString(),
       };
     });
   }
 
-  async createComplaint(actor: Actor, input: ComplaintCreate): Promise<ComplaintRecord> {
+  async createComplaint(actor: Actor, input: ComplaintCreate): Promise<ComplaintRecord | null> {
     const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      await client.query(
-        `INSERT INTO governance.complaints (id, tenant_id, subject, body, status, submitted_by) VALUES ($1,$2,$3,$4,'open',$5)`,
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const inserted = await client.query<{ candidate_id: string; created_at: Date }>(
+        `INSERT INTO governance.complaints
+           (id, tenant_id, candidate_id, complaint_type, channel, description,
+            confidentiality_level, status)
+         SELECT $1, $2, candidate.id, $3, 'candidate_portal', $4, 'restricted', 'received'
+           FROM hiring.candidates AS candidate
+          WHERE candidate.tenant_id = $2 AND candidate.user_id = $5
+        RETURNING candidate_id, created_at`,
         [id, actor.tenantId, input.category, input.description, actor.userId],
       );
+      const row = inserted.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'complaint.create',
+        resourceType: 'complaint',
+        resourceId: id,
+        outcome: 'success',
+        metadata: { category: input.category },
+      });
+      return {
+        id,
+        category: input.category,
+        status: 'received',
+        candidateId: row.candidate_id,
+        createdAt: row.created_at.toISOString(),
+      };
     });
-    return {
-      id,
-      category: input.category,
-      status: 'open',
-      candidateId: actor.userId,
-      createdAt: nowIso(),
-    };
   }
 }
 
