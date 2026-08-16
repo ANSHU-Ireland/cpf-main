@@ -6,7 +6,7 @@ import type { NoticeCreate, NoticeRecord, NoticeType } from './notice-types.js';
 import type { NoticeListResult } from './notice-types.js';
 
 export interface NoticeRepository {
-  listNotices(actor: Actor, applicationId: string): Promise<NoticeListResult>;
+  listNotices(actor: Actor, applicationId: string | null): Promise<NoticeListResult>;
   createNotice(actor: Actor, applicationId: string, input: NoticeCreate): Promise<NoticeRecord>;
 }
 
@@ -47,12 +47,13 @@ export class PgNoticeRepository implements NoticeRepository {
       : { tenantId: actor.tenantId, userId: actor.userId, role: this.#role };
   }
 
-  async listNotices(actor: Actor, applicationId: string): Promise<NoticeListResult> {
+  async listNotices(actor: Actor, applicationId: string | null): Promise<NoticeListResult> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const res = await client.query<NoticeRow>(
         `SELECT ${COLUMNS}
            FROM hiring.notice_acknowledgements
-          WHERE tenant_id = $1 AND application_id = $2
+          WHERE tenant_id = $1
+            AND ($2::uuid IS NULL OR application_id = $2)
           ORDER BY acknowledged_at DESC`,
         [actor.tenantId, applicationId],
       );

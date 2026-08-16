@@ -1,7 +1,7 @@
-import { syntheticStore } from '../../../lib/synthetic.server';
+import { forwardPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export function GET(): Response {
-  return Response.json(syntheticStore.getProfile());
+export function GET(request: Request): Promise<Response> {
+  return forwardPlatform({ request, path: '/me', method: 'GET' });
 }

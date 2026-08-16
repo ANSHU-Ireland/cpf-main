@@ -1,4 +1,4 @@
-import { syntheticStore } from '../../../lib/synthetic.server';
+import { forwardPlatform } from '../../../lib/platform-api.server';
 import type { PreferencesView } from '../../../lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,8 +8,8 @@ const DENSITIES = new Set<PreferencesView['density']>(['comfortable', 'compact']
 
 type WritablePreferences = { -readonly [K in keyof PreferencesView]?: PreferencesView[K] };
 
-export function GET(): Response {
-  return Response.json(syntheticStore.getPreferences());
+export function GET(request: Request): Promise<Response> {
+  return forwardPlatform({ request, path: '/me/preferences', method: 'GET' });
 }
 
 export async function PATCH(request: Request): Promise<Response> {
@@ -39,5 +39,5 @@ export async function PATCH(request: Request): Promise<Response> {
     patch.timezone = body.timezone;
   }
 
-  return Response.json(syntheticStore.updatePreferences(patch));
+  return forwardPlatform({ request, path: '/me/preferences', method: 'PUT', body: patch });
 }

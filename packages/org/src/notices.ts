@@ -50,7 +50,7 @@ type Result<T> = ({ ok: true } & T) | { ok: false; status: number; reason: strin
 export async function listNotices(
   deps: NoticeDeps,
   actor: Actor,
-  applicationId: string,
+  applicationId: string | null,
 ): Promise<Result<{ items: readonly unknown[]; total: number }>> {
   const decision = can(
     { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },

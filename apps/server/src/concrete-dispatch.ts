@@ -765,8 +765,9 @@ export class ConcreteDispatcher {
 
       // ── Notices ───────────────────────────────────────────────────────────
       case 'get_candidate_notices':
-      case 'get_me_notices':
         return api.handleGetNotices(this.#notices, { actor, applicationId: applicationId || '' });
+      case 'get_me_notices':
+        return api.handleGetAccountNotices(this.#notices, { actor });
       case 'post_candidate_notices_noticeId_acknowledgement':
         return api.handlePostNotice(this.#notices, {
           actor,

@@ -8,7 +8,7 @@ type ListResult =
 type CreateResult = { ok: true; notice: unknown } | { ok: false; status: number; reason: string };
 
 export interface NoticeService {
-  listNotices(actor: Actor, applicationId: string): Promise<ListResult>;
+  listNotices(actor: Actor, applicationId: string | null): Promise<ListResult>;
   createNotice(actor: Actor, applicationId: string, input: NoticeCreate): Promise<CreateResult>;
 }
 
@@ -43,6 +43,23 @@ export async function handleGetNotices(
       correlationId,
       detail: result.reason,
     });
+  return jsonResponse(200, { items: result.items, total: result.total }, correlationId);
+}
+
+export async function handleGetAccountNotices(
+  svc: NoticeService,
+  req: { actor: Actor },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const result = await svc.listNotices(req.actor, null);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
   return jsonResponse(200, { items: result.items, total: result.total }, correlationId);
 }
 

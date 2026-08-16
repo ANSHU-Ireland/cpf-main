@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { handleGetNotices, handlePostNotice, type NoticeService } from './notices.handler.js';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  handleGetAccountNotices,
+  handleGetNotices,
+  handlePostNotice,
+  type NoticeService,
+} from './notices.handler.js';
 import type { Actor } from '@cpf/org';
 
 const VALID_ID = '11111111-1111-1111-1111-111111111111';
@@ -34,6 +39,15 @@ describe('handleGetNotices', () => {
       { actor, applicationId: VALID_ID },
     );
     expect(res.status).toBe(403);
+  });
+});
+
+describe('handleGetAccountNotices', () => {
+  it('lists all notices visible to the authenticated actor', async () => {
+    const listNotices = vi.fn().mockResolvedValue({ ok: true as const, items: [], total: 0 });
+    const res = await handleGetAccountNotices(service({ listNotices }), { actor });
+    expect(res.status).toBe(200);
+    expect(listNotices).toHaveBeenCalledWith(actor, null);
   });
 });
 
