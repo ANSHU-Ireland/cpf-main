@@ -419,9 +419,7 @@ export const candidateStore = {
     correctedValue: string,
     reason: string,
   ) {
-    console.log(
-      `Profile correction: ${field} from "${currentValue}" to "${correctedValue}" - ${reason}`,
-    );
+    void { field, currentValue, correctedValue, reason };
   },
   async getCandidateNotices() {
     const notices = [
@@ -454,7 +452,7 @@ export const candidateStore = {
     return { notices, allAcknowledged };
   },
   async acknowledgeCandidateNotice(noticeId: string) {
-    console.log(`Notice ${noticeId} acknowledged`);
+    void noticeId;
   },
   async getPracticeModules() {
     return {
@@ -608,7 +606,7 @@ export const candidateStore = {
     };
   },
   async requestHumanReview(decisionId: string, grounds: string) {
-    console.log(`Human review requested for decision ${decisionId}: ${grounds}`);
+    void { decisionId, grounds };
   },
   async getCandidateTickets() {
     const tickets = [
@@ -654,7 +652,7 @@ export const candidateStore = {
     };
   },
   async withdrawApplication(id: string) {
-    console.log(`Application ${id} withdrawn`);
+    void id;
   },
 };
 
@@ -3738,10 +3736,10 @@ export const supportStore = {
     };
   },
   async addSupportMessage(caseId: string, content: string, internal: boolean) {
-    console.log(`Message added to case ${caseId} (internal: ${internal}): ${content}`);
+    void { caseId, content, internal };
   },
   async updateSupportCaseStatus(caseId: string, status: string) {
-    console.log(`Case ${caseId} status updated to: ${status}`);
+    void { caseId, status };
   },
   async getJitAccessSessions() {
     return {
@@ -3767,10 +3765,10 @@ export const supportStore = {
     };
   },
   async requestJitAccess(scope: string, justification: string) {
-    console.log(`JIT access requested for ${scope}: ${justification}`);
+    void { scope, justification };
   },
   async revokeJitAccess(sessionId: string) {
-    console.log(`JIT access revoked for session ${sessionId}`);
+    void sessionId;
   },
 };
 
@@ -3816,7 +3814,7 @@ export const operationsStore = {
     };
   },
   async acknowledgeOperationalAlert(alertId: string) {
-    console.log(`Alert ${alertId} acknowledged`);
+    void alertId;
   },
   async getSecurityStatus() {
     return {
@@ -3827,13 +3825,13 @@ export const operationsStore = {
     };
   },
   async activateKillSwitch(reason: string) {
-    console.log(`Kill switch activated: ${reason}`);
+    void reason;
   },
   async deactivateKillSwitch() {
-    console.log('Kill switch deactivated');
+    return undefined;
   },
   async escalateSecurityIncident(incidentId: string) {
-    console.log(`Security incident ${incidentId} escalated`);
+    void incidentId;
   },
   async getIntegrationDeliveries() {
     const deliveries = [
@@ -3870,6 +3868,6 @@ export const operationsStore = {
     return { items: deliveries, total: deliveries.length };
   },
   async retryIntegrationDelivery(deliveryId: string) {
-    console.log(`Retrying integration delivery ${deliveryId}`);
+    void deliveryId;
   },
 };

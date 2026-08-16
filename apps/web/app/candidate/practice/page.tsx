@@ -30,8 +30,8 @@ export default function PracticeCentrePage() {
   const { state, reload } = useAsync<{ modules: PracticeModule[] }>(loader);
 
   const handleStart = async (moduleId: string) => {
-    // In real app, would navigate to practice module
-    console.log('Starting practice module:', moduleId);
+    // The synthetic catalogue has no executable module route yet.
+    void moduleId;
   };
 
   return (

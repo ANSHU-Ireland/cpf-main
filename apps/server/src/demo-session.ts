@@ -98,9 +98,14 @@ export function authorizeDemoOperation(
 
   // system_admin: access to all admin/* operations
   if (hasScope(session, 'system_admin', 'global')) {
-    if (operationId.startsWith('get_admin') || operationId.startsWith('post_admin') ||
-        operationId.startsWith('put_admin') || operationId.startsWith('patch_admin') ||
-        operationId.startsWith('delete_admin')) return true;
+    if (
+      operationId.startsWith('get_admin') ||
+      operationId.startsWith('post_admin') ||
+      operationId.startsWith('put_admin') ||
+      operationId.startsWith('patch_admin') ||
+      operationId.startsWith('delete_admin')
+    )
+      return true;
     return true; // system_admin can do everything
   }
 
@@ -120,34 +125,55 @@ export function authorizeDemoOperation(
   }
 
   // All authenticated users can access /me/* endpoints
-  if (operationId.startsWith('get_me') || operationId.startsWith('patch_me') ||
-      operationId.startsWith('put_me') || operationId.startsWith('post_me') ||
-      operationId.startsWith('delete_me')) {
+  if (
+    operationId.startsWith('get_me') ||
+    operationId.startsWith('patch_me') ||
+    operationId.startsWith('put_me') ||
+    operationId.startsWith('post_me') ||
+    operationId.startsWith('delete_me')
+  ) {
     return session.actor.userId.length > 0;
   }
 
   // Candidate portal and data-rights (any authenticated candidate)
-  if (operationId.startsWith('get_candidate_') || operationId.startsWith('post_candidate_') ||
-      operationId.startsWith('put_candidate_') || operationId.startsWith('delete_candidate_')) {
+  if (
+    operationId.startsWith('get_candidate_') ||
+    operationId.startsWith('post_candidate_') ||
+    operationId.startsWith('put_candidate_') ||
+    operationId.startsWith('delete_candidate_')
+  ) {
     return session.actor.userId.length > 0;
   }
 
   // Reviewer profile / availability / training
-  if (operationId.startsWith('get_reviewer') || operationId.startsWith('patch_reviewer') ||
-      operationId.startsWith('put_reviewer') || operationId.startsWith('post_reviewer')) {
+  if (
+    operationId.startsWith('get_reviewer') ||
+    operationId.startsWith('patch_reviewer') ||
+    operationId.startsWith('put_reviewer') ||
+    operationId.startsWith('post_reviewer')
+  ) {
     return session.actor.roles.includes('reviewer');
   }
 
   // Governance operations — governance_officer or employer_admin
-  if (operationId.startsWith('get_governance') || operationId.startsWith('post_governance') ||
-      operationId.startsWith('put_governance') || operationId.startsWith('patch_governance')) {
-    return hasScope(session, 'governance_officer', session.actor.tenantId) ||
-           session.actor.roles.includes('employer_admin');
+  if (
+    operationId.startsWith('get_governance') ||
+    operationId.startsWith('post_governance') ||
+    operationId.startsWith('put_governance') ||
+    operationId.startsWith('patch_governance')
+  ) {
+    return (
+      hasScope(session, 'governance_officer', session.actor.tenantId) ||
+      session.actor.roles.includes('employer_admin')
+    );
   }
 
   // Auth endpoints — always allowed (they establish sessions)
-  if (operationId.startsWith('post_auth') || operationId.startsWith('get_auth') ||
-      operationId.startsWith('delete_auth')) {
+  if (
+    operationId.startsWith('post_auth') ||
+    operationId.startsWith('get_auth') ||
+    operationId.startsWith('delete_auth')
+  ) {
     return true;
   }
 

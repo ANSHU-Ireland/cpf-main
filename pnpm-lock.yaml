@@ -134,6 +134,16 @@ importers:
         specifier: ^18.3.1
         version: 18.3.7(@types/react@18.3.31)
 
+  apps/worker:
+    dependencies:
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.3
+
   packages/account:
     dependencies:
       '@cpf/audit':
@@ -153,6 +163,12 @@ importers:
         specifier: ^8.11.10
         version: 8.20.3
 
+  packages/ai-gateway:
+    dependencies:
+      '@cpf/domain':
+        specifier: workspace:*
+        version: link:../domain
+
   packages/audit:
     dependencies:
       pg:
@@ -162,6 +178,8 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.3
+
+  packages/companion: {}
 
   packages/contracts:
     devDependencies:

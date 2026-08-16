@@ -60,4 +60,20 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
     );
     expect(rls.rows[0]?.relrowsecurity).toBe(true);
   });
+
+  it('applies leased outbox worker columns additively', async () => {
+    const columns = await pool.query<{ column_name: string }>(
+      `select column_name
+         from information_schema.columns
+        where table_schema = 'audit'
+          and table_name = 'outbox_events'
+          and column_name in ('locked_at', 'locked_by', 'last_error_hash')
+        order by column_name`,
+    );
+    expect(columns.rows.map((row) => row.column_name)).toEqual([
+      'last_error_hash',
+      'locked_at',
+      'locked_by',
+    ]);
+  });
 });

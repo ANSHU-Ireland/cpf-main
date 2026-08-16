@@ -60,5 +60,5 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: DB integration + schema/RLS tests
-        run: pnpm exec vitest run packages/db
+      - name: DB integration + schema/RLS/repository tests
+        run: pnpm exec vitest run packages/db packages/account packages/org

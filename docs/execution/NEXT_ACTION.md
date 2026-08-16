@@ -1,24 +1,24 @@
 # Next Action — exactly one executable slice
 
-## Critical journey visual translation
+## CPF-06 authenticated web/API migration
 
-**Goal:** bring the two representative high-value workspaces that failed the baseline comparison
-into verified alignment with their Penpot sources before translating the remaining role inventory.
+**Goal:** remove process-local state from the next complete browser journey and prove that its
+ready, empty, error and denied states come from authenticated platform API responses.
 
-**Source identifiers:** RUN-02 and REV-08; `interfaces/run-02.svg`, `interfaces/rev-08.svg`, the
-assessment-runtime requirements, and the reviewer human-authority/AI-boundary requirements.
+**Selection rule:** choose the highest-priority route whose OpenAPI operation and PostgreSQL
+repository already exist; do not invent a public endpoint for EMP-11, EMP-15, GOV-09 or OPS-02.
 
 **Implementation:**
 
-1. Measure and document the source shell, content regions, typography, controls and visible states.
-2. Extract reusable runtime/workspace layout components without regressing the shared CPF shell.
-3. Rebuild RUN-02 assessment overview with server-authoritative timer, section map, autosave state and
-   next-task action represented faithfully in the synthetic product.
-4. Rebuild REV-08 criterion scorecard with evidence-first layout, human-authored scoring, explicit
-   save/conflict/validation states and no AI numeric score or recommendation.
-5. Verify both primary journeys, keyboard/focus behavior, responsive breakpoints, console output,
-   source/implementation screenshots, full repository tests and the production build.
+1. Add one typed server-side platform API adapter with bounded timeout, correlation propagation,
+   bearer-session forwarding and RFC 9457 problem mapping.
+2. Move the selected Next route handlers away from `synthetic.server.ts` without changing the
+   canonical route or visual contract.
+3. Prove missing, expired, wrong-role and cross-tenant sessions return the correct 401/403/404
+   behavior without leaking resource existence.
+4. Add PostgreSQL integration, browser interaction and route-state evidence.
+5. Update the requirement ledger only for the exact requirements proven by those tests.
 
-**Completion condition:** RUN-02 and REV-08 have no actionable P0/P1/P2 visual differences at their
-source desktop viewport, remain usable at the supported narrow breakpoint, preserve their human
-authority and AI boundaries, and are recorded in a passing `design-qa.md` comparison history.
+**Completion condition:** the selected journey has no process-local store dependency, persists and
+rehydrates through PostgreSQL, passes session/tenant negative tests, and has visual/accessibility
+evidence for ready, empty, error and denied states.
