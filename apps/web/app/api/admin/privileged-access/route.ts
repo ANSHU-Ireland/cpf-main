@@ -1,4 +1,4 @@
-import { adminStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +12,17 @@ interface ActionBody {
   readonly action?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(adminStore.getGrants());
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Privileged access directory contract is incomplete',
+    detail:
+      'The approved API can create and revoke grants but cannot list or approve them, while this screen requires the complete lifecycle.',
+    requirementIds: ['SUP-03', 'FR-SA-21'],
+  });
+}
+
+export function GET(request: Request): Response {
+  return gap(request);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -36,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
       { status: 422 },
     );
   }
-  return Response.json(adminStore.requestGrant(scope, justification), { status: 201 });
+  return gap(request);
 }
 
 export async function PATCH(request: Request): Promise<Response> {
@@ -54,9 +63,5 @@ export async function PATCH(request: Request): Promise<Response> {
   if (action !== 'approve' && action !== 'revoke') {
     return Response.json({ error: 'Action must be approve or revoke.' }, { status: 422 });
   }
-  const updated = adminStore.actOnGrant(id, action);
-  if (updated === null) {
-    return Response.json({ error: 'Access grant not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
+  return gap(request);
 }

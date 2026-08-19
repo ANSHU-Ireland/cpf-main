@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
-import { governanceStore } from '../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, { params }: { params: { systemId: string } }) {
-  const plan = governanceStore.getPostMarketPlan(params.systemId);
-  if (!plan) {
-    return NextResponse.json({ error: 'Post-market plan not found.' }, { status: 404 });
-  }
-  return NextResponse.json(plan);
+export function GET(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Post-market plan read contract is incomplete',
+    detail:
+      'The approved API exposes a collection but not the system-specific current-plan read model required by this screen.',
+    requirementIds: ['GOV-14', 'FR-GOV-20'],
+  });
 }

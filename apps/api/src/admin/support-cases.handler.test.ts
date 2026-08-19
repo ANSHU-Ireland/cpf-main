@@ -14,9 +14,14 @@ const kase: AdminSupportCaseRecord = {
   id: ID,
   caseReference: 'SC-1',
   subject: 'help',
+  tenantName: 'Acme',
+  severity: 'medium',
+  category: 'candidate_support',
+  requesterUserId: ID,
   status: 'open',
   assigneeId: null,
   createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
 function repo(overrides: Partial<AdminSupportCaseRepository> = {}): AdminSupportCaseRepository {

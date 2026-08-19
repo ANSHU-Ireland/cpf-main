@@ -1,38 +1,25 @@
-import { employerStore } from '../../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../../lib/contract-gap.server';
+import { projectPlatform } from '../../../../../lib/platform-api.server';
+import { preflightChecks, type PlatformPreflight } from '../../../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
-interface PreflightBody {
-  readonly checkId?: unknown;
+export function GET(request: Request, { params }: { params: { id: string } }): Promise<Response> {
+  return projectPlatform<PlatformPreflight, unknown>(
+    {
+      request,
+      path: `/campaigns/${encodeURIComponent(params.id)}/activation-preflight`,
+      method: 'GET',
+    },
+    preflightChecks,
+  );
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { id: string } },
-): Promise<Response> {
-  if (employerStore.getCampaign(params.id) === null) {
-    return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-  }
-  return Response.json(employerStore.getPreflight());
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } },
-): Promise<Response> {
-  if (employerStore.getCampaign(params.id) === null) {
-    return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-  }
-  let payload: PreflightBody;
-  try {
-    payload = (await request.json()) as PreflightBody;
-  } catch {
-    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
-  const checkId = typeof payload.checkId === 'string' ? payload.checkId : '';
-  const updated = employerStore.resolvePreflight(checkId);
-  if (updated === null) {
-    return Response.json({ error: 'Preflight check not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
+export function POST(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Preflight controls cannot be manually overridden',
+    detail:
+      'Each blocker is resolved by completing its authoritative assessment, governance, reviewer, notice or retention record.',
+    requirementIds: ['FR-EA-05', 'FR-EA-19'],
+  });
 }

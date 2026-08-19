@@ -1,11 +1,9 @@
-import { NextResponse } from 'next/server';
-import { accountStore } from '../../../lib/synthetic.server';
+import { forwardPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const preferences = await accountStore.getNotificationPreferences();
-  return NextResponse.json(preferences);
+export function GET(request: Request): Promise<Response> {
+  return forwardPlatform({ request, path: '/me/notification-preferences', method: 'GET' });
 }
 
 export async function POST(request: Request) {
@@ -13,9 +11,13 @@ export async function POST(request: Request) {
   const { updates } = body;
 
   if (!Array.isArray(updates)) {
-    return NextResponse.json({ error: 'updates must be an array' }, { status: 422 });
+    return Response.json({ error: 'updates must be an array' }, { status: 422 });
   }
 
-  await accountStore.updateNotificationPreferences(updates);
-  return NextResponse.json({ success: true });
+  return forwardPlatform({
+    request,
+    path: '/me/notification-preferences',
+    method: 'PUT',
+    body: { updates },
+  });
 }

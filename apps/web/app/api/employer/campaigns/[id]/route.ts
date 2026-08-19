@@ -1,6 +1,11 @@
 import type { CampaignStatus } from '../../../../lib/types';
-import { employerStore } from '../../../../lib/synthetic.server';
-import { DemoPersistenceError, demoPersistence } from '../../../../lib/persistence.server';
+import { callPlatform, platformErrorResponse } from '../../../../lib/platform-api.server';
+import {
+  campaignView,
+  type PlatformCampaign,
+  type PlatformCampaignDashboard,
+  type PlatformPreflight,
+} from '../../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,30 +13,45 @@ interface StatusBody {
   readonly status?: unknown;
 }
 
-const STATUSES: readonly CampaignStatus[] = [
-  'draft',
-  'blocked',
-  'active',
-  'paused',
-  'closed',
-  'archived',
-];
-
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
   try {
-    const persisted = await demoPersistence.getCampaign(params.id);
-    const campaign = persisted ?? employerStore.getCampaign(params.id);
-    if (campaign === null) {
-      return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-    }
-    return Response.json(campaign);
+    const campaign = await callPlatform<PlatformCampaign>({
+      request,
+      path: `/campaigns/${encodeURIComponent(params.id)}`,
+      method: 'GET',
+    });
+    const [dashboard, preflight] = await Promise.all([
+      callPlatform<PlatformCampaignDashboard>({
+        request,
+        path: `/campaigns/${encodeURIComponent(params.id)}/dashboard`,
+        method: 'GET',
+        correlationId: campaign.correlationId,
+      }),
+      callPlatform<PlatformPreflight>({
+        request,
+        path: `/campaigns/${encodeURIComponent(params.id)}/activation-preflight`,
+        method: 'GET',
+        correlationId: campaign.correlationId,
+      }),
+    ]);
+    return Response.json(
+      campaignView(
+        campaign.data,
+        {
+          campaignId: dashboard.data.campaignId,
+          totalApplications: dashboard.data.totalApplications,
+          byStatus: dashboard.data.statusBreakdown,
+        },
+        preflight.data,
+      ),
+      { headers: { 'x-correlation-id': campaign.correlationId } },
+    );
   } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
     throw error;
   }
 }
@@ -40,46 +60,38 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (!demoPersistence.enabled && employerStore.getCampaign(params.id) === null) {
-    return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-  }
   let payload: StatusBody;
   try {
     payload = (await request.json()) as StatusBody;
   } catch {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
-  const status = payload.status;
-  if (typeof status !== 'string' || !STATUSES.includes(status as CampaignStatus)) {
-    return Response.json({ error: 'A valid status is required.' }, { status: 422 });
-  }
-  if (demoPersistence.enabled) {
-    try {
-      const persisted = await demoPersistence.setCampaignStatus(
-        params.id,
-        status as CampaignStatus,
-      );
-      if (persisted === null) {
-        return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-      }
-      return Response.json(persisted);
-    } catch (error) {
-      if (error instanceof DemoPersistenceError) {
-        return Response.json({ error: error.message }, { status: error.status });
-      }
-      throw error;
-    }
-  }
-  const updated = employerStore.setCampaignStatus(params.id, status as CampaignStatus);
-  if (updated === null) {
-    return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-  }
-  // Activation is gated by open blockers; the store leaves status unchanged when blocked.
-  if (status === 'active' && updated.status !== 'active') {
+  const status = payload.status as CampaignStatus;
+  const action: Partial<Record<CampaignStatus, string>> = {
+    active: 'activate',
+    paused: 'pause',
+    closed: 'close',
+    archived: 'archive',
+  };
+  const operation = action[status];
+  if (operation === undefined) {
     return Response.json(
-      { error: 'Resolve all preflight blockers before activating this campaign.' },
-      { status: 409 },
+      { error: 'Only active, paused, closed or archived lifecycle transitions are supported.' },
+      { status: 422 },
     );
   }
-  return Response.json(updated);
+  try {
+    const result = await callPlatform<PlatformCampaign>({
+      request,
+      path: `/campaigns/${encodeURIComponent(params.id)}/${operation}`,
+      method: 'POST',
+    });
+    return Response.json(campaignView(result.data), {
+      headers: { 'x-correlation-id': result.correlationId },
+    });
+  } catch (error) {
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
+    throw error;
+  }
 }

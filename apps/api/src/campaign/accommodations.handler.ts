@@ -17,10 +17,10 @@ type MutateResult =
   { ok: true; accommodation: unknown } | { ok: false; status: number; reason: string };
 
 export interface AccommodationService {
-  listAccommodations(actor: Actor, applicationId: string): Promise<ListResult>;
+  listAccommodations(actor: Actor, applicationId: string | null): Promise<ListResult>;
   createAccommodation(
     actor: Actor,
-    applicationId: string,
+    applicationId: string | null,
     input: AccommodationCreate,
   ): Promise<MutateResult>;
   updateAccommodationStatus(
@@ -28,6 +28,66 @@ export interface AccommodationService {
     id: string,
     input: AccommodationStatusUpdate,
   ): Promise<MutateResult>;
+}
+
+export async function handleGetCandidateAccommodations(
+  svc: AccommodationService,
+  req: { actor: Actor },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const result = await svc.listAccommodations(req.actor, null);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return jsonResponse(200, { items: result.items, total: result.total }, correlationId);
+}
+
+export async function handlePostCandidateAccommodation(
+  svc: AccommodationService,
+  req: { actor: Actor; body: unknown },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const parsed = parseAccommodationCreate(req.body);
+  if (!parsed.ok) {
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: parsed.errors.join(', '),
+    });
+  }
+  const result = await svc.createAccommodation(req.actor, null, parsed.value);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return jsonResponse(201, result.accommodation, correlationId);
+}
+
+export async function handlePutCandidateAccommodation(
+  svc: AccommodationService,
+  req: { actor: Actor; accommodationId: string; body: unknown },
+): Promise<HttpResponse> {
+  const body = req.body as Record<string, unknown> | null;
+  if (body === null || typeof body !== 'object' || body.status !== 'closed') {
+    const correlationId = ensureCorrelationId();
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: 'Candidates may only withdraw an eligible request by setting status to closed.',
+    });
+  }
+  return handlePatchAccommodationStatus(svc, req);
 }
 
 export function createAccommodationService(deps: {

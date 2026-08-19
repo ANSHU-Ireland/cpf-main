@@ -6,12 +6,14 @@ import {
   parseObservationDisposition,
   parseIntegrityResolution,
   parseReviewQualityId,
+  listReviewObservations,
   type ReviewQualityRepository,
 } from '@cpf/org';
 import type { Actor } from '@cpf/org';
 import { ensureCorrelationId, jsonResponse, problemResponse, type HttpResponse } from '@cpf/http';
 
 export interface ReviewQualityService {
+  listObservations(actor: Actor, assignmentId: string): Promise<HttpResponse>;
   amendScorecard(actor: Actor, scorecardId: string, body: unknown): Promise<HttpResponse>;
   disposeObservation(actor: Actor, observationId: string, body: unknown): Promise<HttpResponse>;
   resolveIntegrity(actor: Actor, eventId: string, body: unknown): Promise<HttpResponse>;
@@ -21,6 +23,20 @@ export function createReviewQualityService(deps: {
   repository: ReviewQualityRepository;
 }): ReviewQualityService {
   return {
+    listObservations: async (actor, assignmentId) => {
+      const correlationId = ensureCorrelationId();
+      const id = parseReviewQualityId(assignmentId);
+      if (id === null) return problemResponse({ status: 422, title: 'Invalid ID', correlationId });
+      const result = await listReviewObservations(deps, actor, id);
+      if (!result.ok) {
+        return problemResponse({
+          status: result.status,
+          title: result.reason,
+          correlationId,
+        });
+      }
+      return jsonResponse(200, result.page, correlationId);
+    },
     amendScorecard: async (actor, scorecardId, body) => {
       const correlationId = ensureCorrelationId();
       const id = parseReviewQualityId(scorecardId);
@@ -70,6 +86,13 @@ export function createReviewQualityService(deps: {
       return jsonResponse(200, r.event, correlationId);
     },
   };
+}
+
+export async function handleListReviewObservations(
+  svc: ReviewQualityService,
+  req: { actor: Actor; assignmentId: string },
+): Promise<HttpResponse> {
+  return svc.listObservations(req.actor, req.assignmentId);
 }
 
 export async function handleCreateScorecardAmendment(

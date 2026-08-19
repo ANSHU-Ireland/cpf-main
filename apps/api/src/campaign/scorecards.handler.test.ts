@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   handleGetScorecard,
   handlePutScorecard,
+  handleSubmitScorecard,
   type ScorecardService,
 } from './scorecards.handler.js';
 import type { Actor } from '@cpf/org';
@@ -26,6 +27,8 @@ function service(overrides: Partial<ScorecardService> = {}): ScorecardService {
   return {
     getScorecard: () => Promise.resolve({ ok: true as const, scorecard: sc }),
     updateScorecard: () => Promise.resolve({ ok: true as const, scorecard: sc }),
+    submitScorecard: () =>
+      Promise.resolve({ ok: true as const, scorecard: { ...sc, status: 'locked' as const } }),
     ...overrides,
   };
 }
@@ -62,5 +65,13 @@ describe('handlePutScorecard', () => {
   it('returns 422 for empty body', async () => {
     const res = await handlePutScorecard(service(), { actor, assignmentId: VALID_ID, body: {} });
     expect(res.status).toBe(422);
+  });
+});
+
+describe('handleSubmitScorecard', () => {
+  it('returns a locked scorecard', async () => {
+    expect((await handleSubmitScorecard(service(), { actor, assignmentId: VALID_ID })).status).toBe(
+      200,
+    );
   });
 });

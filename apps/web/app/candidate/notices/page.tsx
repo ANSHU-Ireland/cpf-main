@@ -13,6 +13,7 @@ export default function CandidateNoticesPage() {
   const headingId = useId();
   const [data, setData] = useState<{ notices: Notice[]; allAcknowledged: boolean } | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [confirmed, setConfirmed] = useState(false);
 
   const loader = useCallback(async () => {
     const result = await apiClient.getCandidateNotices();
@@ -27,6 +28,7 @@ export default function CandidateNoticesPage() {
     const current = data.notices[currentIndex];
     if (!current) return;
     await apiClient.acknowledgeCandidateNotice(current.id);
+    setConfirmed(false);
 
     if (currentIndex < data.notices.length - 1) {
       setCurrentIndex(currentIndex + 1);
@@ -99,20 +101,15 @@ export default function CandidateNoticesPage() {
                             type="checkbox"
                             id="confirm"
                             required
+                            checked={confirmed}
+                            onChange={(event) => setConfirmed(event.target.checked)}
                             className="mt-1 rounded border-line text-blue focus:ring-blue"
                           />
                           <label htmlFor="confirm" className="text-sm text-ink">
                             I have read and understood this notice
                           </label>
                         </div>
-                        <Button
-                          variant="primary"
-                          onClick={handleAcknowledge}
-                          disabled={
-                            !(document.getElementById('confirm') as HTMLInputElement | null)
-                              ?.checked
-                          }
-                        >
+                        <Button variant="primary" onClick={handleAcknowledge} disabled={!confirmed}>
                           {currentIndex < data.notices.length - 1
                             ? 'Continue to next notice'
                             : 'Complete and continue'}

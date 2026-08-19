@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { AttemptSubmissionConflictError } from '@cpf/org';
 import type {
   Actor,
   AttemptRepository,
@@ -12,10 +13,13 @@ import type {
   AttemptPrecheckRecord,
   AttemptAiMessageRecord,
   AttemptPluginExecutionRecord,
+  AttemptSubmissionPreviewRecord,
 } from '@cpf/org';
 import {
   createAttemptService,
   handleGetAttempt,
+  handleGetLatestAttemptPrecheck,
+  handleGetAttemptSubmissionPreview,
   handleStartAttempt,
   handleSubmitAttempt,
   handleSaveAttemptResponse,
@@ -54,6 +58,10 @@ const attemptSession: AttemptSessionRecord = {
   tasks: [],
   activeItemId: null,
   receiptRef: null,
+  aiMessages: [],
+  artifacts: [],
+  pluginExecutions: [],
+  breakActive: false,
 };
 const response: AttemptResponseRecord = { attemptId: ID, itemId: ITEM, value: 1, savedAt: '' };
 const flag: AttemptItemFlagRecord = { attemptId: ID, itemId: ITEM, flagged: true };
@@ -73,6 +81,14 @@ const incident: AttemptIncidentRecord = {
   recordedAt: '',
 };
 const precheck: AttemptPrecheckRecord = { attemptId: ID, passed: true, checks: { camera: true } };
+const preview: AttemptSubmissionPreviewRecord = {
+  attemptId: ID,
+  ready: true,
+  incompleteItemIds: [],
+  blockers: [],
+  responseCount: 1,
+  artifactCount: 0,
+};
 const aiMessage: AttemptAiMessageRecord = {
   id: 'm1',
   attemptId: ID,
@@ -91,6 +107,8 @@ const execution: AttemptPluginExecutionRecord = {
 function repo(overrides: Partial<AttemptRepository> = {}): AttemptRepository {
   return {
     getAttempt: () => Promise.resolve(attemptSession),
+    getLatestPrecheck: () => Promise.resolve(precheck),
+    getSubmissionPreview: () => Promise.resolve(preview),
     startAttempt: () => Promise.resolve(attempt),
     submitAttempt: () => Promise.resolve(attempt),
     saveResponse: () => Promise.resolve(response),
@@ -127,6 +145,21 @@ describe('handleGetAttempt', () => {
     ).toBe(404));
 });
 
+describe('attempt readiness handlers', () => {
+  it('returns the latest precheck', async () =>
+    expect((await handleGetLatestAttemptPrecheck(svc(), { actor, attemptId: ID })).status).toBe(
+      200,
+    ));
+  it('returns a submission preview', async () =>
+    expect((await handleGetAttemptSubmissionPreview(svc(), { actor, attemptId: ID })).status).toBe(
+      200,
+    ));
+  it('validates attempt ids', async () =>
+    expect(
+      (await handleGetAttemptSubmissionPreview(svc(), { actor, attemptId: 'bad' })).status,
+    ).toBe(422));
+});
+
 describe('handleStartAttempt', () => {
   it('200', async () =>
     expect((await handleStartAttempt(svc(), { actor, attemptId: ID })).status).toBe(200));
@@ -146,6 +179,18 @@ describe('handleStartAttempt', () => {
 describe('handleSubmitAttempt', () => {
   it('200', async () =>
     expect((await handleSubmitAttempt(svc(), { actor, attemptId: ID })).status).toBe(200));
+  it('409 when required content is incomplete', async () =>
+    expect(
+      (
+        await handleSubmitAttempt(
+          svc({
+            submitAttempt: () =>
+              Promise.reject(new AttemptSubmissionConflictError('responses incomplete')),
+          }),
+          { actor, attemptId: ID },
+        )
+      ).status,
+    ).toBe(409));
 });
 
 describe('handleSaveAttemptResponse', () => {

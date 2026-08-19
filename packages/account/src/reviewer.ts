@@ -4,29 +4,31 @@ import type { Actor } from './types.js';
 
 const MAX_STRING = 200;
 const MAX_LIST = 50;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export interface ReviewerProfileRecord {
   readonly userId: string;
+  readonly displayName: string;
   readonly expertise: readonly string[];
-  readonly qualifications: readonly string[];
-  readonly languages: readonly string[];
-  readonly maxConcurrent: number;
+  readonly trainingStatus: string;
+  readonly calibrationStatus: string;
+  readonly conflictDeclarationRequired: boolean;
+  readonly maxActiveReviews: number | null;
   readonly updatedAt: string;
 }
 
 export interface ReviewerProfileUpdate {
+  displayName?: string;
   expertise?: readonly string[];
-  qualifications?: readonly string[];
-  languages?: readonly string[];
-  maxConcurrent?: number;
+  maxActiveReviews?: number | null;
 }
 
 export interface ReviewerAvailabilityWindow {
   readonly id: string;
-  readonly dayOfWeek: number;
-  readonly startTime: string;
-  readonly endTime: string;
+  readonly availableFrom: string;
+  readonly availableTo: string;
+  readonly capacity: number;
+  readonly status: 'available' | 'unavailable' | 'tentative';
+  readonly note: string | null;
 }
 
 export interface ReviewerAvailabilityPage {
@@ -36,9 +38,11 @@ export interface ReviewerAvailabilityPage {
 }
 
 export interface AvailabilityWindowInput {
-  readonly dayOfWeek: number;
-  readonly startTime: string;
-  readonly endTime: string;
+  readonly availableFrom: string;
+  readonly availableTo: string;
+  readonly capacity: number;
+  readonly status: 'available' | 'unavailable' | 'tentative';
+  readonly note?: string | null;
 }
 
 export interface AvailabilityReplaceInput {
@@ -47,7 +51,8 @@ export interface AvailabilityReplaceInput {
 
 export interface ReviewerTrainingRecord {
   readonly id: string;
-  readonly moduleCode: string;
+  readonly trainingType: string;
+  readonly materialVersion: string;
   readonly status: string;
   readonly completedAt: string | null;
   readonly expiresAt: string | null;
@@ -105,7 +110,7 @@ function authorize(deps: ReviewerDeps, actor: Actor, action: 'read' | 'write'): 
 
 function readStringList(
   input: Record<string, unknown>,
-  key: 'expertise' | 'qualifications' | 'languages',
+  key: 'expertise',
   errors: string[],
 ): readonly string[] | undefined {
   const v = input[key];
@@ -153,28 +158,36 @@ export function parseReviewerListQuery(raw: unknown): ParseResult<ReviewerListQu
 
 export function parseReviewerProfileUpdate(raw: unknown): ParseResult<ReviewerProfileUpdate> {
   if (!isObject(raw)) return { ok: false, errors: ['body must be a JSON object'] };
-  const allowed = new Set(['expertise', 'qualifications', 'languages', 'maxConcurrent']);
+  const allowed = new Set(['displayName', 'expertise', 'maxActiveReviews']);
   const errors: string[] = [];
   for (const key of Object.keys(raw)) {
     if (!allowed.has(key)) errors.push(`unknown property: ${key}`);
   }
   const value: ReviewerProfileUpdate = {};
+  if (raw.displayName !== undefined) {
+    if (
+      typeof raw.displayName !== 'string' ||
+      raw.displayName.trim().length < 2 ||
+      raw.displayName.length > MAX_STRING
+    ) {
+      errors.push(`displayName must be between 2 and ${MAX_STRING} chars`);
+    } else {
+      value.displayName = raw.displayName.trim();
+    }
+  }
   const expertise = readStringList(raw, 'expertise', errors);
   if (expertise !== undefined) value.expertise = expertise;
-  const qualifications = readStringList(raw, 'qualifications', errors);
-  if (qualifications !== undefined) value.qualifications = qualifications;
-  const languages = readStringList(raw, 'languages', errors);
-  if (languages !== undefined) value.languages = languages;
-  if (raw.maxConcurrent !== undefined) {
+  if (raw.maxActiveReviews !== undefined) {
     if (
-      typeof raw.maxConcurrent !== 'number' ||
-      !Number.isInteger(raw.maxConcurrent) ||
-      raw.maxConcurrent < 0 ||
-      raw.maxConcurrent > 100
+      raw.maxActiveReviews !== null &&
+      (typeof raw.maxActiveReviews !== 'number' ||
+        !Number.isInteger(raw.maxActiveReviews) ||
+        raw.maxActiveReviews < 0 ||
+        raw.maxActiveReviews > 100)
     ) {
-      errors.push('maxConcurrent must be an integer between 0 and 100');
+      errors.push('maxActiveReviews must be null or an integer between 0 and 100');
     } else {
-      value.maxConcurrent = raw.maxConcurrent;
+      value.maxActiveReviews = raw.maxActiveReviews as number | null;
     }
   }
   if (errors.length > 0) return { ok: false, errors };
@@ -197,29 +210,45 @@ export function parseAvailabilityReplace(raw: unknown): ParseResult<Availability
       errors.push('each window must be an object');
       continue;
     }
-    const { dayOfWeek, startTime, endTime } = entry;
+    const { availableFrom, availableTo, capacity, status, note } = entry;
+    const from = typeof availableFrom === 'string' ? Date.parse(availableFrom) : Number.NaN;
+    const to = typeof availableTo === 'string' ? Date.parse(availableTo) : Number.NaN;
+    if (!Number.isFinite(from)) {
+      errors.push('availableFrom must be an ISO-8601 timestamp');
+      continue;
+    }
+    if (!Number.isFinite(to)) {
+      errors.push('availableTo must be an ISO-8601 timestamp');
+      continue;
+    }
+    if (to <= from) {
+      errors.push('availableTo must be after availableFrom');
+      continue;
+    }
     if (
-      typeof dayOfWeek !== 'number' ||
-      !Number.isInteger(dayOfWeek) ||
-      dayOfWeek < 0 ||
-      dayOfWeek > 6
+      typeof capacity !== 'number' ||
+      !Number.isInteger(capacity) ||
+      capacity < 0 ||
+      capacity > 100
     ) {
-      errors.push('dayOfWeek must be an integer between 0 and 6');
+      errors.push('capacity must be an integer between 0 and 100');
       continue;
     }
-    if (typeof startTime !== 'string' || !TIME_RE.test(startTime)) {
-      errors.push('startTime must be an HH:MM time');
+    if (status !== 'available' && status !== 'unavailable' && status !== 'tentative') {
+      errors.push('status must be available, unavailable, or tentative');
       continue;
     }
-    if (typeof endTime !== 'string' || !TIME_RE.test(endTime)) {
-      errors.push('endTime must be an HH:MM time');
+    if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > 2_000)) {
+      errors.push('note must be null or a string up to 2000 chars');
       continue;
     }
-    if (endTime <= startTime) {
-      errors.push('endTime must be after startTime');
-      continue;
-    }
-    parsed.push({ dayOfWeek, startTime, endTime });
+    parsed.push({
+      availableFrom: new Date(from).toISOString(),
+      availableTo: new Date(to).toISOString(),
+      capacity,
+      status,
+      ...(note === undefined ? {} : { note: note as string | null }),
+    });
   }
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, value: { windows: parsed } };

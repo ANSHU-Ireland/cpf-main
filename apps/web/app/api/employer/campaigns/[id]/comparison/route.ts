@@ -1,13 +1,18 @@
-import { employerStore } from '../../../../../lib/synthetic.server';
+import { projectPlatform } from '../../../../../lib/platform-api.server';
+import {
+  campaignComparison,
+  type PlatformCampaignComparison,
+} from '../../../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { id: string } },
-): Promise<Response> {
-  if (employerStore.getCampaign(params.id) === null) {
-    return Response.json({ error: 'Campaign not found.' }, { status: 404 });
-  }
-  return Response.json(employerStore.getComparison());
+export function GET(request: Request, { params }: { params: { id: string } }): Promise<Response> {
+  return projectPlatform<PlatformCampaignComparison, unknown>(
+    {
+      request,
+      path: `/campaigns/${encodeURIComponent(params.id)}/comparison`,
+      method: 'GET',
+    },
+    campaignComparison,
+  );
 }

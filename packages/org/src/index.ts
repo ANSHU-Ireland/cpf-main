@@ -39,6 +39,7 @@ export * from './notice-repository.js';
 export * from './notices.js';
 export * from './campaign-stats.js';
 export * from './campaign-stats-repository.js';
+export * from './campaign-readiness.js';
 export * from './assessment-types.js';
 export * from './assessment-repository.js';
 export * from './assessments.js';

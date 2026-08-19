@@ -1,30 +1,20 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-interface InvitationBody {
-  readonly email?: unknown;
-  readonly campaignName?: unknown;
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Invitation directory contract not approved',
+    detail:
+      'The baseline can create an invitation for a known application, but this screen requires a tenant invitation list and email-to-application workflow that the contract does not expose.',
+    requirementIds: ['FR-EA-13'],
+  });
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getInvitations());
+export function GET(request: Request): Response {
+  return gap(request);
 }
 
-export async function POST(request: Request): Promise<Response> {
-  let payload: InvitationBody;
-  try {
-    payload = (await request.json()) as InvitationBody;
-  } catch {
-    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
-  const email = typeof payload.email === 'string' ? payload.email.trim() : '';
-  const campaignName = typeof payload.campaignName === 'string' ? payload.campaignName.trim() : '';
-  if (!email.includes('@')) {
-    return Response.json({ error: 'A valid email is required.' }, { status: 422 });
-  }
-  if (campaignName.length < 2) {
-    return Response.json({ error: 'A campaign is required.' }, { status: 422 });
-  }
-  return Response.json(employerStore.sendInvitation(email, campaignName), { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

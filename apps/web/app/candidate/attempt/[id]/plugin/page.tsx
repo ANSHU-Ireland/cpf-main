@@ -35,7 +35,7 @@ function Runner({
     setBusy(true);
     setError(null);
     try {
-      await apiClient.runPlugin(attemptId, 'Sample test runner', input);
+      await apiClient.runPlugin(attemptId, 'cpf.demo.workspace', input);
       onChanged();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not run the plugin.');

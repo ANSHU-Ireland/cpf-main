@@ -89,7 +89,7 @@ export interface AuthRepository {
   changeEmail(actor: Actor, input: EmailChangeInput): Promise<boolean>;
   confirmEmailChange(actor: Actor, input: TokenInput): Promise<boolean>;
   listMfaMethods(actor: Actor, query: AuthListQuery): Promise<AuthMethodPage>;
-  enrollMfaMethod(actor: Actor, input: MfaEnrollInput): Promise<AuthMethodRecord>;
+  enrollMfaMethod(actor: Actor, input: MfaEnrollInput): Promise<AuthMethodRecord | null>;
   removeMfaMethod(actor: Actor, methodId: string): Promise<boolean>;
   challengeMfa(input: MfaChallengeInput): Promise<AuthSessionRecord | null>;
   rotateRecoveryCodes(actor: Actor): Promise<RecoveryCodesRecord | null>;
@@ -405,6 +405,9 @@ export async function enrollMfaMethod(
 ): Promise<Result<{ method: AuthMethodRecord }>> {
   if (!authorize(deps, actor, 'write')) return { ok: false, status: 403, reason: 'forbidden' };
   const method = await deps.repository.enrollMfaMethod(actor, input);
+  if (method === null) {
+    return { ok: false, status: 503, reason: 'MFA provider unavailable.' };
+  }
   return { ok: true, method };
 }
 

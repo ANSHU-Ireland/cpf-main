@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   handleGetCandidateProfile,
   handleGetCandidateInvitation,
+  handleGetCandidateApplicationStatus,
+  handleGetCandidatePractice,
   type CandidatePortalService,
 } from './candidate-portal.handler.js';
 import type { Actor } from '@cpf/org';
@@ -21,6 +23,22 @@ function service(overrides: Partial<CandidatePortalService> = {}): CandidatePort
         ok: true as const,
         invitation: { invitationId: 'i', campaignTitle: 'C', expiresAt: '', status: 'pending' },
       }),
+    getApplicationStatus: () =>
+      Promise.resolve({
+        ok: true as const,
+        application: {
+          applicationId: VALID_ID,
+          employerName: 'Example employer',
+          roleName: 'Engineer',
+          assessmentTitle: 'Practical',
+          status: 'invited',
+          appliedAt: '2026-08-01T00:00:00.000Z',
+          invitedAt: null,
+          dueAt: null,
+          decision: null,
+        },
+      }),
+    listPractice: () => Promise.resolve({ ok: true as const, modules: [] }),
     ...overrides,
   };
 }
@@ -54,5 +72,21 @@ describe('handleGetCandidateInvitation', () => {
       { actor },
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe('handleGetCandidateApplicationStatus', () => {
+  it('returns 200', async () => {
+    const res = await handleGetCandidateApplicationStatus(service(), {
+      actor,
+      applicationId: VALID_ID,
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('handleGetCandidatePractice', () => {
+  it('returns 200', async () => {
+    expect((await handleGetCandidatePractice(service(), { actor })).status).toBe(200);
   });
 });

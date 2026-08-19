@@ -1,4 +1,9 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import {
+  integration,
+  integrations,
+  type PlatformIntegration,
+} from '../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,8 +13,11 @@ interface IntegrationBody {
   readonly endpoint?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getIntegrations());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformIntegration[]; total: number }, unknown>(
+    { request, path: '/organization/integrations', method: 'GET' },
+    integrations,
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -22,14 +30,20 @@ export async function POST(request: Request): Promise<Response> {
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
   const kind = typeof payload.kind === 'string' ? payload.kind.trim() : '';
   const endpoint = typeof payload.endpoint === 'string' ? payload.endpoint.trim() : '';
-  if (name.length < 2) {
-    return Response.json({ error: 'An integration name is required.' }, { status: 422 });
+  if (name.length < 2 || kind === '' || !endpoint.startsWith('https://')) {
+    return Response.json(
+      { error: 'A name, integration kind and secure HTTPS endpoint are required.' },
+      { status: 422 },
+    );
   }
-  if (kind.length === 0) {
-    return Response.json({ error: 'An integration kind is required.' }, { status: 422 });
-  }
-  if (!endpoint.startsWith('https://')) {
-    return Response.json({ error: 'A secure https endpoint is required.' }, { status: 422 });
-  }
-  return Response.json(employerStore.addIntegration(name, kind, endpoint), { status: 201 });
+  return projectPlatform<PlatformIntegration, unknown>(
+    {
+      request,
+      path: '/organization/integrations',
+      method: 'POST',
+      body: { connectionType: kind, provider: name, config: { endpoint } },
+    },
+    integration,
+    201,
+  );
 }

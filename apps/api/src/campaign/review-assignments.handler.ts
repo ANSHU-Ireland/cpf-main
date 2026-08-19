@@ -5,12 +5,14 @@ import {
   acceptReviewAssignment,
   stopReviewAssignmentAi,
   declineReviewAssignment,
+  setReviewAssignmentConflict,
   addReviewAssignmentAnnotation,
   addReviewAssignmentClarification,
   parseReviewAssignmentListQuery,
   parseReviewAssignmentCreate,
   parseAssignmentId,
   parseAssignmentDecline,
+  parseAssignmentConflict,
   parseAssignmentAnnotation,
   parseAssignmentClarification,
   type ReviewAssignmentDeps,
@@ -39,6 +41,7 @@ export interface ReviewAssignmentService {
   acceptAssignment(actor: Actor, id: string): Promise<AcceptAssignmentResult>;
   stopAi(actor: Actor, id: string): Promise<AcceptAssignmentResult>;
   decline(actor: Actor, id: string, body: unknown): Promise<AcceptAssignmentResult>;
+  setConflict(actor: Actor, id: string, body: unknown): Promise<AcceptAssignmentResult>;
   addAnnotation(actor: Actor, id: string, body: unknown): Promise<AnnotationResult>;
   addClarification(actor: Actor, id: string, body: unknown): Promise<ClarificationResult>;
 }
@@ -54,6 +57,11 @@ export function createReviewAssignmentService(deps: ReviewAssignmentDeps): Revie
       const parsed = parseAssignmentDecline(body);
       if (!parsed.ok) return { ok: false, status: 422, reason: parsed.errors.join(', ') };
       return declineReviewAssignment(deps, actor, id, parsed.value);
+    },
+    setConflict: async (actor, id, body) => {
+      const parsed = parseAssignmentConflict(body);
+      if (!parsed.ok) return { ok: false, status: 422, reason: parsed.errors.join(', ') };
+      return setReviewAssignmentConflict(deps, actor, id, parsed.value);
     },
     addAnnotation: async (actor, id, body) => {
       const parsed = parseAssignmentAnnotation(body);
@@ -189,6 +197,27 @@ export async function handlePostDeclineAssignment(
       correlationId,
       detail: result.reason,
     });
+  return jsonResponse(200, result.assignment, correlationId);
+}
+
+export async function handlePutAssignmentConflict(
+  svc: ReviewAssignmentService,
+  req: { actor: Actor; assignmentId: string; body: unknown },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const id = parseAssignmentId(req.assignmentId);
+  if (id === null) {
+    return problemResponse({ status: 422, title: 'Invalid ID', correlationId, detail: 'bad uuid' });
+  }
+  const result = await svc.setConflict(req.actor, id, req.body);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
   return jsonResponse(200, result.assignment, correlationId);
 }
 

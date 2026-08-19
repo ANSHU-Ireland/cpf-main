@@ -1,27 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const collection = governanceStore.getTechnicalDocs();
-  return NextResponse.json(collection);
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Technical-document storage is externally gated',
+    detail:
+      'An Annex IV version requires a protected object URI, content hash and complete manifest; local placeholder evidence is not permitted.',
+    requirementIds: ['GOV-05', 'FR-GOV-06'],
+  });
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const { systemId, version } = body;
+export function GET(request: Request): Response {
+  return gap(request);
+}
 
-  if (typeof systemId !== 'string' || systemId.trim().length < 2) {
-    return NextResponse.json({ error: 'Invalid systemId.' }, { status: 422 });
-  }
-  if (typeof version !== 'string' || version.trim().length < 1) {
-    return NextResponse.json(
-      { error: 'Invalid version; minimum 1 character required.' },
-      { status: 422 },
-    );
-  }
-
-  const doc = governanceStore.createTechnicalDocVersion(systemId.trim(), version.trim());
-  return NextResponse.json(doc, { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

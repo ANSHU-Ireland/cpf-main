@@ -12,13 +12,23 @@ export interface CampaignDashboardData {
   readonly campaignId: string;
   readonly totalApplications: number;
   readonly totalReviewers: number;
+  readonly unassignedReviews: number;
   readonly averageScore: number | null;
   readonly statusBreakdown: Record<string, number>;
 }
 
 export interface CampaignComparisonData {
   readonly campaignId: string;
-  readonly candidates: readonly { candidateId: string; score: number | null; rank: number }[];
+  readonly candidates: readonly {
+    candidateId: string;
+    applicationId: string;
+    candidateReference: string;
+    reviewStatus: string;
+    criteriaScored: number;
+    criteriaTotal: number;
+    score: number | null;
+    rank: number;
+  }[];
 }
 
 export interface CampaignDashboardRepository {

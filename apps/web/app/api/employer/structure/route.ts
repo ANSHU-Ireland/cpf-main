@@ -1,4 +1,9 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import {
+  callPlatform,
+  platformErrorResponse,
+  projectPlatform,
+} from '../../../lib/platform-api.server';
+import { structure } from '../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,8 +13,39 @@ interface StructureBody {
   readonly departmentId?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getStructure());
+interface Department {
+  readonly id: string;
+  readonly name: string;
+}
+
+interface Team {
+  readonly id: string;
+  readonly name: string;
+  readonly departmentId: string;
+}
+
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const [departments, teams] = await Promise.all([
+      callPlatform<{ items: readonly Department[] }>({
+        request,
+        path: '/organization/departments?limit=100',
+        method: 'GET',
+      }),
+      callPlatform<{ items: readonly Team[] }>({
+        request,
+        path: '/organization/teams?limit=100',
+        method: 'GET',
+      }),
+    ]);
+    return Response.json(structure(departments.data, teams.data), {
+      headers: { 'x-correlation-id': departments.correlationId },
+    });
+  } catch (error) {
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
+    throw error;
+  }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -24,18 +60,33 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'A name is required.' }, { status: 422 });
   }
   if (payload.kind === 'department') {
-    return Response.json(employerStore.addDepartment(name), { status: 201 });
+    return projectPlatform<Department, Department>(
+      {
+        request,
+        path: '/organization/departments',
+        method: 'POST',
+        body: { name },
+      },
+      (item) => item,
+      201,
+    );
   }
   if (payload.kind === 'team') {
-    const departmentId = typeof payload.departmentId === 'string' ? payload.departmentId : '';
-    const team = employerStore.addTeam(name, departmentId);
-    if (team === null) {
-      return Response.json({ error: 'Parent department not found.' }, { status: 422 });
+    const departmentId =
+      typeof payload.departmentId === 'string' ? payload.departmentId.trim() : '';
+    if (departmentId === '') {
+      return Response.json({ error: 'A parent department is required.' }, { status: 422 });
     }
-    return Response.json(team, { status: 201 });
+    return projectPlatform<Team, Team>(
+      {
+        request,
+        path: '/organization/teams',
+        method: 'POST',
+        body: { name, departmentId },
+      },
+      (item) => item,
+      201,
+    );
   }
-  return Response.json(
-    { error: 'A valid kind (department or team) is required.' },
-    { status: 422 },
-  );
+  return Response.json({ error: 'A valid structure kind is required.' }, { status: 422 });
 }

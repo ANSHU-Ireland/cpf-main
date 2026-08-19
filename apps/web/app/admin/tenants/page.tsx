@@ -46,10 +46,12 @@ export default function TenantsPage(): React.JSX.Element {
   const headingId = useId();
   const nameId = useId();
   const slugId = useId();
+  const regionId = useId();
   const load = useCallback(() => apiClient.getTenants(), []);
   const { state, reload, setData } = useAsync<Collection<TenantView>>(load);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [dataRegion, setDataRegion] = useState('EU');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +59,7 @@ export default function TenantsPage(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const created = await apiClient.createTenant(name.trim(), slug.trim());
+      const created = await apiClient.createTenant(name.trim(), slug.trim(), dataRegion.trim());
       setData({ items: [created, ...current.items], total: current.total + 1 });
       setName('');
       setSlug('');
@@ -120,6 +122,24 @@ export default function TenantsPage(): React.JSX.Element {
                     gap: 'calc(var(--space-unit) * 1)',
                   }}
                 >
+                  <label htmlFor={regionId} style={{ fontWeight: 600 }}>
+                    Data region
+                  </label>
+                  <input
+                    id={regionId}
+                    value={dataRegion}
+                    onChange={(e) => setDataRegion(e.target.value)}
+                    placeholder="EU"
+                    style={fieldStyle}
+                  />
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'calc(var(--space-unit) * 1)',
+                  }}
+                >
                   <label htmlFor={slugId} style={{ fontWeight: 600 }}>
                     Slug
                   </label>
@@ -138,7 +158,12 @@ export default function TenantsPage(): React.JSX.Element {
                 ) : null}
                 <div>
                   <Button
-                    disabled={busy || name.trim().length < 2 || slug.trim().length < 2}
+                    disabled={
+                      busy ||
+                      name.trim().length < 2 ||
+                      slug.trim().length < 2 ||
+                      dataRegion.trim().length < 2
+                    }
                     onClick={() => void create(data)}
                   >
                     {busy ? 'Creating…' : 'Create tenant'}

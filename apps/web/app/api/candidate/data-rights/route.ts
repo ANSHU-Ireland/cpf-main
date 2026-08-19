@@ -1,17 +1,67 @@
-import { candidateStore } from '../../../lib/synthetic.server';
+import { forwardPlatform, projectPlatform } from '../../../lib/platform-api.server';
 import type { DataRightsType } from '../../../lib/types';
 
 export const dynamic = 'force-dynamic';
 
 const TYPES = new Set<DataRightsType>(['export', 'rectification', 'erasure', 'restriction']);
+const TO_PLATFORM_TYPE: Readonly<Record<DataRightsType, string>> = {
+  export: 'access',
+  rectification: 'correction',
+  erasure: 'deletion',
+  restriction: 'restriction',
+};
+const FROM_PLATFORM_TYPE: Readonly<Record<string, DataRightsType>> = {
+  access: 'export',
+  correction: 'rectification',
+  deletion: 'erasure',
+  restriction: 'restriction',
+};
 
 interface CreateBody {
   readonly type?: unknown;
   readonly note?: unknown;
 }
 
-export function GET(): Response {
-  return Response.json(candidateStore.getDataRights());
+interface DataRightRecord {
+  readonly id: string;
+  readonly requestType: string;
+  readonly status:
+    | 'received'
+    | 'identity_verification'
+    | 'in_progress'
+    | 'fulfilled'
+    | 'partially_fulfilled'
+    | 'rejected'
+    | 'closed';
+  readonly createdAt: string;
+}
+
+interface DataRightPage {
+  readonly items: readonly DataRightRecord[];
+  readonly total: number;
+}
+
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<DataRightPage, object>(
+    { request, path: '/candidate/data-rights-requests', method: 'GET' },
+    (page) => ({
+      total: page.total,
+      items: page.items.map((item) => ({
+        id: item.id,
+        type: FROM_PLATFORM_TYPE[item.requestType] ?? 'export',
+        status:
+          item.status === 'fulfilled' || item.status === 'closed'
+            ? 'completed'
+            : item.status === 'rejected'
+              ? 'refused'
+              : item.status === 'identity_verification' || item.status === 'partially_fulfilled'
+                ? 'in_progress'
+                : item.status,
+        submittedAt: item.createdAt,
+        note: null,
+      })),
+    }),
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -26,7 +76,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Choose a valid request type.' }, { status: 422 });
   }
   const note = typeof body.note === 'string' ? body.note : '';
-  return Response.json(candidateStore.createDataRightsRequest(type as DataRightsType, note), {
-    status: 201,
+  return forwardPlatform({
+    request,
+    path: '/candidate/data-rights-requests',
+    method: 'POST',
+    body: {
+      requestType: TO_PLATFORM_TYPE[type as DataRightsType],
+      justification: note.trim() || 'Candidate self-service request.',
+    },
   });
 }

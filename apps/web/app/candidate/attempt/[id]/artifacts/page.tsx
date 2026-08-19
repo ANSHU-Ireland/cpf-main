@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useId, useState, type FormEvent } from 'react';
+import { useCallback, useId } from 'react';
 import { Button, Field, Input } from '@cpf/ui';
 import { PageHeader } from '../../../../components/PageHeader';
 import { Card } from '../../../../components/Card';
 import { StatusBadge, type BadgeTone } from '../../../../components/StatusBadge';
 import { AsyncBoundary } from '../../../../components/AsyncBoundary';
-import { apiClient, ApiError } from '../../../../lib/api-client';
+import { apiClient } from '../../../../lib/api-client';
 import { useAsync } from '../../../../lib/useAsync';
 import type { ArtifactStatus, ArtifactView, Collection } from '../../../../lib/types';
 
@@ -24,51 +24,15 @@ const STATUS_LABEL: Record<ArtifactStatus, string> = {
   rejected: 'Rejected',
 };
 
-function Artifacts({
-  attemptId,
-  initial,
-  onChanged,
-}: {
-  attemptId: string;
-  initial: Collection<ArtifactView>;
-  onChanged: () => void;
-}): React.JSX.Element {
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (name.trim() === '') {
-      setError('Enter a file name to attach.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setFormError(null);
-    try {
-      const size = `${(Math.random() * 900 + 100).toFixed(0)} KB`;
-      await apiClient.uploadArtifact(attemptId, name.trim(), size);
-      setName('');
-      onChanged();
-    } catch (e) {
-      setFormError(e instanceof ApiError ? e.message : 'Could not upload that artifact.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function Artifacts({ initial }: { initial: Collection<ArtifactView> }): React.JSX.Element {
   return (
     <div style={{ display: 'grid', gap: 'calc(var(--space-unit) * 4)' }}>
       <Card as="article" aria-label="Attach an artifact">
         <p style={{ marginBlockStart: 0, color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-          Uploaded files are scanned and versioned before they attach to your attempt (demo:
-          simulated file name only).
+          Uploads remain unavailable until signed object storage and malware scanning are
+          configured. Existing persisted artifacts remain visible below.
         </p>
-        <form
-          onSubmit={(e) => void onSubmit(e)}
-          noValidate
+        <div
           style={{
             display: 'flex',
             gap: 'calc(var(--space-unit) * 3)',
@@ -77,28 +41,22 @@ function Artifacts({
           }}
         >
           <div style={{ flex: '1 1 240px' }}>
-            <Field label="File name" required error={error ?? undefined}>
+            <Field label="File name">
               {({ id, invalid, describedBy }) => (
                 <Input
                   id={id}
-                  value={name}
                   invalid={invalid}
                   aria-describedby={describedBy}
                   placeholder="solution.zip"
-                  onChange={(e) => setName(e.target.value)}
+                  disabled
                 />
               )}
             </Field>
           </div>
-          <Button type="submit" disabled={busy}>
-            {busy ? 'Uploading…' : 'Upload artifact'}
+          <Button type="button" disabled>
+            Upload unavailable
           </Button>
-        </form>
-        {formError ? (
-          <p role="alert" style={{ margin: 'var(--space-unit) 0 0', color: 'var(--color-red)' }}>
-            {formError}
-          </p>
-        ) : null}
+        </div>
       </Card>
 
       {initial.items.length === 0 ? (
@@ -159,7 +117,7 @@ export default function ArtifactsPage({ params }: { params: { id: string } }): R
         description="Attach permitted files to your attempt. Each is scanned, versioned and recorded."
       />
       <AsyncBoundary state={state} onRetry={reload} label="your artifacts">
-        {(data) => <Artifacts attemptId={id} initial={data} onChanged={reload} />}
+        {(data) => <Artifacts initial={data} />}
       </AsyncBoundary>
     </section>
   );

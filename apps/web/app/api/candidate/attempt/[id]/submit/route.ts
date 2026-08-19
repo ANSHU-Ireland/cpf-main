@@ -1,24 +1,16 @@
-import { runtimeStore } from '../../../../../lib/synthetic.server';
-import { DemoPersistenceError, demoPersistence } from '../../../../../lib/persistence.server';
+import { attemptView, type PlatformAttempt } from '../../../../../lib/attempt-api.server';
+import { mutateThenProject } from '../../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
-  try {
-    await demoPersistence.submitAttempt();
-    const persisted = await demoPersistence.getAttempt(params.id);
-    if (persisted !== null) return Response.json(persisted);
-  } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    throw error;
-  }
-  return Response.json(runtimeStore.submitAttempt());
+  const id = encodeURIComponent(params.id);
+  return mutateThenProject<PlatformAttempt, object>({
+    mutation: { request, path: `/attempts/${id}/submit`, method: 'POST', body: {} },
+    read: { request, path: `/attempts/${id}`, method: 'GET' },
+    project: attemptView,
+  });
 }

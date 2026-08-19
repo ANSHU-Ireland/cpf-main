@@ -1,24 +1,18 @@
 # Next Action — exactly one executable slice
 
-## Critical journey visual translation
+## Verify the continuation checkpoint
 
-**Goal:** bring the two representative high-value workspaces that failed the baseline comparison
-into verified alignment with their Penpot sources before translating the remaining role inventory.
+**Goal:** turn the saved `agent/complete-remaining-scope` checkpoint into a fully measured local
+baseline before adding another feature.
 
-**Source identifiers:** RUN-02 and REV-08; `interfaces/run-02.svg`, `interfaces/rev-08.svg`, the
-assessment-runtime requirements, and the reviewer human-authority/AI-boundary requirements.
+1. Treat the passing `pnpm verify` result (148 files / 1,559 tests passing; 21 files / 53 tests
+   skipped without `DATABASE_URL`) as the checkpoint baseline.
+2. Run the production web build and contract check.
+3. Run the PostgreSQL-backed repository/RLS suites with the configured local database.
+4. Fix only evidence-backed regressions from those gates.
+5. Record exact results in `CURRENT_STATE.md` and continue with the ordered worklist in
+   `NEXT_SESSION_PLAN_2026-08-16.md`.
 
-**Implementation:**
-
-1. Measure and document the source shell, content regions, typography, controls and visible states.
-2. Extract reusable runtime/workspace layout components without regressing the shared CPF shell.
-3. Rebuild RUN-02 assessment overview with server-authoritative timer, section map, autosave state and
-   next-task action represented faithfully in the synthetic product.
-4. Rebuild REV-08 criterion scorecard with evidence-first layout, human-authored scoring, explicit
-   save/conflict/validation states and no AI numeric score or recommendation.
-5. Verify both primary journeys, keyboard/focus behavior, responsive breakpoints, console output,
-   source/implementation screenshots, full repository tests and the production build.
-
-**Completion condition:** RUN-02 and REV-08 have no actionable P0/P1/P2 visual differences at their
-source desktop viewport, remain usable at the supported narrow breakpoint, preserve their human
-authority and AI boundaries, and are recorded in a passing `design-qa.md` comparison history.
+**Completion condition:** formatting, lint, typecheck, unit tests, production build, contract check
+and database-backed tests have current evidence, with every skip or blocker explicitly accounted
+for.

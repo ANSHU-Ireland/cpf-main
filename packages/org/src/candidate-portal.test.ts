@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { getCandidateProfile, getCandidateInvitation } from './candidate-portal.js';
+import {
+  getCandidateProfile,
+  getCandidateInvitation,
+  getCandidateApplicationStatus,
+  listCandidatePractice,
+} from './candidate-portal.js';
 import type {
   CandidatePortalRepository,
   CandidateProfileData,
   CandidateInvitationData,
+  CandidateApplicationStatusData,
 } from './candidate-portal.js';
 import type { Actor } from './types.js';
 
@@ -28,11 +34,24 @@ const invitation: CandidateInvitationData = {
   expiresAt: '2025-01-01T00:00:00.000Z',
   status: 'pending',
 };
+const application: CandidateApplicationStatusData = {
+  applicationId: 'a1',
+  employerName: 'Example employer',
+  roleName: 'Engineer',
+  assessmentTitle: 'Practical',
+  status: 'invited',
+  appliedAt: '2026-08-01T00:00:00.000Z',
+  invitedAt: null,
+  dueAt: null,
+  decision: null,
+};
 
 function repo(overrides: Partial<CandidatePortalRepository> = {}): CandidatePortalRepository {
   return {
     getProfile: () => Promise.resolve(profile),
     getInvitation: () => Promise.resolve(invitation),
+    getApplicationStatus: () => Promise.resolve(application),
+    listPracticeModules: () => Promise.resolve([]),
     ...overrides,
   };
 }
@@ -67,5 +86,27 @@ describe('getCandidateInvitation', () => {
       admin,
     );
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('getCandidateApplicationStatus', () => {
+  it('returns only the scoped application', async () => {
+    const result = await getCandidateApplicationStatus({ repository: repo() }, admin, 'a1');
+    expect(result).toMatchObject({ ok: true, application: { applicationId: 'a1' } });
+  });
+  it('does not expose a missing or differently scoped application', async () => {
+    const result = await getCandidateApplicationStatus(
+      { repository: repo({ getApplicationStatus: () => Promise.resolve(null) }) },
+      admin,
+      'a2',
+    );
+    expect(result).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe('listCandidatePractice', () => {
+  it('returns the persistent practice catalogue', async () => {
+    const result = await listCandidatePractice({ repository: repo() }, admin);
+    expect(result).toEqual({ ok: true, modules: [] });
   });
 });

@@ -1,5 +1,9 @@
-import { runtimeStore } from '../../../../lib/synthetic.server';
-import { DemoPersistenceError, demoPersistence } from '../../../../lib/persistence.server';
+import { attemptView, type PlatformAttempt } from '../../../../lib/attempt-api.server';
+import {
+  forwardPlatform,
+  mutateThenProject,
+  projectPlatform,
+} from '../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,46 +12,32 @@ interface AttemptActionBody {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
-  try {
-    const persisted = await demoPersistence.getAttempt(params.id);
-    return Response.json(persisted ?? runtimeStore.getAttempt());
-  } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    throw error;
-  }
+  return projectPlatform<PlatformAttempt, object>(
+    { request, path: `/attempts/${encodeURIComponent(params.id)}`, method: 'GET' },
+    attemptView,
+  );
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
   let body: AttemptActionBody;
   try {
     body = (await request.json()) as AttemptActionBody;
   } catch {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
-  if (body.action === 'reset') return Response.json(runtimeStore.resetAttempt());
-  try {
-    await demoPersistence.startAttempt();
-    const persisted = await demoPersistence.getAttempt(params.id);
-    if (persisted !== null) return Response.json(persisted);
-  } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    throw error;
+  const id = encodeURIComponent(params.id);
+  if (body.action === 'reset') {
+    return forwardPlatform({ request, path: `/attempts/${id}/ai/reset`, method: 'POST', body: {} });
   }
-  return Response.json(runtimeStore.startAttempt());
+  return mutateThenProject<PlatformAttempt, object>({
+    mutation: { request, path: `/attempts/${id}/start`, method: 'POST', body: {} },
+    read: { request, path: `/attempts/${id}`, method: 'GET' },
+    project: attemptView,
+  });
 }

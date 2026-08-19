@@ -1,4 +1,4 @@
-import { candidateStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +8,15 @@ interface CreateBody {
 }
 
 export function GET(): Response {
-  return Response.json(candidateStore.getComplaints());
+  return Response.json(
+    {
+      type: 'about:blank',
+      title: 'Complaint history is not available in the baseline API contract',
+      status: 501,
+      detail: 'Submitting a complaint is supported; listing complaints requires a contract update.',
+    },
+    { status: 501 },
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -26,5 +34,22 @@ export async function POST(request: Request): Promise<Response> {
       { status: 422 },
     );
   }
-  return Response.json(candidateStore.createComplaint(subject), { status: 201 });
+  return projectPlatform<
+    { id: string; category: string; status: string; createdAt: string },
+    object
+  >(
+    {
+      request,
+      path: '/candidate/complaints',
+      method: 'POST',
+      body: { category: subject, description: detail },
+    },
+    (complaint) => ({
+      id: complaint.id,
+      subject: complaint.category,
+      status: complaint.status === 'resolved' ? 'resolved' : 'open',
+      submittedAt: complaint.createdAt,
+    }),
+    201,
+  );
 }

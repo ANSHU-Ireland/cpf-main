@@ -50,7 +50,7 @@ type Result<T> = ({ ok: true } & T) | { ok: false; status: number; reason: strin
 export async function listNotices(
   deps: NoticeDeps,
   actor: Actor,
-  applicationId: string,
+  applicationId: string | null,
 ): Promise<Result<{ items: readonly unknown[]; total: number }>> {
   const decision = can(
     { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
@@ -66,7 +66,7 @@ export async function listNotices(
 export async function createNotice(
   deps: NoticeDeps,
   actor: Actor,
-  applicationId: string,
+  applicationId: string | null,
   input: NoticeCreate,
 ): Promise<Result<{ notice: unknown }>> {
   const decision = can(
@@ -77,5 +77,6 @@ export async function createNotice(
   );
   if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
   const record = await deps.repository.createNotice(actor, applicationId, input);
+  if (record === null) return { ok: false, status: 404, reason: 'application_not_found' };
   return { ok: true, notice: record };
 }

@@ -48,6 +48,8 @@ function repo(overrides: Partial<AiModelRepository> = {}): AiModelRepository {
     getModel: () => Promise.resolve(model()),
     createModel: (_a: Actor, input: AiModelCreate) =>
       Promise.resolve(model({ modelKey: input.modelKey })),
+    recordEvaluation: () =>
+      Promise.resolve(model({ evaluationSummary: { outcome: 'passed' }, status: 'evaluating' })),
     activateModel: () => Promise.resolve(model({ status: 'active' })),
     suspendModel: () => Promise.resolve(model({ status: 'suspended' })),
     ...overrides,

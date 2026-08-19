@@ -25,7 +25,7 @@ export default function ReviewerProfilePage(): React.JSX.Element {
   const headingId = useId();
   const nameId = useId();
   const discId = useId();
-  const bioId = useId();
+  const maxId = useId();
   const load = useCallback(() => apiClient.getReviewerProfile(), []);
   const { state, reload, setData } = useAsync<ReviewerProfileView>(load);
 
@@ -38,7 +38,7 @@ export default function ReviewerProfilePage(): React.JSX.Element {
       />
       <AsyncBoundary state={state} onRetry={reload} label="profile">
         {(profile) => (
-          <ProfileForm profile={profile} onSaved={setData} ids={{ nameId, discId, bioId }} />
+          <ProfileForm profile={profile} onSaved={setData} ids={{ nameId, discId, maxId }} />
         )}
       </AsyncBoundary>
     </div>
@@ -52,11 +52,13 @@ function ProfileForm({
 }: {
   profile: ReviewerProfileView;
   onSaved: (next: ReviewerProfileView) => void;
-  ids: { nameId: string; discId: string; bioId: string };
+  ids: { nameId: string; discId: string; maxId: string };
 }): React.JSX.Element {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [disciplines, setDisciplines] = useState(profile.disciplines.join(', '));
-  const [biography, setBiography] = useState(profile.biography);
+  const [maxActiveReviews, setMaxActiveReviews] = useState(
+    profile.maxActiveReviews === null ? '' : String(profile.maxActiveReviews),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -64,12 +66,20 @@ function ProfileForm({
   useEffect(() => {
     setDisplayName(profile.displayName);
     setDisciplines(profile.disciplines.join(', '));
-    setBiography(profile.biography);
+    setMaxActiveReviews(profile.maxActiveReviews === null ? '' : String(profile.maxActiveReviews));
   }, [profile]);
 
   async function save(): Promise<void> {
     if (displayName.trim().length < 2) {
       setError('A display name is required.');
+      return;
+    }
+    const maxReviews = maxActiveReviews.trim() === '' ? null : Number(maxActiveReviews);
+    if (
+      maxReviews !== null &&
+      (!Number.isInteger(maxReviews) || maxReviews < 0 || maxReviews > 100)
+    ) {
+      setError('Maximum active reviews must be blank or an integer from 0 to 100.');
       return;
     }
     setBusy(true);
@@ -82,7 +92,7 @@ function ProfileForm({
           .split(',')
           .map((d) => d.trim())
           .filter((d) => d.length > 0),
-        biography,
+        maxActiveReviews: maxReviews,
       });
       onSaved(next);
       setSaved(true);
@@ -125,17 +135,24 @@ function ProfileForm({
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--space-unit) * 2)' }}
         >
-          <label htmlFor={ids.bioId} style={{ fontWeight: 600 }}>
-            Biography
+          <label htmlFor={ids.maxId} style={{ fontWeight: 600 }}>
+            Maximum active reviews
           </label>
-          <textarea
-            id={ids.bioId}
-            value={biography}
-            onChange={(e) => setBiography(e.target.value)}
-            rows={4}
-            style={{ ...fieldStyle, resize: 'vertical' }}
+          <input
+            id={ids.maxId}
+            type="number"
+            min={0}
+            max={100}
+            value={maxActiveReviews}
+            onChange={(e) => setMaxActiveReviews(e.target.value)}
+            style={fieldStyle}
           />
         </div>
+        <p style={{ margin: 0, color: 'var(--color-muted)' }}>
+          Training: {profile.trainingStatus.replaceAll('_', ' ')} · Calibration:{' '}
+          {profile.calibrationStatus.replaceAll('_', ' ')} · Conflict declaration:{' '}
+          {profile.conflictDeclarationRequired ? 'required' : 'not required'}
+        </p>
         {error ? (
           <p role="alert" style={{ margin: 0, color: 'var(--color-red)' }}>
             {error}

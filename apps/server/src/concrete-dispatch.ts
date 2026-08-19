@@ -16,7 +16,6 @@ import {
   PgInvitationRepository,
   PgDecisionRepository,
   PgScorecardRepository,
-  PgApplicationRepository,
   PgOrganizationRepository,
   PgMemberRepository,
   PgDepartmentRepository,
@@ -25,8 +24,7 @@ import {
   PgNoticeRepository,
   PgAssessmentRepository,
   PgCampaignReviewerRepository,
-  PgCampaignStatsRepository,
-  PgReviewerProfileRepository,
+  PgCampaignReadinessRepository,
   PgCampaignDashboardRepository,
   PgBookingRepository,
   PgAiModelRepository,
@@ -241,6 +239,7 @@ const CONCRETE_OPERATIONS = new Set<string>([
   'post_candidate_notices_noticeId_acknowledgement',
   'post_candidate_profile_corrections',
   'post_candidates_merge',
+  'post_candidates_merge_preview',
   'post_decisions_decisionId_approvals',
   'post_decisions_decisionId_issue',
   'post_governance_ai_literacy',
@@ -332,7 +331,7 @@ export class ConcreteDispatcher {
   readonly #attempts;
   readonly #campaigns;
   readonly #campaignLifecycle;
-  readonly #campaignStats;
+  readonly #campaignReadiness;
   readonly #candidates;
   readonly #candidateImports;
   readonly #invitations;
@@ -340,13 +339,11 @@ export class ConcreteDispatcher {
   readonly #scorecards;
   readonly #auth;
   readonly #reviewer;
-  readonly #applications;
   readonly #accommodations;
   readonly #notices;
   readonly #bookings;
   readonly #campaignReviewers;
   readonly #campaignDashboard;
-  readonly #reviewerProfiles;
   readonly #reviewAssignments;
   readonly #assessments;
   readonly #assessmentVersions;
@@ -391,59 +388,136 @@ export class ConcreteDispatcher {
     this.#opts = options;
     const role = options.role;
 
-    this.#attempts = api.createAttemptService({ repository: new PgAttemptRepository(pool, options) });
+    this.#attempts = api.createAttemptService({
+      repository: new PgAttemptRepository(pool, options),
+    });
     const campaignRepository = new PgCampaignRepository(pool, options);
     this.#campaigns = api.createCampaignService({ repository: campaignRepository });
-    this.#campaignLifecycle = api.createCampaignLifecycleService({ repository: campaignRepository });
-    this.#campaignStats = api.createCampaignStatsService({ repository: new PgCampaignStatsRepository(pool, options) });
-    this.#candidates = api.createCandidateService({ repository: new PgCandidateRepository(pool, options) });
-    this.#candidateImports = api.createCandidateImportService({ repository: new PgCandidateImportRepository(pool, { ...(role === undefined ? {} : { role }), dataKey: options.importDataKey ?? 'cpf-synthetic-demo-import-key-v1' }) });
-    this.#invitations = api.createInvitationService({ repository: new PgInvitationRepository(pool, options) });
-    this.#decisions = api.createDecisionService({ repository: new PgDecisionRepository(pool, options) });
-    this.#scorecards = api.createScorecardService({ repository: new PgScorecardRepository(pool, options) });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.#auth = api.createAuthService({ repository: new DemoAuthRepository(pool) as any });
+    this.#campaignLifecycle = api.createCampaignLifecycleService({
+      repository: campaignRepository,
+    });
+    this.#campaignReadiness = api.createCampaignReadinessService(
+      new PgCampaignReadinessRepository(pool, role),
+    );
+    this.#candidates = api.createCandidateService({
+      repository: new PgCandidateRepository(pool, options),
+    });
+    this.#candidateImports = api.createCandidateImportService({
+      repository: new PgCandidateImportRepository(pool, {
+        ...(role === undefined ? {} : { role }),
+        dataKey: options.importDataKey ?? 'cpf-synthetic-demo-import-key-v1',
+      }),
+    });
+    this.#invitations = api.createInvitationService({
+      repository: new PgInvitationRepository(pool, options),
+    });
+    this.#decisions = api.createDecisionService({
+      repository: new PgDecisionRepository(pool, options),
+    });
+    this.#scorecards = api.createScorecardService({
+      repository: new PgScorecardRepository(pool, options),
+    });
+    this.#auth = api.createAuthService({
+      repository: new DemoAuthRepository(pool) as never,
+    });
     this.#reviewer = api.createReviewerService({ repository: new PgReviewerRepository(pool) });
-    this.#applications = api.createApplicationService({ repository: new PgApplicationRepository(pool, options) });
-    this.#accommodations = api.createAccommodationService({ repository: new PgAccommodationRepository(pool, options) });
+    this.#accommodations = api.createAccommodationService({
+      repository: new PgAccommodationRepository(pool, options),
+    });
     this.#notices = api.createNoticeService({ repository: new PgNoticeRepository(pool, options) });
     this.#bookings = api.createBookingService({ repository: new PgBookingRepository(pool, role) });
-    this.#campaignReviewers = api.createCampaignReviewerService({ repository: new PgCampaignReviewerRepository(pool, options) });
-    this.#campaignDashboard = api.createCampaignDashboardService({ repository: new PgCampaignDashboardRepository(pool, role) });
-    this.#reviewerProfiles = api.createReviewerProfileService({ repository: new PgReviewerProfileRepository(pool, options) });
-    this.#reviewAssignments = api.createReviewAssignmentService({ repository: new PgReviewAssignmentRepository(pool, role) });
-    this.#assessments = api.createAssessmentService({ repository: new PgAssessmentRepository(pool, options) });
+    this.#campaignReviewers = api.createCampaignReviewerService({
+      repository: new PgCampaignReviewerRepository(pool, options),
+    });
+    this.#campaignDashboard = api.createCampaignDashboardService({
+      repository: new PgCampaignDashboardRepository(pool, role),
+    });
+    this.#reviewAssignments = api.createReviewAssignmentService({
+      repository: new PgReviewAssignmentRepository(pool, role),
+    });
+    this.#assessments = api.createAssessmentService({
+      repository: new PgAssessmentRepository(pool, options),
+    });
     const pgAssessmentVersionRepo = new PgAssessmentVersionRepository(pool, role);
-    this.#assessmentVersions = api.createAssessmentVersionService({ versionRepository: pgAssessmentVersionRepo, validationRepository: pgAssessmentVersionRepo });
+    this.#assessmentVersions = api.createAssessmentVersionService({
+      versionRepository: pgAssessmentVersionRepo,
+      validationRepository: pgAssessmentVersionRepo,
+    });
     this.#aiModels = api.createAiModelService({ repository: new PgAiModelRepository(pool, role) });
     this.#plugins = api.createPluginService({ repository: new PgPluginRepository(pool, role) });
-    this.#promptVersions = api.createPromptVersionService({ repository: new PgPromptVersionRepository(pool, role) });
-    this.#notificationTemplates = api.createNotificationTemplateService({ repository: new PgNotificationTemplateRepository(pool, role) });
-    this.#submissionReports = api.createSubmissionReportService({ repository: new PgSubmissionReportRepository(pool, role) });
-    this.#auditEvidence = api.createAuditEvidenceService({ repository: new PgAuditEvidenceRepository(pool, role) });
-    this.#reviewQuality = api.createReviewQualityService({ repository: new PgReviewQualityRepository(pool, role) });
-    this.#candidatePortal = api.createCandidatePortalService({ repository: new PgCandidatePortalRepository(pool, role) });
-    this.#dataRights = api.createDataRightsService({ repository: new PgDataRightsRepository(pool, role) });
-    this.#candidateMerges = api.createCandidateMergeService({ repository: new PgCandidateMergeRepository(pool, role) });
-    this.#candidateActions = api.createCandidateActionService({ repository: new PgCandidateActionRepository(pool, role) });
-    this.#deployerReadiness = api.createDeployerReadinessService({ repository: new PgDeployerReadinessRepository(pool, role) });
-    this.#memberInvitations = api.createMemberInvitationService({ repository: new PgMemberInvitationRepository(pool, role) });
-    this.#integrations = api.createIntegrationService({ repository: new PgIntegrationRepository(pool, role) });
+    this.#promptVersions = api.createPromptVersionService({
+      repository: new PgPromptVersionRepository(pool, role),
+    });
+    this.#notificationTemplates = api.createNotificationTemplateService({
+      repository: new PgNotificationTemplateRepository(pool, role),
+    });
+    this.#submissionReports = api.createSubmissionReportService({
+      repository: new PgSubmissionReportRepository(pool, role),
+    });
+    this.#auditEvidence = api.createAuditEvidenceService({
+      repository: new PgAuditEvidenceRepository(pool, role),
+    });
+    this.#reviewQuality = api.createReviewQualityService({
+      repository: new PgReviewQualityRepository(pool, role),
+    });
+    this.#candidatePortal = api.createCandidatePortalService({
+      repository: new PgCandidatePortalRepository(pool, role),
+    });
+    this.#dataRights = api.createDataRightsService({
+      repository: new PgDataRightsRepository(pool, role),
+    });
+    this.#candidateMerges = api.createCandidateMergeService({
+      repository: new PgCandidateMergeRepository(pool, role),
+    });
+    this.#candidateActions = api.createCandidateActionService({
+      repository: new PgCandidateActionRepository(pool, role),
+    });
+    this.#deployerReadiness = api.createDeployerReadinessService({
+      repository: new PgDeployerReadinessRepository(pool, role),
+    });
+    this.#memberInvitations = api.createMemberInvitationService({
+      repository: new PgMemberInvitationRepository(
+        pool,
+        role,
+        options.importDataKey ?? 'cpf-synthetic-demo-import-key-v1',
+      ),
+    });
+    this.#integrations = api.createIntegrationService({
+      repository: new PgIntegrationRepository(pool, role),
+    });
     this.#webhooks = api.createWebhookService({ repository: new PgWebhookRepository(pool, role) });
-    this.#aiSystems = api.createAiSystemService({ repository: new PgAiSystemRepository(pool, role) });
-    this.#riskControls = api.createRiskControlService({ repository: new PgRiskControlRepository(pool, role) });
-    this.#governanceDocs = api.createGovernanceDocService({ repository: new PgGovernanceDocRepository(pool, role) });
-    this.#governanceSubmissions = api.createGovernanceSubmissionService({ repository: new PgGovernanceSubmissionRepository(pool, role) });
+    this.#aiSystems = api.createAiSystemService({
+      repository: new PgAiSystemRepository(pool, role),
+    });
+    this.#riskControls = api.createRiskControlService({
+      repository: new PgRiskControlRepository(pool, role),
+    });
+    this.#governanceDocs = api.createGovernanceDocService({
+      repository: new PgGovernanceDocRepository(pool, role),
+    });
+    this.#governanceSubmissions = api.createGovernanceSubmissionService({
+      repository: new PgGovernanceSubmissionRepository(pool, role),
+    });
     this.#tenants = api.createTenantService({ repository: new PgTenantRepository(pool) });
     this.#staff = api.createStaffService({ repository: new PgStaffRepository(pool) });
     this.#plans = api.createPlanService({ repository: new PgPlanRepository(pool) });
-    this.#featureFlags = api.createFeatureFlagService({ repository: new PgFeatureFlagRepository(pool) });
+    this.#featureFlags = api.createFeatureFlagService({
+      repository: new PgFeatureFlagRepository(pool),
+    });
     this.#releases = api.createReleaseService({ repository: new PgReleaseRepository(pool) });
-    this.#adminAudit = api.createAdminAuditService({ repository: new PgAdminAuditRepository(pool) });
+    this.#adminAudit = api.createAdminAuditService({
+      repository: new PgAdminAuditRepository(pool),
+    });
     this.#adminJobs = api.createAdminJobService({ repository: new PgAdminJobRepository(pool) });
-    this.#adminMaintenance = api.createAdminMaintenanceService({ repository: new PgAdminMaintenanceRepository(pool) });
-    this.#adminSupportCases = api.createAdminSupportCaseService({ repository: new PgAdminSupportCaseRepository(pool) });
-    this.#adminPrivilegedAccess = api.createAdminPrivilegedAccessService({ repository: new PgAdminPrivilegedAccessRepository(pool) });
+    this.#adminMaintenance = api.createAdminMaintenanceService({
+      repository: new PgAdminMaintenanceRepository(pool),
+    });
+    this.#adminSupportCases = api.createAdminSupportCaseService({
+      repository: new PgAdminSupportCaseRepository(pool),
+    });
+    this.#adminPrivilegedAccess = api.createAdminPrivilegedAccessService({
+      repository: new PgAdminPrivilegedAccessRepository(pool),
+    });
     this.#securityEvents = new PgSecurityEventRepository(pool);
     this.#notifPrefs = new PgNotificationPreferenceRepository(pool);
     this.#prefs = new PgPreferencesRepository(pool);
@@ -499,16 +573,15 @@ export class ConcreteDispatcher {
     const changeId = p('changeId');
     const incidentId = p('incidentId');
     const accommodationId = p('accommodationId');
-    const noticeId = p('noticeId');
 
     switch (operationId) {
-
       // ── Attempts ────────────────────────────────────────────────────────────
       case 'get_attempts_attemptId':
         return api.handleGetAttempt(this.#attempts, { actor, attemptId });
       case 'get_attempts_attemptId_prechecks_latest':
+        return api.handleGetLatestAttemptPrecheck(this.#attempts, { actor, attemptId });
       case 'get_attempts_attemptId_submission_preview':
-        return api.handleGetAttempt(this.#attempts, { actor, attemptId });
+        return api.handleGetAttemptSubmissionPreview(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_start':
         return api.handleStartAttempt(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_submit':
@@ -526,13 +599,22 @@ export class ConcreteDispatcher {
       case 'post_attempts_attemptId_artifacts':
         return api.handleAddAttemptArtifact(this.#attempts, { actor, attemptId, body });
       case 'delete_attempts_attemptId_artifacts_artifactId':
-        return api.handleDeleteAttemptArtifact(this.#attempts, { actor, attemptId, artifactId: p('artifactId') });
+        return api.handleDeleteAttemptArtifact(this.#attempts, {
+          actor,
+          attemptId,
+          artifactId: p('artifactId'),
+        });
       case 'post_attempts_attemptId_ai_messages':
         return api.handleAttemptAiMessage(this.#attempts, { actor, attemptId, body });
       case 'post_attempts_attemptId_ai_reset':
         return api.handleAttemptAiReset(this.#attempts, { actor, attemptId });
       case 'post_attempts_attemptId_plugins_pluginCode_execute':
-        return api.handleExecuteAttemptPlugin(this.#attempts, { actor, attemptId, pluginCode: p('pluginCode'), body });
+        return api.handleExecuteAttemptPlugin(this.#attempts, {
+          actor,
+          attemptId,
+          pluginCode: p('pluginCode'),
+          body,
+        });
 
       // ── Campaigns ──────────────────────────────────────────────────────────
       case 'get_campaigns':
@@ -558,10 +640,21 @@ export class ConcreteDispatcher {
       case 'get_campaigns_campaignId_comparison':
         return api.handleGetCampaignComparison(this.#campaignDashboard, { actor, campaignId });
       case 'get_campaigns_campaignId_activation_preflight':
+        return api.handleGetCampaignActivationPreflight(this.#campaignReadiness, {
+          actor,
+          campaignId,
+        });
       case 'get_campaigns_campaignId_candidate_preview':
-        return api.handleGetCampaignStats(this.#campaignStats, { actor, campaignId });
+        return api.handleGetCampaignCandidatePreview(this.#campaignReadiness, {
+          actor,
+          campaignId,
+        });
       case 'get_campaigns_campaignId_reviewers':
-        return api.handleGetCampaignReviewers(this.#campaignReviewers, { actor, campaignId, query: query as never });
+        return api.handleGetCampaignReviewers(this.#campaignReviewers, {
+          actor,
+          campaignId,
+          query: query as never,
+        });
       case 'post_campaigns_campaignId_reviewers':
         return api.handlePostCampaignReviewer(this.#campaignReviewers, { actor, campaignId, body });
       case 'post_campaigns_campaignId_review_assignments':
@@ -579,38 +672,81 @@ export class ConcreteDispatcher {
 
       // ── Imports ───────────────────────────────────────────────────────────
       case 'post_campaigns_campaignId_candidate_imports':
-        return api.handleCreateImportJob(this.#candidateImports, { actor, campaignId, idempotencyKey, body });
+        return api.handleCreateImportJob(this.#candidateImports, {
+          actor,
+          campaignId,
+          idempotencyKey,
+          body,
+        });
       case 'get_candidate_imports_importId':
         return api.handleGetImportJob(this.#candidateImports, { actor, jobId: importId });
       case 'get_candidate_imports_importId_rows':
-        return api.handleGetImportRows(this.#candidateImports, { actor, jobId: importId, limit: Number(query['limit'] ?? 25) });
+        return api.handleGetImportRows(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          limit: Number(query['limit'] ?? 25),
+        });
       case 'patch_candidate_imports_importId_rows_rowId':
-        return api.handlePatchImportRow(this.#candidateImports, { actor, jobId: importId, rowId, idempotencyKey, body });
+        return api.handlePatchImportRow(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          rowId,
+          idempotencyKey,
+          body,
+        });
       case 'post_candidate_imports_importId_commit':
-        return api.handleCommitImportJob(this.#candidateImports, { actor, jobId: importId, idempotencyKey });
+        return api.handleCommitImportJob(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          idempotencyKey,
+        });
       case 'post_candidate_imports_importId_cancel':
-        return api.handleCancelImportJob(this.#candidateImports, { actor, jobId: importId, idempotencyKey });
+        return api.handleCancelImportJob(this.#candidateImports, {
+          actor,
+          jobId: importId,
+          idempotencyKey,
+        });
 
       // ── Invitations / Applications / Decisions ────────────────────────────
       case 'post_applications_applicationId_invitations':
         return api.handlePostInvitation(this.#invitations, { actor, applicationId, body });
       case 'post_applications_applicationId_decisions':
-        return api.handleCreateDecision(this.#decisions, { actor, applicationId, body, idempotencyKey });
+        return api.handleCreateDecision(this.#decisions, {
+          actor,
+          applicationId,
+          body,
+          idempotencyKey,
+        });
       case 'post_decisions_decisionId_approvals':
-        return api.handleApproveDecision(this.#decisions, { actor, decisionId, body, idempotencyKey });
+        return api.handleApproveDecision(this.#decisions, {
+          actor,
+          decisionId,
+          body,
+          idempotencyKey,
+        });
       case 'post_decisions_decisionId_issue':
         return api.handleIssueDecision(this.#decisions, { actor, decisionId, idempotencyKey });
       case 'post_invitations_invitationId_resend':
         return api.handleResendInvitation(this.#invitations, { actor, invitationId });
       case 'post_invitations_invitationId_extend':
-        return api.handleExtendInvitation(this.#invitations, { actor, applicationId: '', invitationId, body });
+        return api.handleExtendInvitation(this.#invitations, {
+          actor,
+          applicationId: '',
+          invitationId,
+          body,
+        });
       case 'delete_invitations_invitationId':
         return api.handleRevokeInvitation(this.#invitations, { actor, invitationId });
       case 'get_applications_applicationId_bookings':
-        return api.handleListBookings(this.#bookings, { actor });
+        return api.handleListBookings(this.#bookings, { actor, applicationId });
       case 'post_applications_applicationId_bookings':
+        return api.handleCreateBooking(this.#bookings, { actor, applicationId, body });
       case 'put_bookings_bookingId':
-        return api.handleCreateBooking(this.#bookings, { actor, body });
+        return api.handleUpdateBooking(this.#bookings, {
+          actor,
+          bookingId: p('bookingId'),
+          body,
+        });
 
       // ── Scorecards ────────────────────────────────────────────────────────
       case 'get_review_assignments_assignmentId_scorecard':
@@ -620,20 +756,38 @@ export class ConcreteDispatcher {
 
       // ── Accommodations ────────────────────────────────────────────────────
       case 'get_accommodations':
+        return api.handleGetAccommodations(this.#accommodations, {
+          actor,
+          applicationId,
+        });
       case 'get_candidate_accommodations':
-        return api.handleGetAccommodations(this.#accommodations, { actor, applicationId: applicationId || '' });
+        return api.handleGetCandidateAccommodations(this.#accommodations, { actor });
       case 'post_candidate_accommodations':
-        return api.handlePostAccommodation(this.#accommodations, { actor, applicationId: applicationId || '', body });
+        return api.handlePostCandidateAccommodation(this.#accommodations, { actor, body });
       case 'put_accommodations_accommodationId_decision':
+        return api.handlePatchAccommodationStatus(this.#accommodations, {
+          actor,
+          accommodationId,
+          body,
+        });
       case 'put_candidate_accommodations_accommodationId':
-        return api.handlePatchAccommodationStatus(this.#accommodations, { actor, accommodationId, body });
+        return api.handlePutCandidateAccommodation(this.#accommodations, {
+          actor,
+          accommodationId,
+          body,
+        });
 
       // ── Notices ───────────────────────────────────────────────────────────
       case 'get_candidate_notices':
+        return api.handleGetAccountNotices(this.#notices, { actor });
       case 'get_me_notices':
-        return api.handleGetNotices(this.#notices, { actor, applicationId: applicationId || '' });
+        return api.handleGetAccountNotices(this.#notices, { actor });
       case 'post_candidate_notices_noticeId_acknowledgement':
-        return api.handlePostNotice(this.#notices, { actor, applicationId: applicationId || '', body });
+        return api.handlePostCandidateNoticeAcknowledgement(this.#notices, {
+          actor,
+          noticeId: p('noticeId'),
+          body,
+        });
 
       // ── Assessments ───────────────────────────────────────────────────────
       case 'get_assessments':
@@ -643,7 +797,11 @@ export class ConcreteDispatcher {
       case 'post_assessments':
         return api.handlePostAssessment(this.#assessments, { actor, body });
       case 'post_assessments_assessmentId_versions':
-        return api.handlePostDuplicateVersion(this.#assessmentVersions, { actor, versionId: assessmentId });
+        return api.handlePostAssessmentVersion(this.#assessmentVersions, {
+          actor,
+          assessmentId,
+          body,
+        });
 
       // ── Assessment Versions ───────────────────────────────────────────────
       case 'get_assessment_versions_versionId_preview':
@@ -657,14 +815,19 @@ export class ConcreteDispatcher {
       case 'post_assessment_versions_versionId_suspend':
         return api.handlePostSuspendVersion(this.#assessmentVersions, { actor, versionId });
       case 'post_assessment_versions_versionId_validations':
-        return api.handlePostAssessmentValidation(this.#assessmentVersions, { actor, versionId, body });
+        return api.handlePostAssessmentValidation(this.#assessmentVersions, {
+          actor,
+          versionId,
+          body,
+        });
 
       // ── AI Models ─────────────────────────────────────────────────────────
       case 'get_ai_models':
         return api.handleGetAiModels(this.#aiModels, { actor, query: query as never });
       case 'post_ai_models':
-      case 'post_ai_models_modelId_evaluations':
         return api.handlePostAiModel(this.#aiModels, { actor, body });
+      case 'post_ai_models_modelId_evaluations':
+        return api.handlePostAiModelEvaluation(this.#aiModels, { actor, modelId, body });
       case 'post_ai_models_modelId_activate':
         return api.handlePostActivateAiModel(this.#aiModels, { actor, modelId });
       case 'post_ai_models_modelId_suspend':
@@ -692,17 +855,32 @@ export class ConcreteDispatcher {
       case 'post_notification_templates':
         return api.handleCreateNotificationTemplate(this.#notificationTemplates, { actor, body });
       case 'post_notification_templates_templateId_activate':
-        return api.handleActivateNotificationTemplate(this.#notificationTemplates, { actor, templateId });
+        return api.handleActivateNotificationTemplate(this.#notificationTemplates, {
+          actor,
+          templateId,
+        });
       case 'post_notification_templates_templateId_preview':
-        return api.handlePreviewNotificationTemplate(this.#notificationTemplates, { actor, templateId, body });
+        return api.handlePreviewNotificationTemplate(this.#notificationTemplates, {
+          actor,
+          templateId,
+          body,
+        });
       case 'post_notification_templates_templateId_test_send':
-        return api.handleTestSendNotificationTemplate(this.#notificationTemplates, { actor, templateId, body });
+        return api.handleTestSendNotificationTemplate(this.#notificationTemplates, {
+          actor,
+          templateId,
+          body,
+        });
 
       // ── Submission Reports ────────────────────────────────────────────────
       case 'get_submissions_submissionId_reports':
         return api.handleListSubmissionReports(this.#submissionReports, { actor, submissionId });
       case 'post_submissions_submissionId_reports':
-        return api.handleCreateSubmissionReport(this.#submissionReports, { actor, submissionId, body });
+        return api.handleCreateSubmissionReport(this.#submissionReports, {
+          actor,
+          submissionId,
+          body,
+        });
 
       // ── Audit Evidence ────────────────────────────────────────────────────
       case 'get_audit_evidence_collections':
@@ -714,16 +892,25 @@ export class ConcreteDispatcher {
 
       // ── Review Quality ────────────────────────────────────────────────────
       case 'post_scorecards_scorecardId_amendments':
-        return api.handleCreateScorecardAmendment(this.#reviewQuality, { actor, scorecardId, body });
+        return api.handleCreateScorecardAmendment(this.#reviewQuality, {
+          actor,
+          scorecardId,
+          body,
+        });
       case 'put_ai_observations_observationId_disposition':
-        return api.handleSetObservationDisposition(this.#reviewQuality, { actor, observationId, body });
+        return api.handleSetObservationDisposition(this.#reviewQuality, {
+          actor,
+          observationId,
+          body,
+        });
       case 'put_integrity_events_eventId_resolution':
         return api.handleResolveIntegrityEvent(this.#reviewQuality, { actor, eventId, body });
 
       // ── Candidate Portal ──────────────────────────────────────────────────
       case 'get_candidate_profile':
-      case 'get_candidate_practice':
         return api.handleGetCandidateProfile(this.#candidatePortal, { actor });
+      case 'get_candidate_practice':
+        return api.handleGetCandidatePractice(this.#candidatePortal, { actor });
       case 'get_candidate_invitation':
       case 'post_candidate_invitation_recovery':
       case 'post_candidate_invitations_exchange':
@@ -747,7 +934,10 @@ export class ConcreteDispatcher {
       case 'post_candidate_profile_corrections':
         return api.handleCreateProfileCorrection(this.#candidateActions, { actor, body });
       case 'get_candidate_applications_applicationId_status':
-        return api.handleGetCandidateInvitation(this.#candidatePortal, { actor });
+        return api.handleGetCandidateApplicationStatus(this.#candidatePortal, {
+          actor,
+          applicationId,
+        });
 
       // ── Deployer Readiness ────────────────────────────────────────────────
       case 'get_organization_deployer_readiness':
@@ -761,9 +951,16 @@ export class ConcreteDispatcher {
       case 'post_organization_integrations':
         return api.handleCreateIntegration(this.#integrations, { actor, body });
       case 'post_organization_integrations_connectionId_rotate':
-        return api.handleRotateIntegration(this.#integrations, { actor, integrationId: connectionId });
+        return api.handleRotateIntegration(this.#integrations, {
+          actor,
+          integrationId: connectionId,
+        });
       case 'put_organization_integrations_connectionId_status':
-        return api.handleUpdateIntegration(this.#integrations, { actor, integrationId: connectionId, body });
+        return api.handleUpdateIntegration(this.#integrations, {
+          actor,
+          integrationId: connectionId,
+          body,
+        });
 
       // ── Member Invitations ────────────────────────────────────────────────
       case 'post_organization_member_invitations':
@@ -783,33 +980,56 @@ export class ConcreteDispatcher {
 
       // ── Review Assignments ────────────────────────────────────────────────
       case 'get_review_assignments':
-        return api.handleGetReviewAssignments(this.#reviewAssignments, { actor, query: query as never });
+        return api.handleGetReviewAssignments(this.#reviewAssignments, {
+          actor,
+          query: query as never,
+        });
       case 'get_review_assignments_assignmentId':
-      case 'get_review_assignments_assignmentId_ai_observations':
         return api.handleGetReviewAssignment(this.#reviewAssignments, { actor, assignmentId });
+      case 'get_review_assignments_assignmentId_ai_observations':
+        return api.handleListReviewObservations(this.#reviewQuality, { actor, assignmentId });
       case 'post_review_assignments_assignmentId_accept':
         return api.handlePostAcceptAssignment(this.#reviewAssignments, { actor, assignmentId });
       case 'post_review_assignments_assignmentId_ai_stop':
         return api.handlePostStopAssignmentAi(this.#reviewAssignments, { actor, assignmentId });
       case 'post_review_assignments_assignmentId_annotations':
-        return api.handlePostAssignmentAnnotation(this.#reviewAssignments, { actor, assignmentId, body });
+        return api.handlePostAssignmentAnnotation(this.#reviewAssignments, {
+          actor,
+          assignmentId,
+          body,
+        });
       case 'post_review_assignments_assignmentId_clarifications':
-        return api.handlePostAssignmentClarification(this.#reviewAssignments, { actor, assignmentId, body });
+        return api.handlePostAssignmentClarification(this.#reviewAssignments, {
+          actor,
+          assignmentId,
+          body,
+        });
       case 'post_review_assignments_assignmentId_decline':
+        return api.handlePostDeclineAssignment(this.#reviewAssignments, {
+          actor,
+          assignmentId,
+          body,
+        });
       case 'put_review_assignments_assignmentId_conflict':
-        return api.handlePostDeclineAssignment(this.#reviewAssignments, { actor, assignmentId, body });
+        return api.handlePutAssignmentConflict(this.#reviewAssignments, {
+          actor,
+          assignmentId,
+          body,
+        });
       case 'post_review_assignments_assignmentId_submit':
-        return api.handlePutScorecard(this.#scorecards, { actor, assignmentId, body });
+        return api.handleSubmitScorecard(this.#scorecards, { actor, assignmentId });
 
       // ── Reviewer Profile ──────────────────────────────────────────────────
       case 'get_reviewer_profile':
-        return api.handleGetReviewerProfile(this.#reviewerProfiles, { actor, profileId: actor.userId });
+        return api.handleGetMyReviewerProfile(this.#reviewer, { actor });
       case 'patch_reviewer_profile':
-        return api.handlePatchReviewerProfile(this.#reviewerProfiles, { actor, profileId: actor.userId, body });
+        return api.handlePatchMyReviewerProfile(this.#reviewer, { actor, body });
       case 'get_reviewer_availability':
+        return api.handleGetReviewerAvailability(this.#reviewer, { actor, query });
       case 'put_reviewer_availability':
+        return api.handlePutReviewerAvailability(this.#reviewer, { actor, body });
       case 'get_reviewer_training':
-        return api.handleGetReviewerProfile(this.#reviewer as never, { actor, profileId: actor.userId });
+        return api.handleGetReviewerTraining(this.#reviewer, { actor, query });
 
       // ── Governance — AI Systems ───────────────────────────────────────────
       case 'get_governance_ai_systems':
@@ -837,7 +1057,10 @@ export class ConcreteDispatcher {
       case 'get_governance_post_market_plans':
       case 'get_governance_post_market_signals':
       case 'get_governance_ai_literacy':
-        return api.handleListGovernanceDocs(this.#governanceDocs, { actor, docType: operationId.replace('get_governance_', '') as never });
+        return api.handleListGovernanceDocs(this.#governanceDocs, {
+          actor,
+          docType: operationId.replace('get_governance_', '') as never,
+        });
       case 'post_governance_qms_documents':
       case 'post_governance_technical_documents':
       case 'post_governance_datasets':
@@ -850,23 +1073,54 @@ export class ConcreteDispatcher {
       case 'post_governance_ce_marking':
       case 'post_governance_eu_declarations':
       case 'post_governance_eu_registrations':
-        return api.handleCreateGovernanceDoc(this.#governanceDocs, { actor, docType: operationId.replace('post_governance_', '') as never, body });
+        return api.handleCreateGovernanceDoc(this.#governanceDocs, {
+          actor,
+          docType: operationId.replace('post_governance_', '') as never,
+          body,
+        });
 
       // ── Governance — Submissions ──────────────────────────────────────────
       case 'post_governance_conformity_assessments':
-        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, { actor, submissionType: 'conformity_assessment' as never, body });
+        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
+          actor,
+          submissionType: 'conformity_assessment' as never,
+          body,
+        });
       case 'post_governance_change_requests':
-        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, { actor, submissionType: 'change_request' as never, body });
+        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
+          actor,
+          submissionType: 'change_request' as never,
+          body,
+        });
       case 'post_governance_serious_incidents':
-        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, { actor, submissionType: 'serious_incident' as never, body });
+        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
+          actor,
+          submissionType: 'serious_incident' as never,
+          body,
+        });
       case 'post_governance_deployer_instructions':
-        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, { actor, submissionType: 'deployer_instruction' as never, body });
+        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
+          actor,
+          submissionType: 'deployer_instruction' as never,
+          body,
+        });
       case 'post_governance_conformity_assessments_assessmentId_approve':
-        return api.handleApproveConformityAssessment(this.#governanceSubmissions, { actor, assessmentId });
+        return api.handleApproveConformityAssessment(this.#governanceSubmissions, {
+          actor,
+          assessmentId,
+        });
       case 'put_governance_change_requests_changeId_decision':
-        return api.handleDecideChangeRequest(this.#governanceSubmissions, { actor, changeId, body });
+        return api.handleDecideChangeRequest(this.#governanceSubmissions, {
+          actor,
+          changeId,
+          body,
+        });
       case 'put_governance_serious_incidents_incidentId':
-        return api.handleUpdateSeriousIncident(this.#governanceSubmissions, { actor, incidentId, body });
+        return api.handleUpdateSeriousIncident(this.#governanceSubmissions, {
+          actor,
+          incidentId,
+          body,
+        });
 
       // ── Admin — Tenants ───────────────────────────────────────────────────
       case 'get_admin_tenants':
@@ -950,7 +1204,10 @@ export class ConcreteDispatcher {
       case 'post_admin_privileged_access_grants':
         return api.handleCreatePrivilegedAccessGrant(this.#adminPrivilegedAccess, { actor, body });
       case 'delete_admin_privileged_access_grants_grantId':
-        return api.handleRevokePrivilegedAccessGrant(this.#adminPrivilegedAccess, { actor, grantId });
+        return api.handleRevokePrivilegedAccessGrant(this.#adminPrivilegedAccess, {
+          actor,
+          grantId,
+        });
 
       // ── Account / Me ──────────────────────────────────────────────────────
       case 'get_me': {
@@ -958,7 +1215,10 @@ export class ConcreteDispatcher {
         return api.handleGetMe(svc as never, { actor });
       }
       case 'patch_me': {
-        const svc = { updateMe: (a: Actor, u: unknown) => new PgAccountRepository(this.#pool).applyProfileUpdate(a, u as never) };
+        const svc = {
+          updateMe: (a: Actor, u: unknown) =>
+            new PgAccountRepository(this.#pool).applyProfileUpdate(a, u as never),
+        };
         return api.handlePatchMe(svc as never, { actor, body });
       }
       case 'post_me_data_export':
@@ -967,142 +1227,247 @@ export class ConcreteDispatcher {
 
       // ── Me Sessions ───────────────────────────────────────────────────────
       case 'get_me_sessions': {
-        const svc = { listSessions: (a: Actor, q: unknown) => new PgSessionRepository(this.#pool).listSessions(a, q as never) };
+        const svc = {
+          listSessions: (a: Actor, q: unknown) =>
+            new PgSessionRepository(this.#pool).listSessions(a, q as never),
+        };
         return api.handleGetMeSessions(svc as never, { actor, query: {} as never });
       }
       case 'delete_me_sessions_sessionId': {
-        const svc = { revokeSession: (a: Actor, id: string) => new PgSessionRepository(this.#pool).revokeSession(a, id, 'user-initiated') };
+        const svc = {
+          revokeSession: (a: Actor, id: string) =>
+            new PgSessionRepository(this.#pool).revokeSession(a, id, 'user-initiated'),
+        };
         return api.handleDeleteMeSession(svc as never, { actor, sessionId });
       }
 
       // ── Me Security Events ────────────────────────────────────────────────
       case 'get_me_security_events': {
-        const svc = { listSecurityEvents: (a: Actor, q: never) => this.#securityEvents.listSecurityEvents(a, q) };
+        const svc = {
+          listSecurityEvents: (a: Actor, q: never) => this.#securityEvents.listSecurityEvents(a, q),
+        };
         return api.handleGetMeSecurityEvents(svc as never, { actor, query: {} as never });
       }
 
       // ── Me Notification Preferences ───────────────────────────────────────
       case 'get_me_notification_preferences': {
-        const svc = { listPreferences: (a: Actor, q: never) => this.#notifPrefs.listPreferences(a, q), updatePreferences: (a: Actor, u: never) => this.#notifPrefs.applyPreferenceUpdate(a, u) };
+        const svc = {
+          listPreferences: (a: Actor, q: never) => this.#notifPrefs.listPreferences(a, q),
+          updatePreferences: (a: Actor, u: never) => this.#notifPrefs.applyPreferenceUpdate(a, u),
+        };
         return api.handleGetMeNotificationPreferences(svc as never, { actor, query: {} as never });
       }
       case 'put_me_notification_preferences': {
-        const svc = { listPreferences: (a: Actor, q: never) => this.#notifPrefs.listPreferences(a, q), updatePreferences: (a: Actor, u: never) => this.#notifPrefs.applyPreferenceUpdate(a, u) };
+        const svc = {
+          listPreferences: (a: Actor, q: never) => this.#notifPrefs.listPreferences(a, q),
+          updatePreferences: (a: Actor, u: never) => this.#notifPrefs.applyPreferenceUpdate(a, u),
+        };
         return api.handlePutMeNotificationPreferences(svc as never, { actor, body });
       }
 
       // ── Me Preferences ────────────────────────────────────────────────────
       case 'get_me_preferences': {
-        const svc = { getPreferences: (a: Actor) => this.#prefs.readPreferences(a), replacePreferences: (a: Actor, u: never) => this.#prefs.replacePreferences(a, u) };
+        const svc = {
+          getPreferences: (a: Actor) => this.#prefs.readPreferences(a),
+          replacePreferences: (a: Actor, u: never) => this.#prefs.replacePreferences(a, u),
+        };
         return api.handleGetMePreferences(svc as never, { actor });
       }
       case 'put_me_preferences': {
-        const svc = { getPreferences: (a: Actor) => this.#prefs.readPreferences(a), replacePreferences: (a: Actor, u: never) => this.#prefs.replacePreferences(a, u) };
+        const svc = {
+          getPreferences: (a: Actor) => this.#prefs.readPreferences(a),
+          replacePreferences: (a: Actor, u: never) => this.#prefs.replacePreferences(a, u),
+        };
         return api.handlePutMePreferences(svc as never, { actor, body });
       }
 
       // ── Me Onboarding ─────────────────────────────────────────────────────
       case 'get_me_onboarding': {
-        const svc = { listOnboarding: (a: Actor, q: never) => this.#onboarding.listOnboarding(a, q), updateStep: (a: Actor, u: never) => this.#onboarding.updateStep(a, u) };
+        const svc = {
+          listOnboarding: (a: Actor, q: never) => this.#onboarding.listOnboarding(a, q),
+          updateStep: (a: Actor, u: never) => this.#onboarding.updateStep(a, u),
+        };
         return api.handleGetMeOnboarding(svc as never, { actor, query: {} as never });
       }
       case 'put_me_onboarding_stepCode': {
-        const svc = { listOnboarding: (a: Actor, q: never) => this.#onboarding.listOnboarding(a, q), updateStep: (a: Actor, u: never) => this.#onboarding.updateStep(a, u) };
+        const svc = {
+          listOnboarding: (a: Actor, q: never) => this.#onboarding.listOnboarding(a, q),
+          updateStep: (a: Actor, u: never) => this.#onboarding.updateStep(a, u),
+        };
         return api.handlePutMeOnboardingStep(svc as never, { actor, stepCode, body });
       }
 
       // ── Me Support Cases ──────────────────────────────────────────────────
       case 'get_me_support_cases': {
-        const svc = { listCases: (a: Actor, q: never) => this.#supportCases.listCases(a, q), createCase: (a: Actor, i: never) => this.#supportCases.createCase(a, i) };
+        const svc = {
+          listCases: (a: Actor, q: never) => this.#supportCases.listCases(a, q),
+          createCase: (a: Actor, i: never) => this.#supportCases.createCase(a, i),
+        };
         return api.handleGetMeSupportCases(svc as never, { actor, query: {} as never });
       }
       case 'post_me_support_cases': {
-        const svc = { listCases: (a: Actor, q: never) => this.#supportCases.listCases(a, q), createCase: (a: Actor, i: never) => this.#supportCases.createCase(a, i) };
+        const svc = {
+          listCases: (a: Actor, q: never) => this.#supportCases.listCases(a, q),
+          createCase: (a: Actor, i: never) => this.#supportCases.createCase(a, i),
+        };
         return api.handlePostMeSupportCase(svc as never, { actor, body });
       }
       case 'get_me_support_cases_caseId': {
-        const svc = { getCase: (a: Actor, id: string, q: never) => this.#supportCaseDetail.getCaseDetail(a, id, q), addMessage: (a: Actor, id: string, m: never) => this.#supportCaseDetail.addMessage(a, id, m) };
+        const svc = {
+          getCase: (a: Actor, id: string, q: never) =>
+            this.#supportCaseDetail.getCaseDetail(a, id, q),
+          addMessage: (a: Actor, id: string, m: never) =>
+            this.#supportCaseDetail.addMessage(a, id, m),
+        };
         return api.handleGetMeSupportCase(svc as never, { actor, caseId, query: {} as never });
       }
       case 'post_me_support_cases_caseId_messages': {
-        const svc = { getCase: (a: Actor, id: string, q: never) => this.#supportCaseDetail.getCaseDetail(a, id, q), addMessage: (a: Actor, id: string, m: never) => this.#supportCaseDetail.addMessage(a, id, m) };
+        const svc = {
+          getCase: (a: Actor, id: string, q: never) =>
+            this.#supportCaseDetail.getCaseDetail(a, id, q),
+          addMessage: (a: Actor, id: string, m: never) =>
+            this.#supportCaseDetail.addMessage(a, id, m),
+        };
         return api.handlePostMeSupportCaseMessage(svc as never, { actor, caseId, body });
       }
 
       // ── Organization ──────────────────────────────────────────────────────
       case 'get_organization': {
         const orgRepo = new PgOrganizationRepository(this.#pool, this.#opts);
-        const svc = { getOrganization: (a: Actor) => orgRepo.getOrganization(a), updateOrganization: (a: Actor, u: unknown) => orgRepo.updateOrganization(a, u as never) };
+        const svc = {
+          getOrganization: (a: Actor) => orgRepo.getOrganization(a),
+          updateOrganization: (a: Actor, u: unknown) => orgRepo.updateOrganization(a, u as never),
+        };
         return api.handleGetOrganization(svc as never, { actor, query: {} as never });
       }
       case 'patch_organization': {
         const orgRepo = new PgOrganizationRepository(this.#pool, this.#opts);
-        const svc = { getOrganization: (a: Actor) => orgRepo.getOrganization(a), updateOrganization: (a: Actor, u: unknown) => orgRepo.updateOrganization(a, u as never) };
+        const svc = {
+          getOrganization: (a: Actor) => orgRepo.getOrganization(a),
+          updateOrganization: (a: Actor, u: unknown) => orgRepo.updateOrganization(a, u as never),
+        };
         return api.handlePatchOrganization(svc as never, { actor, body });
       }
       case 'get_organization_departments': {
         const r = new PgDepartmentRepository(this.#pool, this.#opts);
-        const svc = { getDepartments: (a: Actor, q: never) => r.listDepartments(a, q), createDepartment: (a: Actor, b: never) => r.createDepartment(a, b), updateDepartment: (a: Actor, id: string, b: never) => r.updateDepartment(a, id, b) };
+        const svc = {
+          getDepartments: (a: Actor, q: never) => r.listDepartments(a, q),
+          createDepartment: (a: Actor, b: never) => r.createDepartment(a, b),
+          updateDepartment: (a: Actor, id: string, b: never) => r.updateDepartment(a, id, b),
+        };
         return api.handleGetOrganizationDepartments(svc as never, { actor, query: query as never });
       }
       case 'post_organization_departments': {
         const r = new PgDepartmentRepository(this.#pool, this.#opts);
-        const svc = { getDepartments: (a: Actor, q: never) => r.listDepartments(a, q), createDepartment: (a: Actor, b: never) => r.createDepartment(a, b), updateDepartment: (a: Actor, id: string, b: never) => r.updateDepartment(a, id, b) };
+        const svc = {
+          getDepartments: (a: Actor, q: never) => r.listDepartments(a, q),
+          createDepartment: (a: Actor, b: never) => r.createDepartment(a, b),
+          updateDepartment: (a: Actor, id: string, b: never) => r.updateDepartment(a, id, b),
+        };
         return api.handlePostOrganizationDepartment(svc as never, { actor, body });
       }
       case 'patch_organization_departments_departmentId': {
         const r = new PgDepartmentRepository(this.#pool, this.#opts);
-        const svc = { getDepartments: (a: Actor, q: never) => r.listDepartments(a, q), createDepartment: (a: Actor, b: never) => r.createDepartment(a, b), updateDepartment: (a: Actor, id: string, b: never) => r.updateDepartment(a, id, b) };
-        return api.handlePatchOrganizationDepartment(svc as never, { actor, departmentId: p('departmentId'), body });
+        const svc = {
+          getDepartments: (a: Actor, q: never) => r.listDepartments(a, q),
+          createDepartment: (a: Actor, b: never) => r.createDepartment(a, b),
+          updateDepartment: (a: Actor, id: string, b: never) => r.updateDepartment(a, id, b),
+        };
+        return api.handlePatchOrganizationDepartment(svc as never, {
+          actor,
+          departmentId: p('departmentId'),
+          body,
+        });
       }
       case 'get_organization_members': {
         const r = new PgMemberRepository(this.#pool, this.#opts);
-        const svc = { getMembers: (a: Actor, q: never) => r.listMembers(a, q), updateMemberStatus: (a: Actor, id: string, b: never) => r.updateMemberStatus(a, id, b), updateMemberRoles: (a: Actor, id: string, b: never) => r.replaceMemberRoles(a, id, b) };
+        const svc = {
+          getMembers: (a: Actor, q: never) => r.listMembers(a, q),
+          updateMemberStatus: (a: Actor, id: string, b: never) => r.updateMemberStatus(a, id, b),
+          updateMemberRoles: (a: Actor, id: string, b: never) => r.replaceMemberRoles(a, id, b),
+        };
         return api.handleGetOrganizationMembers(svc as never, { actor, query: query as never });
       }
       case 'put_organization_members_memberId_status': {
         const r = new PgMemberRepository(this.#pool, this.#opts);
-        const svc = { getMembers: (a: Actor, q: never) => r.listMembers(a, q), updateMemberStatus: (a: Actor, id: string, b: never) => r.updateMemberStatus(a, id, b), updateMemberRoles: (a: Actor, id: string, b: never) => r.replaceMemberRoles(a, id, b) };
+        const svc = {
+          getMembers: (a: Actor, q: never) => r.listMembers(a, q),
+          updateMemberStatus: (a: Actor, id: string, b: never) => r.updateMemberStatus(a, id, b),
+          updateMemberRoles: (a: Actor, id: string, b: never) => r.replaceMemberRoles(a, id, b),
+        };
         return api.handlePutOrganizationMemberStatus(svc as never, { actor, memberId, body });
       }
       case 'put_organization_members_memberId_roles': {
         const r = new PgMemberRepository(this.#pool, this.#opts);
-        const svc = { getMembers: (a: Actor, q: never) => r.listMembers(a, q), updateMemberStatus: (a: Actor, id: string, b: never) => r.updateMemberStatus(a, id, b), updateMemberRoles: (a: Actor, id: string, b: never) => r.replaceMemberRoles(a, id, b) };
+        const svc = {
+          getMembers: (a: Actor, q: never) => r.listMembers(a, q),
+          updateMemberStatus: (a: Actor, id: string, b: never) => r.updateMemberStatus(a, id, b),
+          updateMemberRoles: (a: Actor, id: string, b: never) => r.replaceMemberRoles(a, id, b),
+        };
         return api.handlePutOrganizationMemberRoles(svc as never, { actor, memberId, body });
       }
       case 'get_organization_teams': {
         const r = new PgTeamRepository(this.#pool, this.#opts);
-        const svc = { getTeams: (a: Actor, q: never) => r.listTeams(a, q), createTeam: (a: Actor, b: never) => r.createTeam(a, b), updateTeam: (a: Actor, id: string, b: never) => r.updateTeam(a, id, b) };
+        const svc = {
+          getTeams: (a: Actor, q: never) => r.listTeams(a, q),
+          createTeam: (a: Actor, b: never) => r.createTeam(a, b),
+          updateTeam: (a: Actor, id: string, b: never) => r.updateTeam(a, id, b),
+        };
         return api.handleGetOrganizationTeams(svc as never, { actor, query: query as never });
       }
       case 'post_organization_teams': {
         const r = new PgTeamRepository(this.#pool, this.#opts);
-        const svc = { getTeams: (a: Actor, q: never) => r.listTeams(a, q), createTeam: (a: Actor, b: never) => r.createTeam(a, b), updateTeam: (a: Actor, id: string, b: never) => r.updateTeam(a, id, b) };
+        const svc = {
+          getTeams: (a: Actor, q: never) => r.listTeams(a, q),
+          createTeam: (a: Actor, b: never) => r.createTeam(a, b),
+          updateTeam: (a: Actor, id: string, b: never) => r.updateTeam(a, id, b),
+        };
         return api.handlePostOrganizationTeam(svc as never, { actor, body });
       }
       case 'patch_organization_teams_teamId': {
         const r = new PgTeamRepository(this.#pool, this.#opts);
-        const svc = { getTeams: (a: Actor, q: never) => r.listTeams(a, q), createTeam: (a: Actor, b: never) => r.createTeam(a, b), updateTeam: (a: Actor, id: string, b: never) => r.updateTeam(a, id, b) };
+        const svc = {
+          getTeams: (a: Actor, q: never) => r.listTeams(a, q),
+          createTeam: (a: Actor, b: never) => r.createTeam(a, b),
+          updateTeam: (a: Actor, id: string, b: never) => r.updateTeam(a, id, b),
+        };
         return api.handlePatchOrganizationTeam(svc as never, { actor, teamId: p('teamId'), body });
       }
 
-      // ── Auth (stub — sessions resolved at middleware) ─────────────────────
+      // ── Auth (provider-dependent commands fail closed until configured) ───
       case 'post_auth_login':
+        return api.handleAuthLogin(this.#auth, { body });
       case 'post_auth_logout':
+        return api.handleAuthLogout(this.#auth, { actor, body });
       case 'post_auth_logout_all':
+        return api.handleAuthLogoutAll(this.#auth, { actor, body });
       case 'post_auth_mfa_challenge':
+        return api.handleAuthMfaChallenge(this.#auth, { body });
       case 'post_auth_mfa_methods':
+        return api.handlePostAuthMfaMethod(this.#auth, { actor, body });
       case 'post_auth_mfa_recovery_codes_rotate':
+        return api.handleAuthRotateRecoveryCodes(this.#auth, { actor });
       case 'post_auth_password_change':
+        return api.handleAuthPasswordChange(this.#auth, { actor, body });
       case 'post_auth_password_forgot':
+        return api.handleAuthPasswordForgot(this.#auth, { body });
       case 'post_auth_password_reset':
+        return api.handleAuthPasswordReset(this.#auth, { body });
       case 'post_auth_email_change':
+        return api.handleAuthEmailChange(this.#auth, { actor, body });
       case 'post_auth_email_change_confirm':
+        return api.handleAuthEmailChangeConfirm(this.#auth, { actor, body });
       case 'post_auth_email_resend':
+        return api.handleAuthEmailResend(this.#auth, { body });
       case 'post_auth_email_verify':
+        return api.handleAuthEmailVerify(this.#auth, { body });
       case 'get_auth_mfa_methods':
+        return api.handleGetAuthMfaMethods(this.#auth, { actor, query });
       case 'delete_auth_mfa_methods_methodId':
-        return api.handleGetMe({ getMe: async () => null } as never, { actor });
+        return api.handleDeleteAuthMfaMethod(this.#auth, {
+          actor,
+          methodId: p('methodId'),
+        });
 
       default:
         return null;

@@ -1,5 +1,5 @@
-import { runtimeStore } from '../../../../../lib/synthetic.server';
-import { DemoPersistenceError, demoPersistence } from '../../../../../lib/persistence.server';
+import { attemptView, type PlatformAttempt } from '../../../../../lib/attempt-api.server';
+import { mutateThenProject } from '../../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +12,6 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
   let body: SaveTaskBody;
   try {
     body = (await request.json()) as SaveTaskBody;
@@ -26,15 +23,15 @@ export async function POST(
     return Response.json({ error: 'A task id is required.' }, { status: 422 });
   }
   const response = typeof body.response === 'string' ? body.response : '';
-  try {
-    await demoPersistence.saveTask(taskId, response);
-    const persisted = await demoPersistence.getAttempt(params.id);
-    if (persisted !== null) return Response.json(persisted);
-  } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    throw error;
-  }
-  return Response.json(runtimeStore.saveTask(taskId, response));
+  const id = encodeURIComponent(params.id);
+  return mutateThenProject<PlatformAttempt, object>({
+    mutation: {
+      request,
+      path: `/attempts/${id}/responses/${encodeURIComponent(taskId)}`,
+      method: 'PUT',
+      body: { value: response },
+    },
+    read: { request, path: `/attempts/${id}`, method: 'GET' },
+    project: attemptView,
+  });
 }

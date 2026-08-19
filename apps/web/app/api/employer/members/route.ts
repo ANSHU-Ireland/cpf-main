@@ -1,4 +1,5 @@
-import { employerStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { members, type PlatformMember } from '../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +8,11 @@ interface MemberBody {
   readonly role?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(employerStore.getMembers());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformMember[]; total: number }, unknown>(
+    { request, path: '/organization/members?limit=100', method: 'GET' },
+    members,
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -20,11 +24,23 @@ export async function POST(request: Request): Promise<Response> {
   }
   const email = typeof payload.email === 'string' ? payload.email.trim() : '';
   const role = typeof payload.role === 'string' ? payload.role.trim() : '';
-  if (!email.includes('@')) {
-    return Response.json({ error: 'A valid email is required.' }, { status: 422 });
+  if (!email.includes('@') || role === '') {
+    return Response.json({ error: 'A valid email and role are required.' }, { status: 422 });
   }
-  if (role.length === 0) {
-    return Response.json({ error: 'A role is required.' }, { status: 422 });
-  }
-  return Response.json(employerStore.inviteMember(email, role), { status: 201 });
+  return projectPlatform<{ id: string; email: string; roles: readonly string[] }, PlatformMember>(
+    {
+      request,
+      path: '/organization/member-invitations',
+      method: 'POST',
+      body: { email, roles: [role] },
+    },
+    (invitation) => ({
+      id: invitation.id,
+      email: invitation.email,
+      displayName: invitation.email,
+      roles: invitation.roles,
+      status: 'invited',
+    }),
+    201,
+  );
 }

@@ -1,47 +1,25 @@
-import type { AssessmentStatus } from '../../../../lib/types';
-import { assessmentStore } from '../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../lib/contract-gap.server';
+import { projectPlatform } from '../../../../lib/platform-api.server';
+import { assessmentDetail, type PlatformAssessment } from '../../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
-interface StatusBody {
-  readonly status?: unknown;
+export function GET(request: Request, { params }: { params: { id: string } }): Promise<Response> {
+  return projectPlatform<PlatformAssessment, unknown>(
+    {
+      request,
+      path: `/assessments/${encodeURIComponent(params.id)}`,
+      method: 'GET',
+    },
+    assessmentDetail,
+  );
 }
 
-const STATUSES: readonly AssessmentStatus[] = [
-  'draft',
-  'in_review',
-  'active',
-  'suspended',
-  'retired',
-];
-
-export async function GET(
-  _request: Request,
-  { params }: { params: { id: string } },
-): Promise<Response> {
-  const detail = assessmentStore.getAssessment(params.id);
-  if (detail === null) {
-    return Response.json({ error: 'Assessment not found.' }, { status: 404 });
-  }
-  return Response.json(detail);
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } },
-): Promise<Response> {
-  if (assessmentStore.getAssessment(params.id) === null) {
-    return Response.json({ error: 'Assessment not found.' }, { status: 404 });
-  }
-  let payload: StatusBody;
-  try {
-    payload = (await request.json()) as StatusBody;
-  } catch {
-    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
-  const status = payload.status;
-  if (typeof status !== 'string' || !STATUSES.includes(status as AssessmentStatus)) {
-    return Response.json({ error: 'A valid status is required.' }, { status: 422 });
-  }
-  return Response.json(assessmentStore.setAssessmentStatus(params.id, status as AssessmentStatus));
+export function PATCH(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Assessment lifecycle command not exposed',
+    detail:
+      'The baseline governs immutable assessment versions, but it does not expose a direct assessment-level status command for this control.',
+    requirementIds: ['FR-AA-01', 'FR-AA-02'],
+  });
 }

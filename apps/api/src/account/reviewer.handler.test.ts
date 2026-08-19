@@ -13,13 +13,22 @@ const actor: Actor = { userId: 'user-1', tenantId: 'tenant-1', roles: [] };
 
 const profile = {
   userId: 'user-1',
+  displayName: 'Review One',
   expertise: ['ml'],
-  qualifications: ['phd'],
-  languages: ['en'],
-  maxConcurrent: 5,
+  trainingStatus: 'passed',
+  calibrationStatus: 'calibrated',
+  conflictDeclarationRequired: true,
+  maxActiveReviews: 5,
   updatedAt: '',
 };
-const window = { id: 'w1', dayOfWeek: 1, startTime: '09:00', endTime: '17:00' };
+const window = {
+  id: 'w1',
+  availableFrom: '2026-08-17T09:00:00.000Z',
+  availableTo: '2026-08-17T17:00:00.000Z',
+  capacity: 4,
+  status: 'available' as const,
+  note: null,
+};
 
 function repo(overrides: Partial<ReviewerRepository> = {}): ReviewerRepository {
   return {
@@ -32,8 +41,9 @@ function repo(overrides: Partial<ReviewerRepository> = {}): ReviewerRepository {
         items: [
           {
             id: 't1',
-            moduleCode: 'bias-101',
-            status: 'completed',
+            trainingType: 'bias-101',
+            materialVersion: '1',
+            status: 'passed',
             completedAt: '',
             expiresAt: null,
           },
@@ -62,7 +72,7 @@ describe('reviewer handlers', () => {
   });
   it('patchProfile 200 / 422', async () => {
     expect(
-      (await handlePatchMyReviewerProfile(svc(), { actor, body: { maxConcurrent: 3 } })).status,
+      (await handlePatchMyReviewerProfile(svc(), { actor, body: { maxActiveReviews: 3 } })).status,
     ).toBe(200);
     expect((await handlePatchMyReviewerProfile(svc(), { actor, body: {} })).status).toBe(422);
   });
@@ -73,7 +83,16 @@ describe('reviewer handlers', () => {
       (
         await handlePutReviewerAvailability(svc(), {
           actor,
-          body: { windows: [{ dayOfWeek: 1, startTime: '09:00', endTime: '17:00' }] },
+          body: {
+            windows: [
+              {
+                availableFrom: '2026-08-17T09:00:00Z',
+                availableTo: '2026-08-17T17:00:00Z',
+                capacity: 4,
+                status: 'available',
+              },
+            ],
+          },
         })
       ).status,
     ).toBe(200);

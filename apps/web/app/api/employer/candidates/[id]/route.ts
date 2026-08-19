@@ -1,14 +1,15 @@
-import { employerStore } from '../../../../lib/synthetic.server';
+import { projectPlatform } from '../../../../lib/platform-api.server';
+import { candidateRecord, type PlatformCandidate } from '../../../../lib/employer-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { id: string } },
-): Promise<Response> {
-  const record = employerStore.getCandidate(params.id);
-  if (record === null) {
-    return Response.json({ error: 'Candidate not found.' }, { status: 404 });
-  }
-  return Response.json(record);
+export function GET(request: Request, { params }: { params: { id: string } }): Promise<Response> {
+  return projectPlatform<PlatformCandidate, unknown>(
+    {
+      request,
+      path: `/candidates/${encodeURIComponent(params.id)}`,
+      method: 'GET',
+    },
+    candidateRecord,
+  );
 }

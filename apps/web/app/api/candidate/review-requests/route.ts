@@ -1,24 +1,40 @@
-import { NextResponse } from 'next/server';
-import { candidateStore } from '../../../lib/synthetic.server';
+import type { PlatformCandidateProfile } from '../../../lib/candidate-api.server';
+import { candidateReviewableDecisions } from '../../../lib/candidate-self-service.server';
+import { forwardPlatform, projectPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const result = await candidateStore.getReviewableDecisions();
-  return NextResponse.json(result);
+interface ReviewRequestBody {
+  readonly decisionId?: unknown;
+  readonly grounds?: unknown;
 }
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const { decisionId, grounds } = body;
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<PlatformCandidateProfile, object>(
+    { request, path: '/candidate/profile', method: 'GET' },
+    candidateReviewableDecisions,
+  );
+}
 
-  if (!decisionId?.trim()) {
-    return NextResponse.json({ error: 'decisionId is required' }, { status: 422 });
+export async function POST(request: Request): Promise<Response> {
+  let body: ReviewRequestBody;
+  try {
+    body = (await request.json()) as ReviewRequestBody;
+  } catch {
+    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
-  if (!grounds?.trim() || grounds.trim().length < 20) {
-    return NextResponse.json({ error: 'grounds must be at least 20 characters' }, { status: 422 });
+  const applicationId = typeof body.decisionId === 'string' ? body.decisionId.trim() : '';
+  const grounds = typeof body.grounds === 'string' ? body.grounds.trim() : '';
+  if (applicationId === '') {
+    return Response.json({ error: 'decisionId is required' }, { status: 422 });
   }
-
-  await candidateStore.requestHumanReview(decisionId.trim(), grounds.trim());
-  return NextResponse.json({ success: true }, { status: 201 });
+  if (grounds.length < 20) {
+    return Response.json({ error: 'grounds must be at least 20 characters' }, { status: 422 });
+  }
+  return forwardPlatform({
+    request,
+    path: `/candidate/applications/${encodeURIComponent(applicationId)}/human-review`,
+    method: 'POST',
+    body: { reason: grounds },
+  });
 }

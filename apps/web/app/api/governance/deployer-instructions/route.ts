@@ -1,44 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const collection = governanceStore.getDeployerInstructions();
-  return NextResponse.json(collection);
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Deployer-instruction publication is incomplete',
+    detail:
+      'Publication requires a versioned protected artifact, accuracy metrics, monitoring, incident and maintenance instructions that this screen does not collect.',
+    requirementIds: ['GOV-10', 'FR-GOV-16'],
+  });
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const { systemId, version, limitations, oversight } = body;
+export function GET(request: Request): Response {
+  return gap(request);
+}
 
-  if (typeof systemId !== 'string' || systemId.trim().length < 2) {
-    return NextResponse.json({ error: 'Invalid systemId.' }, { status: 422 });
-  }
-  if (typeof version !== 'string' || version.trim().length < 1) {
-    return NextResponse.json(
-      { error: 'Invalid version; minimum 1 character required.' },
-      { status: 422 },
-    );
-  }
-  if (typeof limitations !== 'string' || limitations.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid limitations; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-  if (typeof oversight !== 'string' || oversight.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid oversight; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-
-  const instructions = governanceStore.publishDeployerInstructions(
-    systemId.trim(),
-    version.trim(),
-    limitations.trim(),
-    oversight.trim(),
-  );
-  return NextResponse.json(instructions, { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

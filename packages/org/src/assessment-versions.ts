@@ -59,6 +59,11 @@ export interface AssessmentValidationRepository {
 }
 
 export interface AssessmentVersionRepository {
+  createVersionForAssessment(
+    actor: Actor,
+    assessmentId: string,
+    rationale: string,
+  ): Promise<AssessmentVersionRecord | null>;
   activateVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null>;
   previewVersion(actor: Actor, versionId: string): Promise<AssessmentVersionPreview | null>;
   duplicateVersion(actor: Actor, versionId: string): Promise<AssessmentVersionRecord | null>;
@@ -165,6 +170,24 @@ export async function duplicateAssessmentVersion(
   if (!canWriteAssessment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
   const record = await deps.repository.duplicateVersion(actor, versionId);
   if (record === null) return { ok: false, status: 404, reason: 'Version not found.' };
+  return { ok: true, version: record };
+}
+
+export async function createAssessmentVersionForAssessment(
+  deps: { repository: AssessmentVersionRepository },
+  actor: Actor,
+  assessmentId: string,
+  rationale: string,
+): Promise<Result<{ version: AssessmentVersionRecord }>> {
+  if (!canWriteAssessment(actor)) return { ok: false, status: 403, reason: 'forbidden' };
+  const record = await deps.repository.createVersionForAssessment(actor, assessmentId, rationale);
+  if (record === null) {
+    return {
+      ok: false,
+      status: 409,
+      reason: 'An existing assessment version is required before a new draft can be created.',
+    };
+  }
   return { ok: true, version: record };
 }
 

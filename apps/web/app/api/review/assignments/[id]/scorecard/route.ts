@@ -1,5 +1,9 @@
-import { reviewStore } from '../../../../../lib/synthetic.server';
-import { DemoPersistenceError, demoPersistence } from '../../../../../lib/persistence.server';
+import {
+  callPlatform,
+  PlatformApiError,
+  projectPlatform,
+} from '../../../../../lib/platform-api.server';
+import { reviewerScorecard, type PlatformScorecard } from '../../../../../lib/review-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,30 +16,23 @@ interface ScorecardBody {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (reviewStore.getAssignment(params.id) === null) {
-    return Response.json({ error: 'Assignment not found.' }, { status: 404 });
-  }
-  try {
-    const persisted = await demoPersistence.getScorecard();
-    return Response.json(persisted ?? reviewStore.getScorecard());
-  } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    throw error;
-  }
+  return projectPlatform<PlatformScorecard, unknown>(
+    {
+      request,
+      path: `/review-assignments/${encodeURIComponent(params.id)}/scorecard`,
+      method: 'GET',
+    },
+    reviewerScorecard,
+  );
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (reviewStore.getAssignment(params.id) === null) {
-    return Response.json({ error: 'Assignment not found.' }, { status: 404 });
-  }
   let payload: ScorecardBody;
   try {
     payload = (await request.json()) as ScorecardBody;
@@ -43,21 +40,21 @@ export async function POST(
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
   const criterionId = typeof payload.criterionId === 'string' ? payload.criterionId : '';
+  const rationale = typeof payload.rationale === 'string' ? payload.rationale.trim() : '';
+  const evidenceLink = typeof payload.evidenceLink === 'string' ? payload.evidenceLink.trim() : '';
+  const insufficientEvidence = payload.insufficientEvidence === true;
   if (criterionId === '') {
     return Response.json({ error: 'A criterion id is required.' }, { status: 422 });
   }
   if (typeof payload.score !== 'number' || Number.isNaN(payload.score) || payload.score < 0) {
     return Response.json({ error: 'A valid score is required.' }, { status: 422 });
   }
-  const rationale = typeof payload.rationale === 'string' ? payload.rationale.trim() : '';
   if (rationale.length < 3) {
     return Response.json(
       { error: 'A rationale is required for every score you record.' },
       { status: 422 },
     );
   }
-  const evidenceLink = typeof payload.evidenceLink === 'string' ? payload.evidenceLink.trim() : '';
-  const insufficientEvidence = payload.insufficientEvidence === true;
   if (!insufficientEvidence && evidenceLink.length < 3) {
     return Response.json(
       { error: 'Link the source evidence or choose insufficient evidence.' },
@@ -65,36 +62,29 @@ export async function POST(
     );
   }
   try {
-    await demoPersistence.saveCriterion(
-      criterionId,
-      payload.score,
-      rationale,
-      evidenceLink,
-      insufficientEvidence,
-    );
-    const persisted = await demoPersistence.getScorecard();
-    if (persisted !== null) {
-      const criterion = persisted.items.find((item) => item.id === criterionId);
-      if (criterion === undefined) {
-        return Response.json({ error: 'Criterion not found.' }, { status: 404 });
-      }
-      return Response.json(criterion);
+    const result = await callPlatform<PlatformScorecard>({
+      request,
+      path: `/review-assignments/${encodeURIComponent(params.id)}/scorecard`,
+      method: 'PUT',
+      body: {
+        criterion: {
+          criterionId,
+          humanScore: payload.score,
+          insufficientEvidence,
+          evidenceLinks: evidenceLink === '' ? [] : [{ source: evidenceLink }],
+          reviewerComment: rationale,
+        },
+      },
+    });
+    const criterion = reviewerScorecard(result.data).items.find((item) => item.id === criterionId);
+    if (criterion === undefined) {
+      return Response.json({ error: 'Criterion not found.' }, { status: 404 });
     }
+    return Response.json(criterion, {
+      headers: { 'x-correlation-id': result.correlationId },
+    });
   } catch (error) {
-    if (error instanceof DemoPersistenceError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
+    if (error instanceof PlatformApiError) return error.toResponse();
     throw error;
   }
-  const updated = reviewStore.saveCriterion(
-    criterionId,
-    payload.score,
-    rationale,
-    evidenceLink,
-    insufficientEvidence,
-  );
-  if (updated === null) {
-    return Response.json({ error: 'Criterion not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
 }

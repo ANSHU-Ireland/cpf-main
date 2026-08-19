@@ -20,8 +20,8 @@ const admin: Actor = { tenantId: T, userId: U, roles: ['employer_admin'] };
 const noRole: Actor = { tenantId: T, userId: U, roles: ['viewer'] };
 const dr: DataRightRequestRecord = {
   id: 'd1',
-  requestType: 'erasure',
-  status: 'pending',
+  requestType: 'deletion',
+  status: 'received',
   candidateId: C,
   createdAt: '',
 };
@@ -44,17 +44,14 @@ function repo(ov: Partial<DataRightsRepository> = {}): DataRightsRepository {
 
 describe('parseDataRightRequestCreate', () => {
   it('valid', () =>
-    expect(
-      parseDataRightRequestCreate({ requestType: 'erasure', candidateId: C, justification: 'j' })
-        .ok,
-    ).toBe(true));
+    expect(parseDataRightRequestCreate({ requestType: 'deletion', justification: 'j' }).ok).toBe(
+      true,
+    ));
   it('invalid', () => expect(parseDataRightRequestCreate({}).ok).toBe(false));
 });
 describe('parseComplaintCreate', () => {
   it('valid', () =>
-    expect(parseComplaintCreate({ category: 'bias', candidateId: C, description: 'd' }).ok).toBe(
-      true,
-    ));
+    expect(parseComplaintCreate({ category: 'bias', description: 'd' }).ok).toBe(true));
   it('invalid', () => expect(parseComplaintCreate({}).ok).toBe(false));
 });
 describe('listDataRightRequests', () => {
@@ -68,8 +65,7 @@ describe('createDataRightRequest', () => {
     expect(
       (
         await createDataRightRequest({ repository: repo() }, admin, {
-          requestType: 'erasure',
-          candidateId: C,
+          requestType: 'deletion',
           justification: 'j',
         })
       ).ok,
@@ -81,7 +77,6 @@ describe('createComplaint', () => {
       (
         await createComplaint({ repository: repo() }, admin, {
           category: 'bias',
-          candidateId: C,
           description: 'd',
         })
       ).ok,

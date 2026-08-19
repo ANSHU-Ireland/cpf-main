@@ -1,7 +1,11 @@
-import { adminStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { auditEvent, type PlatformAuditEvent } from '../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(): Promise<Response> {
-  return Response.json(adminStore.getAudit());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformAuditEvent[]; total: number }, unknown>(
+    { request, path: '/admin/audit-events?limit=100', method: 'GET' },
+    (data) => ({ items: data.items.map(auditEvent), total: data.total }),
+  );
 }

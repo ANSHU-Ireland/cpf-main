@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
 import { Card } from '../../components/Card';
@@ -9,12 +9,11 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { useAsync } from '../../lib/useAsync';
 import type { ConformityAssessmentView } from '../../lib/types';
 import { apiClient } from '../../lib/api-client';
-import { governanceStore } from '../../lib/synthetic.server';
 
 export default function GovernanceConformityPage() {
   const headingId = useId();
-  const params = useParams<{ systemId?: string }>();
-  const systemId = params?.systemId || governanceStore.aiSystemId;
+  const searchParams = useSearchParams();
+  const systemId = searchParams.get('systemId') ?? '';
   const [data, setData] = useState<ConformityAssessmentView | null>(null);
 
   const loader = useCallback(async () => {

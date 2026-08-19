@@ -3,6 +3,9 @@ import {
   handleGetAccommodations,
   handlePostAccommodation,
   handlePatchAccommodationStatus,
+  handleGetCandidateAccommodations,
+  handlePostCandidateAccommodation,
+  handlePutCandidateAccommodation,
   type AccommodationService,
 } from './accommodations.handler.js';
 import type { Actor } from '@cpf/org';
@@ -89,5 +92,31 @@ describe('handlePatchAccommodationStatus', () => {
       { actor, accommodationId: VALID_ID, body: { status: 'declined' } },
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe('candidate accommodation handlers', () => {
+  it('uses candidate-owned application resolution', async () => {
+    expect((await handleGetCandidateAccommodations(service(), { actor })).status).toBe(200);
+    expect(
+      (
+        await handlePostCandidateAccommodation(service(), {
+          actor,
+          body: { requestSummary: 'Need more time' },
+        })
+      ).status,
+    ).toBe(201);
+  });
+
+  it('only permits a candidate to close their request', async () => {
+    expect(
+      (
+        await handlePutCandidateAccommodation(service(), {
+          actor,
+          accommodationId: VALID_ID,
+          body: { status: 'approved' },
+        })
+      ).status,
+    ).toBe(422);
   });
 });

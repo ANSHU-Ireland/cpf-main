@@ -4,10 +4,17 @@ import type { Actor } from './types.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const OBSERVATION_DISPOSITIONS = ['accepted', 'rejected', 'deferred'] as const;
+export const OBSERVATION_DISPOSITIONS = ['useful', 'edited', 'rejected', 'reported'] as const;
 export type ObservationDisposition = (typeof OBSERVATION_DISPOSITIONS)[number];
 
-export const INTEGRITY_RESOLUTIONS = ['dismissed', 'confirmed', 'escalated'] as const;
+export const INTEGRITY_RESOLUTIONS = [
+  'explained',
+  'technical_issue',
+  'inconclusive',
+  'immaterial',
+  'requires_clarification',
+  'material_integrity_concern',
+] as const;
 export type IntegrityResolution = (typeof INTEGRITY_RESOLUTIONS)[number];
 
 export interface ScorecardAmendmentRecord {
@@ -22,6 +29,22 @@ export interface ObservationRecord {
   readonly disposition: ObservationDisposition;
   readonly note: string | null;
   readonly updatedAt: string;
+}
+
+export interface ReviewObservationRecord {
+  readonly id: string;
+  readonly criterionId: string | null;
+  readonly observation: string;
+  readonly evidenceLinks: readonly unknown[];
+  readonly limitations: readonly unknown[];
+  readonly status: 'generated' | 'blocked' | 'reported' | 'withdrawn';
+  readonly generatedAt: string;
+}
+
+export interface ReviewObservationPage {
+  readonly items: readonly ReviewObservationRecord[];
+  readonly total: number;
+  readonly independentScoringComplete: boolean;
 }
 
 export interface IntegrityEventRecord {
@@ -47,6 +70,7 @@ export interface IntegrityResolutionInput {
 }
 
 export interface ReviewQualityRepository {
+  listObservations(actor: Actor, assignmentId: string): Promise<ReviewObservationPage | null>;
   createAmendment(
     actor: Actor,
     scorecardId: string,
@@ -90,7 +114,10 @@ export function parseObservationDisposition(
     typeof disposition !== 'string' ||
     !OBSERVATION_DISPOSITIONS.includes(disposition as ObservationDisposition)
   ) {
-    return { ok: false, errors: ['disposition must be accepted, rejected, or deferred'] };
+    return {
+      ok: false,
+      errors: ['disposition must be useful, edited, rejected, or reported'],
+    };
   }
   const value: ObservationDispositionInput = { disposition: disposition as ObservationDisposition };
   if (typeof obj.note === 'string') return { ok: true, value: { ...value, note: obj.note } };
@@ -107,7 +134,12 @@ export function parseIntegrityResolution(
     typeof resolution !== 'string' ||
     !INTEGRITY_RESOLUTIONS.includes(resolution as IntegrityResolution)
   ) {
-    return { ok: false, errors: ['resolution must be dismissed, confirmed, or escalated'] };
+    return {
+      ok: false,
+      errors: [
+        'resolution must be explained, technical_issue, inconclusive, immaterial, requires_clarification, or material_integrity_concern',
+      ],
+    };
   }
   const value: IntegrityResolutionInput = { resolution: resolution as IntegrityResolution };
   if (typeof obj.note === 'string') return { ok: true, value: { ...value, note: obj.note } };
@@ -119,6 +151,23 @@ export function parseReviewQualityId(raw: string): string | null {
 }
 
 type Result<T> = ({ ok: true } & T) | { ok: false; status: number; reason: string };
+
+export async function listReviewObservations(
+  deps: { repository: ReviewQualityRepository },
+  actor: Actor,
+  assignmentId: string,
+): Promise<Result<{ page: ReviewObservationPage }>> {
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'read',
+    { type: 'review_assignment', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+  const page = await deps.repository.listObservations(actor, assignmentId);
+  if (page === null) return { ok: false, status: 404, reason: 'not_found' };
+  return { ok: true, page };
+}
 
 export async function createScorecardAmendment(
   deps: { repository: ReviewQualityRepository },

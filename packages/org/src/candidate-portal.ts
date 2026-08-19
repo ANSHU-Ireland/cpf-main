@@ -6,11 +6,7 @@ export interface CandidateProfileData {
   readonly candidateId: string;
   readonly email: string;
   readonly displayName: string;
-  readonly applications: readonly {
-    applicationId: string;
-    campaignTitle: string;
-    status: string;
-  }[];
+  readonly applications: readonly CandidateApplicationStatusData[];
 }
 
 export interface CandidateInvitationData {
@@ -20,14 +16,50 @@ export interface CandidateInvitationData {
   readonly status: string;
 }
 
+export interface CandidateApplicationStatusData {
+  readonly applicationId: string;
+  readonly employerName: string;
+  readonly roleName: string;
+  readonly assessmentTitle: string;
+  readonly status: string;
+  readonly appliedAt: string;
+  readonly invitedAt: string | null;
+  readonly dueAt: string | null;
+  readonly decision: {
+    readonly outcome: string;
+    readonly rationale: string;
+    readonly decidedBy: string;
+    readonly issuedAt: string;
+  } | null;
+}
+
+export interface CandidatePracticeModuleData {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly durationSeconds: number;
+  readonly taskCount: number;
+}
+
 export interface CandidatePortalRepository {
   getProfile(actor: Actor): Promise<CandidateProfileData | null>;
   getInvitation(actor: Actor): Promise<CandidateInvitationData | null>;
+  getApplicationStatus(
+    actor: Actor,
+    applicationId: string,
+  ): Promise<CandidateApplicationStatusData | null>;
+  listPracticeModules(actor: Actor): Promise<readonly CandidatePracticeModuleData[]>;
 }
 
 type Result<T> = ({ ok: true } & T) | { ok: false; status: number; reason: string };
 export type GetCandidateProfileResult = Result<{ profile: CandidateProfileData }>;
 export type GetCandidateInvitationResult = Result<{ invitation: CandidateInvitationData }>;
+export type GetCandidateApplicationStatusResult = Result<{
+  application: CandidateApplicationStatusData;
+}>;
+export type ListCandidatePracticeResult = Result<{
+  modules: readonly CandidatePracticeModuleData[];
+}>;
 
 export async function getCandidateProfile(
   deps: { repository: CandidatePortalRepository },
@@ -59,4 +91,35 @@ export async function getCandidateInvitation(
   const invitation = await deps.repository.getInvitation(actor);
   if (invitation === null) return { ok: false, status: 404, reason: 'No pending invitation.' };
   return { ok: true, invitation };
+}
+
+export async function getCandidateApplicationStatus(
+  deps: { repository: CandidatePortalRepository },
+  actor: Actor,
+  applicationId: string,
+): Promise<GetCandidateApplicationStatusResult> {
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'read',
+    { type: 'application', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+  const application = await deps.repository.getApplicationStatus(actor, applicationId);
+  if (application === null) return { ok: false, status: 404, reason: 'Application not found.' };
+  return { ok: true, application };
+}
+
+export async function listCandidatePractice(
+  deps: { repository: CandidatePortalRepository },
+  actor: Actor,
+): Promise<ListCandidatePracticeResult> {
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'read',
+    { type: 'candidate', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+  return { ok: true, modules: await deps.repository.listPracticeModules(actor) };
 }

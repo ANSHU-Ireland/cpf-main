@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server';
-import { supportStore } from '../../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(_request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  await supportStore.revokeJitAccess(id);
-  return NextResponse.json({ success: true });
+export function POST(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'JIT access lifecycle contract is incomplete',
+    detail:
+      'Revocation cannot be safely projected because the approved API has no grant read or list operation.',
+    requirementIds: ['SUP-03', 'FR-SA-21'],
+  });
 }

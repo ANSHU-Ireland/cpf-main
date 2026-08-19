@@ -7,6 +7,7 @@ import {
   parseObservationDisposition,
   parseIntegrityResolution,
   parseReviewQualityId,
+  listReviewObservations,
 } from './review-quality.js';
 import type {
   ReviewQualityRepository,
@@ -28,19 +29,21 @@ const amendment: ScorecardAmendmentRecord = {
 };
 const observation: ObservationRecord = {
   id: 'o1',
-  disposition: 'accepted',
+  disposition: 'useful',
   note: null,
   updatedAt: '',
 };
 const event: IntegrityEventRecord = {
   id: 'e1',
-  resolution: 'dismissed',
+  resolution: 'explained',
   note: null,
   resolvedAt: '',
 };
 
 function repo(ov: Partial<ReviewQualityRepository> = {}): ReviewQualityRepository {
   return {
+    listObservations: () =>
+      Promise.resolve({ items: [], total: 0, independentScoringComplete: true }),
     createAmendment: () => Promise.resolve(amendment),
     setObservationDisposition: () => Promise.resolve(observation),
     resolveIntegrityEvent: () => Promise.resolve(event),
@@ -53,11 +56,11 @@ describe('parsers', () => {
     expect(parseScorecardAmendmentCreate({ rationale: 'r', changes: 'c' }).ok).toBe(true));
   it('amendment invalid', () => expect(parseScorecardAmendmentCreate({}).ok).toBe(false));
   it('disposition valid', () =>
-    expect(parseObservationDisposition({ disposition: 'accepted' }).ok).toBe(true));
+    expect(parseObservationDisposition({ disposition: 'useful' }).ok).toBe(true));
   it('disposition invalid', () =>
     expect(parseObservationDisposition({ disposition: 'x' }).ok).toBe(false));
   it('resolution valid', () =>
-    expect(parseIntegrityResolution({ resolution: 'confirmed', note: 'n' }).ok).toBe(true));
+    expect(parseIntegrityResolution({ resolution: 'explained', note: 'n' }).ok).toBe(true));
   it('resolution invalid', () => expect(parseIntegrityResolution({}).ok).toBe(false));
   it('id uuid', () => expect(parseReviewQualityId(T)).not.toBeNull());
   it('id bad', () => expect(parseReviewQualityId('x')).toBeNull());
@@ -93,12 +96,25 @@ describe('createScorecardAmendment', () => {
       ).ok,
     ).toBe(false));
 });
+describe('listReviewObservations', () => {
+  it('returns the repository page to an authorised reviewer', async () => {
+    const result = await listReviewObservations({ repository: repo() }, admin, T);
+    expect(result).toMatchObject({
+      ok: true,
+      page: { independentScoringComplete: true, total: 0 },
+    });
+  });
+  it('denies actors without review access', async () => {
+    const result = await listReviewObservations({ repository: repo() }, noRole, T);
+    expect(result.ok).toBe(false);
+  });
+});
 describe('setObservationDisposition', () => {
   it('ok', async () =>
     expect(
       (
         await setObservationDisposition({ repository: repo() }, admin, 'o1', {
-          disposition: 'accepted',
+          disposition: 'useful',
         })
       ).ok,
     ).toBe(true));
@@ -109,7 +125,7 @@ describe('setObservationDisposition', () => {
           { repository: repo({ setObservationDisposition: () => Promise.resolve(null) }) },
           admin,
           'x',
-          { disposition: 'accepted' },
+          { disposition: 'useful' },
         )
       ).ok,
     ).toBe(false));
@@ -119,7 +135,7 @@ describe('resolveIntegrityEvent', () => {
     expect(
       (
         await resolveIntegrityEvent({ repository: repo() }, admin, 'e1', {
-          resolution: 'dismissed',
+          resolution: 'explained',
         })
       ).ok,
     ).toBe(true));
@@ -127,7 +143,7 @@ describe('resolveIntegrityEvent', () => {
     expect(
       (
         await resolveIntegrityEvent({ repository: repo() }, noRole, 'e1', {
-          resolution: 'dismissed',
+          resolution: 'explained',
         })
       ).ok,
     ).toBe(false));

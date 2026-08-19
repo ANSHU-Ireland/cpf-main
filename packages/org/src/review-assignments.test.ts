@@ -6,11 +6,13 @@ import {
   acceptReviewAssignment,
   stopReviewAssignmentAi,
   declineReviewAssignment,
+  setReviewAssignmentConflict,
   addReviewAssignmentAnnotation,
   addReviewAssignmentClarification,
   parseReviewAssignmentListQuery,
   parseReviewAssignmentCreate,
   parseAssignmentDecline,
+  parseAssignmentConflict,
   parseAssignmentAnnotation,
   parseAssignmentClarification,
   parseAssignmentId,
@@ -64,6 +66,7 @@ function repo(overrides: Partial<ReviewAssignmentRepository> = {}): ReviewAssign
     acceptAssignment: () => Promise.resolve(assignment({ status: 'accepted' })),
     stopAssignmentAi: () => Promise.resolve(assignment({ status: 'in_progress' })),
     declineAssignment: () => Promise.resolve(assignment({ status: 'cancelled' })),
+    setAssignmentConflict: () => Promise.resolve(assignment()),
     addAnnotation: () => Promise.resolve(annotation),
     addClarification: () => Promise.resolve(clarification),
     ...overrides,
@@ -200,6 +203,10 @@ describe('parseAssignmentDecline / Annotation / Clarification', () => {
     expect(parseAssignmentAnnotation({ itemId: SUB_ID, body: 'x' }).ok).toBe(true);
     expect(parseAssignmentAnnotation({ itemId: 'bad', body: 'x' }).ok).toBe(false);
   });
+  it('conflict', () => {
+    expect(parseAssignmentConflict({ declared: true, reason: 'Prior relationship' }).ok).toBe(true);
+    expect(parseAssignmentConflict({ declared: true }).ok).toBe(false);
+  });
   it('clarification', () => {
     expect(parseAssignmentClarification({ question: 'q' }).ok).toBe(true);
     expect(parseAssignmentClarification({}).ok).toBe(false);
@@ -236,6 +243,19 @@ describe('declineReviewAssignment', () => {
       { reason: 'busy' },
     );
     expect(r.ok === false && r.status).toBe(404);
+  });
+});
+
+describe('setReviewAssignmentConflict', () => {
+  it('records a distinct conflict declaration', async () => {
+    expect(
+      (
+        await setReviewAssignmentConflict({ repository: repo() }, admin, 'ra-1', {
+          declared: true,
+          reason: 'Prior relationship',
+        })
+      ).ok,
+    ).toBe(true);
   });
 });
 

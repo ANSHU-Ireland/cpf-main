@@ -1,5 +1,10 @@
 import type { AiModelStatus } from '../../../../lib/types';
-import { assessmentStore } from '../../../../lib/synthetic.server';
+import {
+  callPlatform,
+  platformErrorResponse,
+  projectPlatform,
+} from '../../../../lib/platform-api.server';
+import { aiModelDetail, type PlatformAiModel } from '../../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,53 +12,55 @@ interface StatusBody {
   readonly status?: unknown;
 }
 
-const STATUSES: readonly AiModelStatus[] = [
-  'registered',
-  'in_evaluation',
-  'approved',
-  'active',
-  'suspended',
-];
+async function findModel(request: Request, id: string): Promise<PlatformAiModel | null> {
+  const page = await callPlatform<{ items: readonly PlatformAiModel[] }>({
+    request,
+    path: '/ai-models?limit=100',
+    method: 'GET',
+  });
+  return page.data.items.find((item) => item.id === id) ?? null;
+}
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  const detail = assessmentStore.getModel(params.id);
-  if (detail === null) {
-    return Response.json({ error: 'Model not found.' }, { status: 404 });
+  try {
+    const item = await findModel(request, params.id);
+    return item === null
+      ? Response.json({ error: 'Model not found.' }, { status: 404 })
+      : Response.json(aiModelDetail(item));
+  } catch (error) {
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
+    throw error;
   }
-  return Response.json(detail);
 }
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  const before = assessmentStore.getModel(params.id);
-  if (before === null) {
-    return Response.json({ error: 'Model not found.' }, { status: 404 });
-  }
   let payload: StatusBody;
   try {
     payload = (await request.json()) as StatusBody;
   } catch {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
-  const status = payload.status;
-  if (typeof status !== 'string' || !STATUSES.includes(status as AiModelStatus)) {
-    return Response.json({ error: 'A valid status is required.' }, { status: 422 });
-  }
-  const updated = assessmentStore.setModelStatus(params.id, status as AiModelStatus);
-  if (updated === null) {
-    return Response.json({ error: 'Model not found.' }, { status: 404 });
-  }
-  // Activation requires a recorded evaluation and the required human approvals.
-  if (status === 'active' && updated.status !== 'active') {
+  const status = payload.status as AiModelStatus;
+  const action = status === 'active' ? 'activate' : status === 'suspended' ? 'suspend' : null;
+  if (action === null) {
     return Response.json(
-      { error: 'Record the evaluation and required approvals before activating this model.' },
-      { status: 409 },
+      { error: 'Only activation and suspension are lifecycle commands on this surface.' },
+      { status: 422 },
     );
   }
-  return Response.json(updated);
+  return projectPlatform<PlatformAiModel, unknown>(
+    {
+      request,
+      path: `/ai-models/${encodeURIComponent(params.id)}/${action}`,
+      method: 'POST',
+    },
+    aiModelDetail,
+  );
 }

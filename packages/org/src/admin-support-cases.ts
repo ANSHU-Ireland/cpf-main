@@ -4,16 +4,30 @@ import type { Actor } from './types.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const ADMIN_SUPPORT_CASE_STATUSES = ['open', 'pending', 'resolved', 'closed'] as const;
+export const ADMIN_SUPPORT_CASE_STATUSES = [
+  'draft',
+  'open',
+  'awaiting_user',
+  'awaiting_internal',
+  'escalated',
+  'resolved',
+  'closed',
+  'reopened',
+] as const;
 export type AdminSupportCaseStatus = (typeof ADMIN_SUPPORT_CASE_STATUSES)[number];
 
 export interface AdminSupportCaseRecord {
   readonly id: string;
   readonly caseReference: string;
   readonly subject: string;
+  readonly tenantName: string;
+  readonly severity: 'low' | 'medium' | 'high' | 'critical';
+  readonly category: string;
+  readonly requesterUserId: string;
   readonly status: AdminSupportCaseStatus;
   readonly assigneeId: string | null;
   readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 export interface SupportCaseAssignment {

@@ -13,8 +13,11 @@ const ID = '11111111-1111-1111-1111-111111111111';
 const plugin: PluginRecord = {
   id: ID,
   code: 'com.acme.export',
+  provider: 'Acme',
   name: 'Export',
-  status: 'enabled',
+  version: '1.0.0',
+  permissions: {},
+  status: 'active',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -39,7 +42,16 @@ describe('handleListPlugins', () => {
 
 describe('handleCreatePlugin', () => {
   it('returns 201', async () => {
-    const res = await handleCreatePlugin(svc(), { actor, body: { code: 'com.acme.x', name: 'X' } });
+    const res = await handleCreatePlugin(svc(), {
+      actor,
+      body: {
+        code: 'com.acme.x',
+        provider: 'Acme',
+        name: 'X',
+        version: '1.0.0',
+        permissions: {},
+      },
+    });
     expect(res.status).toBe(201);
   });
   it('returns 422 for an invalid body', async () =>
@@ -49,8 +61,13 @@ describe('handleCreatePlugin', () => {
 describe('handleUpdatePluginStatus', () => {
   it('returns 200', async () =>
     expect(
-      (await handleUpdatePluginStatus(svc(), { actor, pluginId: ID, body: { status: 'disabled' } }))
-        .status,
+      (
+        await handleUpdatePluginStatus(svc(), {
+          actor,
+          pluginId: ID,
+          body: { status: 'suspended' },
+        })
+      ).status,
     ).toBe(200));
   it('returns 422 for a bad id', async () =>
     expect(
@@ -58,7 +75,7 @@ describe('handleUpdatePluginStatus', () => {
         await handleUpdatePluginStatus(svc(), {
           actor,
           pluginId: 'bad',
-          body: { status: 'disabled' },
+          body: { status: 'suspended' },
         })
       ).status,
     ).toBe(422));
@@ -68,7 +85,7 @@ describe('handleUpdatePluginStatus', () => {
         await handleUpdatePluginStatus(svc({ updatePluginStatus: () => Promise.resolve(null) }), {
           actor,
           pluginId: ID,
-          body: { status: 'disabled' },
+          body: { status: 'suspended' },
         })
       ).status,
     ).toBe(404));

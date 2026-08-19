@@ -1,4 +1,5 @@
-import { runtimeStore } from '../../../../../lib/synthetic.server';
+import { attemptArtifacts, type PlatformAttempt } from '../../../../../lib/attempt-api.server';
+import { projectPlatform } from '../../../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,22 +9,19 @@ interface ArtifactBody {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
-  return Response.json(runtimeStore.getArtifacts());
+  return projectPlatform<PlatformAttempt, object>(
+    { request, path: `/attempts/${encodeURIComponent(params.id)}`, method: 'GET' },
+    attemptArtifacts,
+  );
 }
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } },
+  _context: { params: { id: string } },
 ): Promise<Response> {
-  if (params.id !== runtimeStore.attemptId()) {
-    return Response.json({ error: 'Attempt not found.' }, { status: 404 });
-  }
   let payload: ArtifactBody;
   try {
     payload = (await request.json()) as ArtifactBody;
@@ -34,6 +32,14 @@ export async function POST(
   if (name === '') {
     return Response.json({ error: 'A file name is required.' }, { status: 422 });
   }
-  const sizeLabel = typeof payload.sizeLabel === 'string' ? payload.sizeLabel : '—';
-  return Response.json(runtimeStore.uploadArtifact(name, sizeLabel), { status: 201 });
+  return Response.json(
+    {
+      type: 'about:blank',
+      title: 'Object storage is not configured',
+      status: 503,
+      detail:
+        'A signed upload target and malware scanner are required before files can be accepted.',
+    },
+    { status: 503 },
+  );
 }

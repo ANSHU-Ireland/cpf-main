@@ -1,6 +1,6 @@
 # CPF full completion ledger
 
-Date: 2026-08-10
+Date: 2026-08-16
 
 This ledger is the executable completion record for the v2.0 handover. It reconciles the product requirements pack, developer TRD, 125-interface Penpot handoff, 244-operation OpenAPI contract, PostgreSQL baseline and current monorepo. A workstream is complete only when its implementation, automated verification and evidence are all present.
 
@@ -16,23 +16,23 @@ This ledger is the executable completion record for the v2.0 handover. It reconc
 
 ## Programme status
 
-| Stage  | Scope                                                         | Status      | Exit evidence                                                                                                                |
-| ------ | ------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| CPF-01 | Source reconciliation and canonical route inventory           | Complete    | 125/125 canonical routes asserted from the live handoff CSV                                                                  |
-| CPF-02 | Shared shell, tokens and canonical account/auth routes        | Complete    | typecheck, build, browser QA and `design-qa.md`                                                                              |
-| CPF-03 | Candidate runtime RUN-02 vertical slice                       | Complete    | five realistic tasks; timer, save, version/checksum, flag and next-task interaction                                          |
-| CPF-04 | Reviewer scorecard REV-08 vertical slice                      | Complete    | evidence-led human scoring, citation, insufficient-evidence rationale and concealed AI observations                          |
-| CPF-05 | Remaining interface fidelity and interaction closure          | In progress | EMP-20/21 now join the verified slices; all 125 routes still require route-specific ready/empty/error/denied evidence        |
-| CPF-06 | Replace web process-local stores with authenticated API calls | In progress | RUN-02, REV-08, campaign, EMP-10 and EMP-20/21 use scoped sessions and PostgreSQL; remaining routes are pending              |
-| CPF-07 | Wire 244 OpenAPI operations to concrete handlers              | In progress | runtime, review, campaign, candidate, invitation, import and all three human-decision operations are concrete                |
-| CPF-08 | PostgreSQL repositories and transaction/outbox coverage       | In progress | completed slices include tenant-scoped audit/outbox; decisions also enqueue a privacy-safe versioned notice                  |
-| CPF-09 | Identity, sessions, MFA, RBAC/ABAC and tenant isolation       | In progress | current slices enforce scoped 401/403; EMP-21 adds a distinct approver role and self-approval rejection; MFA remains pending |
-| CPF-10 | Worker, integration, notification and webhook runtime         | Not started | retry/idempotency/dead-letter/replay protection evidence                                                                     |
-| CPF-11 | Governed AI/tool gateway and evidence ledger                  | Not started | disabled-by-default gateway, provenance, budget, safety, version and outage gates                                            |
-| CPF-12 | Desktop companion and governed telemetry                      | Not started | signed/version-gated client, allow-list, recovery and privacy evidence                                                       |
-| CPF-13 | Deterministic PostgreSQL demo seed                            | In progress | seed creates runtime/review data, three campaigns, five candidates/applications, four invitations and four scoped sessions   |
-| CPF-14 | Security, privacy, accessibility and resilience closure       | Not started | release-gate suite, evidence references and independent findings resolved                                                    |
-| CPF-15 | Deployment/IaC/operations and controlled-pilot package        | Not started | reproducible deployment, backup/restore, rollback, monitoring and runbooks                                                   |
+| Stage  | Scope                                                         | Status      | Exit evidence                                                                                                                   |
+| ------ | ------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| CPF-01 | Source reconciliation and canonical route inventory           | Complete    | 125/125 canonical routes derived directly from the tracked handoff SVGs; no ignored generated file dependency                   |
+| CPF-02 | Shared shell, tokens and canonical account/auth routes        | Complete    | typecheck, build, browser QA and `design-qa.md`                                                                                 |
+| CPF-03 | Candidate runtime RUN-02 vertical slice                       | Complete    | five realistic tasks; timer, save, version/checksum, flag and next-task interaction                                             |
+| CPF-04 | Reviewer scorecard REV-08 vertical slice                      | Complete    | evidence-led human scoring, citation, insufficient-evidence rationale and concealed AI observations                             |
+| CPF-05 | Remaining interface fidelity and interaction closure          | In progress | EMP-20/21 now join the verified slices; all 125 routes still require route-specific ready/empty/error/denied evidence           |
+| CPF-06 | Replace web process-local stores with authenticated API calls | In progress | RUN-02, REV-08, campaign, EMP-10 and EMP-20/21 use scoped sessions and PostgreSQL; remaining routes are pending                 |
+| CPF-07 | Wire 244 OpenAPI operations to concrete handlers              | In progress | executable classification test covers 244/244; candidate merge preview gap fixed; operation-specific semantic/E2E proof remains |
+| CPF-08 | PostgreSQL repositories and transaction/outbox coverage       | In progress | completed slices include tenant audit/outbox; leased outbox migration and processor now have retry/dead-letter tests            |
+| CPF-09 | Identity, sessions, MFA, RBAC/ABAC and tenant isolation       | In progress | current slices enforce scoped 401/403; EMP-21 adds a distinct approver role and self-approval rejection; MFA remains pending    |
+| CPF-10 | Worker, integration, notification and webhook runtime         | In progress | leased outbox claim, event-id idempotency, bounded backoff, hashed errors and dead-letter behavior have unit/schema evidence    |
+| CPF-11 | Governed AI/tool gateway and evidence ledger                  | In progress | disabled-by-default, scope/purpose/version/budget/timeout/output guards and hash-only ledger records have unit evidence         |
+| CPF-12 | Desktop companion and governed telemetry                      | In progress | signed-build/version/disclosure/attempt gates and event-first telemetry allow-list have unit evidence; packaged client absent   |
+| CPF-13 | Deterministic PostgreSQL demo seed                            | In progress | seed creates runtime/review data, three campaigns, five candidates/applications, four invitations and four scoped sessions      |
+| CPF-14 | Security, privacy, accessibility and resilience closure       | Not started | release-gate suite, evidence references and independent findings resolved                                                       |
+| CPF-15 | Deployment/IaC/operations and controlled-pilot package        | Not started | reproducible deployment, backup/restore, rollback, monitoring and runbooks                                                      |
 
 ## Current deterministic demo scenario
 
@@ -55,10 +55,10 @@ The employer candidate-directory and invitation list still use an explicitly lab
 
 ## Release blockers
 
-1. The generic server dispatcher now has concrete runtime, scorecard, campaign, candidate-detail, invitation-command, candidate-import and decision operations, but the remaining OpenAPI operations still return compatibility responses instead of invoking every `apps/api` handler.
+1. All 244 baseline IDs are classified by the concrete dispatcher and the previously omitted merge-preview ID is fixed, but several grouped operations still use compatibility projections and require operation-specific contract/integration tests before CPF-07 can close.
 2. RUN-02, REV-08, employer campaigns, EMP-10 and EMP-20/21 are persistent and session-protected; the remaining web routes and read models still use process-local synthetic stores.
 3. Session, role and resource-scope enforcement is proven for those slices, including the distinct EMP-21 approver; MFA and the remaining API/browser journeys still need end-to-end enforcement.
-4. Worker/outbox publishing, integrations, governed AI/tool adapters and desktop companion are incomplete.
+4. The worker, AI gateway and companion policy foundations now exist, but production transports/providers, PostgreSQL AI ledger binding, webhook replay evidence and a signed desktop binary remain incomplete.
 5. Traceability rows still require executable evidence for every Must requirement.
 6. Independent security, accessibility, human-factors, privacy/legal and controlled-pilot approvals are outside the current evidence set.
 

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   getScorecard,
   updateScorecard,
+  submitScorecard,
+  ScorecardSubmissionConflictError,
   parseScorecardAssignmentId,
   parseScorecardUpdate,
 } from './scorecards.js';
@@ -35,6 +37,7 @@ function repo(overrides: Partial<ScorecardRepository> = {}): ScorecardRepository
   return {
     getScorecard: () => Promise.resolve(sc),
     updateScorecard: () => Promise.resolve(sc),
+    submitScorecard: () => Promise.resolve({ ...sc, status: 'locked' }),
     ...overrides,
   };
 }
@@ -107,5 +110,25 @@ describe('updateScorecard', () => {
       { summary: 'y' },
     );
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('submitScorecard', () => {
+  it('submits through the distinct completeness gate', async () => {
+    expect((await submitScorecard({ repository: repo() }, admin, 'ra-1')).ok).toBe(true);
+  });
+
+  it('maps an incomplete scorecard to conflict', async () => {
+    const result = await submitScorecard(
+      {
+        repository: repo({
+          submitScorecard: () =>
+            Promise.reject(new ScorecardSubmissionConflictError('criteria incomplete')),
+        }),
+      },
+      admin,
+      'ra-1',
+    );
+    expect(result).toMatchObject({ ok: false, status: 409 });
   });
 });

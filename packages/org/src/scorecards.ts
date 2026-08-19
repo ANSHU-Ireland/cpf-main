@@ -1,7 +1,6 @@
 import { can } from '@cpf/policy';
 import { ORG_PERMISSIONS } from './permissions.js';
 import type { Actor } from './types.js';
-import { SCORECARD_STATUSES } from './scorecard-types.js';
 import type {
   CriterionScoreUpdate,
   ScorecardRecord,
@@ -10,7 +9,7 @@ import type {
 } from './scorecard-types.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VALID_STATUSES: ReadonlySet<string> = new Set(SCORECARD_STATUSES);
+const VALID_STATUSES: ReadonlySet<string> = new Set(['draft']);
 
 export function parseScorecardAssignmentId(raw: string): string | null {
   return UUID_RE.test(raw) ? raw : null;
@@ -41,7 +40,7 @@ export function parseScorecardUpdate(
     obj['status'] !== undefined &&
     (typeof obj['status'] !== 'string' || !VALID_STATUSES.has(obj['status']))
   )
-    errors.push('status invalid');
+    errors.push('status may only remain draft; use the submit operation to lock a scorecard');
   let criterion: CriterionScoreUpdate | undefined;
   if (obj['criterion'] !== undefined) {
     if (obj['criterion'] === null || typeof obj['criterion'] !== 'object') {
@@ -110,6 +109,14 @@ export interface ScorecardRepository {
     assignmentId: string,
     input: ScorecardUpdate,
   ): Promise<ScorecardRecord | null>;
+  submitScorecard(actor: Actor, assignmentId: string): Promise<ScorecardRecord | null>;
+}
+
+export class ScorecardSubmissionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScorecardSubmissionConflictError';
+  }
 }
 
 // --- domain ---
@@ -151,4 +158,28 @@ export async function updateScorecard(
   const record = await deps.repository.updateScorecard(actor, assignmentId, input);
   if (record === null) return { ok: false, status: 404, reason: 'Scorecard not found.' };
   return { ok: true, scorecard: record };
+}
+
+export async function submitScorecard(
+  deps: { repository: ScorecardRepository },
+  actor: Actor,
+  assignmentId: string,
+): Promise<UpdateScorecardResult> {
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'review_assignment', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+  try {
+    const record = await deps.repository.submitScorecard(actor, assignmentId);
+    if (record === null) return { ok: false, status: 404, reason: 'Scorecard not found.' };
+    return { ok: true, scorecard: record };
+  } catch (error) {
+    if (error instanceof ScorecardSubmissionConflictError) {
+      return { ok: false, status: 409, reason: error.message };
+    }
+    throw error;
+  }
 }

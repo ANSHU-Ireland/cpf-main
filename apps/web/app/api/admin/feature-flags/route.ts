@@ -1,4 +1,9 @@
-import { adminStore } from '../../../lib/synthetic.server';
+import {
+  callPlatform,
+  platformErrorResponse,
+  projectPlatform,
+} from '../../../lib/platform-api.server';
+import { featureFlag, featureFlags, type PlatformFlag } from '../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +16,11 @@ interface ToggleBody {
   readonly id?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(adminStore.getFlags());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformFlag[]; total: number }, unknown>(
+    { request, path: '/admin/feature-flags', method: 'GET' },
+    featureFlags,
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -24,16 +32,19 @@ export async function POST(request: Request): Promise<Response> {
   }
   const key = typeof payload.key === 'string' ? payload.key.trim() : '';
   const description = typeof payload.description === 'string' ? payload.description.trim() : '';
-  if (!/^[a-z0-9_]{2,}$/.test(key)) {
-    return Response.json(
-      { error: 'A flag key is required (lowercase letters, numbers and underscores).' },
-      { status: 422 },
-    );
+  if (!/^[a-z0-9][a-z0-9._-]+$/.test(key) || description.length < 4) {
+    return Response.json({ error: 'A valid key and description are required.' }, { status: 422 });
   }
-  if (description.length < 4) {
-    return Response.json({ error: 'A description is required.' }, { status: 422 });
-  }
-  return Response.json(adminStore.createFlag(key, description), { status: 201 });
+  return projectPlatform<PlatformFlag, unknown>(
+    {
+      request,
+      path: '/admin/feature-flags',
+      method: 'POST',
+      body: { key, description, enabled: false },
+    },
+    featureFlag,
+    201,
+  );
 }
 
 export async function PATCH(request: Request): Promise<Response> {
@@ -44,12 +55,30 @@ export async function PATCH(request: Request): Promise<Response> {
     return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
   }
   const id = typeof payload.id === 'string' ? payload.id : '';
-  if (id.length === 0) {
-    return Response.json({ error: 'A flag id is required.' }, { status: 422 });
+  if (id === '') return Response.json({ error: 'A flag id is required.' }, { status: 422 });
+  try {
+    const list = await callPlatform<{ items: readonly PlatformFlag[] }>({
+      request,
+      path: '/admin/feature-flags',
+      method: 'GET',
+    });
+    const current = list.data.items.find((item) => item.id === id);
+    if (current === undefined) {
+      return Response.json({ error: 'Feature flag not found.' }, { status: 404 });
+    }
+    const result = await callPlatform<PlatformFlag>({
+      request,
+      path: `/admin/feature-flags/${encodeURIComponent(id)}`,
+      method: 'PUT',
+      body: { enabled: !current.enabled },
+      correlationId: list.correlationId,
+    });
+    return Response.json(featureFlag(result.data), {
+      headers: { 'x-correlation-id': result.correlationId },
+    });
+  } catch (error) {
+    const response = platformErrorResponse(error);
+    if (response !== null) return response;
+    throw error;
   }
-  const updated = adminStore.toggleFlag(id);
-  if (updated === null) {
-    return Response.json({ error: 'Feature flag not found.' }, { status: 404 });
-  }
-  return Response.json(updated);
 }

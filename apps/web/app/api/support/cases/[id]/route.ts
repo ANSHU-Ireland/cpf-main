@@ -1,13 +1,12 @@
-import { NextResponse } from 'next/server';
-import { supportStore } from '../../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  const caseDetail = await supportStore.getSupportCase(id);
-  if (!caseDetail) {
-    return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-  }
-  return NextResponse.json(caseDetail);
+export function GET(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Administrative support-case detail contract is missing',
+    detail:
+      'The approved admin API exposes the queue, assignment and status but no case detail or message history read model.',
+    requirementIds: ['SUP-02', 'FR-SUP-02'],
+  });
 }

@@ -97,6 +97,13 @@ async function transitionCampaign(
       reason: `Campaign cannot be ${action}d from its current status.`,
     };
   }
+  if (result === 'preflight_failed') {
+    return {
+      ok: false,
+      status: 409,
+      reason: 'Campaign activation is blocked until every launch preflight check passes.',
+    };
+  }
   return { ok: true, campaign: result };
 }
 

@@ -20,6 +20,12 @@ export interface TenantRecord {
   readonly status: TenantStatus;
   readonly dataRegion: string;
   readonly subscriptionPlanId: string | null;
+  readonly subscriptionPlanName?: string | null;
+  readonly staffCount?: number;
+  readonly seatsUsed?: number;
+  readonly seatsLimit?: number;
+  readonly subscriptionStartsAt?: string | null;
+  readonly subscriptionEndsAt?: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

@@ -1,30 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { governanceStore } from '../../../lib/synthetic.server';
+import { contractGapResponse } from '../../../lib/contract-gap.server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const collection = governanceStore.getVendorEvidence();
-  return NextResponse.json(collection);
+function gap(request: Request): Response {
+  return contractGapResponse(request, {
+    title: 'Vendor-evidence payload is incomplete',
+    detail:
+      'The screen omits legal roles, locations, subprocessors, security, model, retention, audit and exit evidence required by the canonical record.',
+    requirementIds: ['GOV-17', 'FR-GOV-22'],
+  });
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const { vendor, obligation } = body;
+export function GET(request: Request): Response {
+  return gap(request);
+}
 
-  if (typeof vendor !== 'string' || vendor.trim().length < 2) {
-    return NextResponse.json(
-      { error: 'Invalid vendor; minimum 2 characters required.' },
-      { status: 422 },
-    );
-  }
-  if (typeof obligation !== 'string' || obligation.trim().length < 4) {
-    return NextResponse.json(
-      { error: 'Invalid obligation; minimum 4 characters required.' },
-      { status: 422 },
-    );
-  }
-
-  const evidence = governanceStore.requestVendorEvidence(vendor.trim(), obligation.trim());
-  return NextResponse.json(evidence, { status: 201 });
+export function POST(request: Request): Response {
+  return gap(request);
 }

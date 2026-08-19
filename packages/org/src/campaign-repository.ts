@@ -10,6 +10,7 @@ import type {
   CampaignStatus,
   CampaignUpdate,
 } from './campaign-types.js';
+import { evaluateCampaignActivationPreflight } from './campaign-readiness.js';
 
 export interface CampaignListResult {
   readonly items: readonly CampaignRecord[];
@@ -17,7 +18,8 @@ export interface CampaignListResult {
   readonly hasMore: boolean;
 }
 
-export type TransitionStatusResult = CampaignRecord | 'not_found' | 'invalid_status';
+export type TransitionStatusResult =
+  CampaignRecord | 'not_found' | 'invalid_status' | 'preflight_failed';
 
 export interface CampaignRepository {
   listCampaigns(actor: Actor, query: CampaignListQuery): Promise<CampaignListResult>;
@@ -259,6 +261,25 @@ export class PgCampaignRepository implements CampaignRepository {
     validFrom: readonly CampaignStatus[],
   ): Promise<TransitionStatusResult> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
+      if (toStatus === 'active') {
+        const preflight = await evaluateCampaignActivationPreflight(client, actor.tenantId, id);
+        if (preflight === null) return 'not_found';
+        if (!preflight.ready) {
+          await new PgAuditWriter(client).append({
+            tenantId: actor.tenantId,
+            actorType: 'user',
+            actorId: actor.userId,
+            action: 'campaign.activation_blocked',
+            resourceType: 'campaign',
+            resourceId: id,
+            outcome: 'denied',
+            metadata: {
+              blockerIds: preflight.checks.filter((item) => !item.resolved).map((item) => item.id),
+            },
+          });
+          return 'preflight_failed';
+        }
+      }
       const res = await client.query<CampaignRow>(
         `UPDATE hiring.campaigns
             SET status = $3, updated_at = now()

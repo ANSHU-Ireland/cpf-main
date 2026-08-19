@@ -18,8 +18,11 @@ const ID = '11111111-1111-1111-1111-111111111111';
 const plugin: PluginRecord = {
   id: ID,
   code: 'com.acme.export',
+  provider: 'Acme',
   name: 'Export',
-  status: 'enabled',
+  version: '1.0.0',
+  permissions: { capabilities: ['export'], dataScope: 'applications' },
+  status: 'active',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -28,7 +31,7 @@ function repo(overrides: Partial<PluginRepository> = {}): PluginRepository {
   return {
     listPlugins: () => Promise.resolve({ items: [plugin], total: 1 }),
     createPlugin: () => Promise.resolve(plugin),
-    updatePluginStatus: () => Promise.resolve({ ...plugin, status: 'disabled' }),
+    updatePluginStatus: () => Promise.resolve({ ...plugin, status: 'suspended' }),
     ...overrides,
   };
 }
@@ -39,7 +42,15 @@ function deps(overrides: Partial<PluginRepository> = {}) {
 
 describe('parsePluginCreate', () => {
   it('accepts a dotted slug', () =>
-    expect(parsePluginCreate({ code: 'com.acme.export', name: 'Export' }).ok).toBe(true));
+    expect(
+      parsePluginCreate({
+        code: 'com.acme.export',
+        provider: 'Acme',
+        name: 'Export',
+        version: '1.0.0',
+        permissions: {},
+      }).ok,
+    ).toBe(true));
   it('rejects an uppercase code', () =>
     expect(parsePluginCreate({ code: 'Bad', name: 'Export' }).ok).toBe(false));
   it('rejects a missing name', () =>
@@ -47,7 +58,7 @@ describe('parsePluginCreate', () => {
 });
 
 describe('parsePluginStatusUpdate', () => {
-  it('accepts enabled', () => expect(parsePluginStatusUpdate({ status: 'enabled' }).ok).toBe(true));
+  it('accepts active', () => expect(parsePluginStatusUpdate({ status: 'active' }).ok).toBe(true));
   it('rejects a bad status', () =>
     expect(parsePluginStatusUpdate({ status: 'weird' }).ok).toBe(false));
 });
@@ -67,23 +78,39 @@ describe('listPlugins', () => {
 
 describe('createPlugin', () => {
   it('creates for an admin', async () =>
-    expect((await createPlugin(deps(), admin, { code: 'com.acme.x', name: 'X' })).ok).toBe(true));
+    expect(
+      (
+        await createPlugin(deps(), admin, {
+          code: 'com.acme.x',
+          provider: 'Acme',
+          name: 'X',
+          version: '1.0.0',
+          permissions: {},
+        })
+      ).ok,
+    ).toBe(true));
   it('denies a viewer', async () => {
-    const r = await createPlugin(deps(), noRole, { code: 'com.acme.x', name: 'X' });
+    const r = await createPlugin(deps(), noRole, {
+      code: 'com.acme.x',
+      provider: 'Acme',
+      name: 'X',
+      version: '1.0.0',
+      permissions: {},
+    });
     expect(r.ok === false && r.status).toBe(403);
   });
 });
 
 describe('updatePluginStatus', () => {
   it('updates for an admin', async () =>
-    expect((await updatePluginStatus(deps(), admin, ID, { status: 'disabled' })).ok).toBe(true));
+    expect((await updatePluginStatus(deps(), admin, ID, { status: 'suspended' })).ok).toBe(true));
   it('returns 404 when missing', async () => {
     const r = await updatePluginStatus(
       deps({ updatePluginStatus: () => Promise.resolve(null) }),
       admin,
       ID,
       {
-        status: 'disabled',
+        status: 'suspended',
       },
     );
     expect(r.ok === false && r.status).toBe(404);

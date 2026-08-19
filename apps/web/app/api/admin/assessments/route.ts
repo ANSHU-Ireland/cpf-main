@@ -1,18 +1,30 @@
-import type { RiskTier } from '../../../lib/types';
-import { assessmentStore } from '../../../lib/synthetic.server';
+import { randomUUID } from 'node:crypto';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { assessment, type PlatformAssessment } from '../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
 interface CreateBody {
   readonly name?: unknown;
   readonly roleFamily?: unknown;
+  readonly seniority?: unknown;
   readonly riskTier?: unknown;
 }
 
-const TIERS: readonly RiskTier[] = ['minimal', 'limited', 'high'];
+function assessmentCode(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 72);
+  return `${slug || 'assessment'}-${randomUUID().slice(0, 8)}`;
+}
 
-export async function GET(): Promise<Response> {
-  return Response.json(assessmentStore.getAssessments());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformAssessment[]; total: number }, unknown>(
+    { request, path: '/assessments?limit=100', method: 'GET' },
+    (data) => ({ items: data.items.map(assessment), total: data.total }),
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -24,17 +36,32 @@ export async function POST(request: Request): Promise<Response> {
   }
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
   const roleFamily = typeof payload.roleFamily === 'string' ? payload.roleFamily.trim() : '';
-  const riskTier = payload.riskTier;
-  if (name.length < 2) {
-    return Response.json({ error: 'An assessment name is required.' }, { status: 422 });
+  const seniority = typeof payload.seniority === 'string' ? payload.seniority.trim() : '';
+  if (name.length < 2 || roleFamily.length < 2 || seniority.length < 2) {
+    return Response.json(
+      { error: 'An assessment name, role family and seniority are required.' },
+      { status: 422 },
+    );
   }
-  if (roleFamily.length < 2) {
-    return Response.json({ error: 'A role family is required.' }, { status: 422 });
+  if (payload.riskTier !== 'high') {
+    return Response.json(
+      { error: 'Employment assessment systems are governed as high-risk on this platform.' },
+      { status: 422 },
+    );
   }
-  if (typeof riskTier !== 'string' || !TIERS.includes(riskTier as RiskTier)) {
-    return Response.json({ error: 'A valid risk tier is required.' }, { status: 422 });
-  }
-  return Response.json(assessmentStore.createAssessment(name, roleFamily, riskTier as RiskTier), {
-    status: 201,
-  });
+  return projectPlatform<PlatformAssessment, unknown>(
+    {
+      request,
+      path: '/assessments',
+      method: 'POST',
+      body: {
+        code: assessmentCode(name),
+        title: name,
+        targetRole: roleFamily,
+        seniority,
+      },
+    },
+    assessment,
+    201,
+  );
 }

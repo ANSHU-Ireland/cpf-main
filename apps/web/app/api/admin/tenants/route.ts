@@ -1,14 +1,19 @@
-import { adminStore } from '../../../lib/synthetic.server';
+import { projectPlatform } from '../../../lib/platform-api.server';
+import { tenant, tenants, type PlatformTenant } from '../../../lib/admin-api.server';
 
 export const dynamic = 'force-dynamic';
 
 interface TenantBody {
   readonly name?: unknown;
   readonly slug?: unknown;
+  readonly dataRegion?: unknown;
 }
 
-export async function GET(): Promise<Response> {
-  return Response.json(adminStore.getTenants());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<{ items: readonly PlatformTenant[]; total: number }, unknown>(
+    { request, path: '/admin/tenants', method: 'GET' },
+    tenants,
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -20,14 +25,25 @@ export async function POST(request: Request): Promise<Response> {
   }
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
   const slug = typeof payload.slug === 'string' ? payload.slug.trim().toLowerCase() : '';
-  if (name.length < 2) {
-    return Response.json({ error: 'A tenant name is required.' }, { status: 422 });
-  }
-  if (!/^[a-z0-9-]{2,}$/.test(slug)) {
+  const dataRegion = typeof payload.dataRegion === 'string' ? payload.dataRegion.trim() : '';
+  if (
+    name.length < 2 ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) ||
+    dataRegion === ''
+  ) {
     return Response.json(
-      { error: 'A slug is required (lowercase letters, numbers and hyphens).' },
+      { error: 'A tenant name, DNS-safe slug and data region are required.' },
       { status: 422 },
     );
   }
-  return Response.json(adminStore.createTenant(name, slug), { status: 201 });
+  return projectPlatform<PlatformTenant, unknown>(
+    {
+      request,
+      path: '/admin/tenants',
+      method: 'POST',
+      body: { legalName: name, slug, dataRegion },
+    },
+    tenant,
+    201,
+  );
 }

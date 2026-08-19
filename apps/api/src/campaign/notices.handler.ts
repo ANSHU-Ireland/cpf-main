@@ -8,8 +8,12 @@ type ListResult =
 type CreateResult = { ok: true; notice: unknown } | { ok: false; status: number; reason: string };
 
 export interface NoticeService {
-  listNotices(actor: Actor, applicationId: string): Promise<ListResult>;
-  createNotice(actor: Actor, applicationId: string, input: NoticeCreate): Promise<CreateResult>;
+  listNotices(actor: Actor, applicationId: string | null): Promise<ListResult>;
+  createNotice(
+    actor: Actor,
+    applicationId: string | null,
+    input: NoticeCreate,
+  ): Promise<CreateResult>;
 }
 
 export function createNoticeService(deps: {
@@ -46,6 +50,23 @@ export async function handleGetNotices(
   return jsonResponse(200, { items: result.items, total: result.total }, correlationId);
 }
 
+export async function handleGetAccountNotices(
+  svc: NoticeService,
+  req: { actor: Actor },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  const result = await svc.listNotices(req.actor, null);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return jsonResponse(200, { items: result.items, total: result.total }, correlationId);
+}
+
 export async function handlePostNotice(
   svc: NoticeService,
   req: { actor: Actor; applicationId: string; body: unknown },
@@ -78,4 +99,38 @@ export async function handlePostNotice(
       detail: result.reason,
     });
   return jsonResponse(201, result.notice, correlationId);
+}
+
+export async function handlePostCandidateNoticeAcknowledgement(
+  svc: NoticeService,
+  req: { actor: Actor; noticeId: string; body: unknown },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId();
+  if (parseNoticeApplicationId(req.noticeId) === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Invalid notice ID',
+      correlationId,
+      detail: 'bad uuid',
+    });
+  }
+  const parsed = parseNoticeCreate(req.body);
+  if (!parsed.ok) {
+    return problemResponse({
+      status: 422,
+      title: 'Validation',
+      correlationId,
+      detail: parsed.errors.join(', '),
+    });
+  }
+  const result = await svc.createNotice(req.actor, null, parsed.value);
+  if (!result.ok) {
+    return problemResponse({
+      status: result.status,
+      title: result.reason,
+      correlationId,
+      detail: result.reason,
+    });
+  }
+  return jsonResponse(200, result.notice, correlationId);
 }

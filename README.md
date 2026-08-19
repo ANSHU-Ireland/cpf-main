@@ -3,8 +3,8 @@
 EU-focused, multi-tenant, AI-assisted hiring-assessment platform. Built contract-first from
 the verified v2.0 source-of-truth package (see `docs/source-of-truth/`).
 
-> **Status:** Wave 0 foundation. **NOT READY** for demo/pilot/production. No compliance claim
-> is made. See `docs/execution/RELEASE_GATES.md`.
+> **Status:** Active implementation with persistent reference slices. **NOT READY** for
+> pilot/production. No compliance claim is made. See `docs/execution/RELEASE_GATES.md`.
 
 ## Non-negotiable safety invariants
 
@@ -15,19 +15,18 @@ formula. Enforced in code and tests under `packages/domain/src/invariants/`.
 ## Layout
 
 ```
-apps/        web, worker, companion (added per wave)
-packages/    domain, application, contracts, db, policy, ui, ai-gateway, observability, testkit
+apps/        web, API/server and leased outbox worker
+packages/    domain, account/org, contracts, db, policy, UI, governed AI gateway, companion policy
 infra/       local, vercel, aws
 docs/        source-of-truth (verified originals), execution (durable ledgers), architecture...
 ```
 
 ## Develop
 
-Prerequisites: Node ≥ 22 (verified 24.11.1), pnpm 10.22.0. Docker is **not** yet available on
-this machine — DB integration tests are gated until a Postgres is reachable (see
-`docs/execution/EXTERNAL_ACTIONS_REQUIRED.md`, EXT-01).
+Prerequisites: Node ≥ 22, pnpm 10.22.0. Unit verification works without external services.
+Repository integration tests run when `DATABASE_URL` is set and in the PostgreSQL-backed CI job.
 
-```powershell
+```sh
 pnpm install
 pnpm run verify   # format + lint + typecheck + tests
 ```

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { PgAuditWriter } from '@cpf/audit';
 import { withTenant, type TenantContext } from '@cpf/db';
+import { AttemptSubmissionConflictError } from './attempts.js';
 import type {
   ArtifactKind,
   AttemptAiMessageInput,
@@ -25,6 +26,7 @@ import type {
   AttemptSessionRecord,
   AttemptSessionSectionRecord,
   AttemptSessionTaskRecord,
+  AttemptSubmissionPreviewRecord,
   AttemptStatus,
   IncidentType,
 } from './attempts.js';
@@ -121,6 +123,15 @@ interface PluginExecutionRow {
   plugin_code: string;
   status: string;
   output_json: unknown;
+}
+
+interface SessionArtifactRow extends ArtifactRow {
+  malware_scan_status: 'pending' | 'clean' | 'infected' | 'error';
+}
+
+interface SessionPluginExecutionRow extends PluginExecutionRow {
+  input_json: unknown;
+  started_at: Date;
 }
 
 function domainStatus(status: string): AttemptStatus {
@@ -262,6 +273,44 @@ export class PgAttemptRepository implements AttemptRepository {
         [actor.tenantId, attemptId, row.assessment_version_id],
       );
 
+      const [messageResult, artifactResult, pluginResult, breakResult] = await Promise.all([
+        client.query<AiMessageRow>(
+          `SELECT message.id, conversation.attempt_id, message.role, message.content,
+                  message.created_at
+             FROM evidence.ai_messages AS message
+             JOIN evidence.ai_conversations AS conversation
+               ON conversation.id = message.conversation_id
+              AND conversation.tenant_id = message.tenant_id
+            WHERE message.tenant_id = $1 AND conversation.attempt_id = $2
+            ORDER BY message.created_at, message.sequence_no`,
+          [actor.tenantId, attemptId],
+        ),
+        client.query<SessionArtifactRow>(
+          `SELECT id, attempt_id, artifact_type, object_uri, created_at, malware_scan_status
+             FROM runtime.artifacts
+            WHERE tenant_id = $1 AND attempt_id = $2
+            ORDER BY created_at, id`,
+          [actor.tenantId, attemptId],
+        ),
+        client.query<SessionPluginExecutionRow>(
+          `SELECT execution.id, execution.attempt_id, plugin.code AS plugin_code,
+                  execution.status, execution.output_json, execution.input_json,
+                  execution.started_at
+             FROM evidence.plugin_executions AS execution
+             JOIN assessment.plugin_registry AS plugin ON plugin.id = execution.plugin_id
+            WHERE execution.tenant_id = $1 AND execution.attempt_id = $2
+            ORDER BY execution.started_at, execution.id`,
+          [actor.tenantId, attemptId],
+        ),
+        client.query<{ active: boolean }>(
+          `SELECT EXISTS (
+             SELECT 1 FROM runtime.session_breaks
+              WHERE tenant_id = $1 AND attempt_id = $2 AND ended_at IS NULL
+           ) AS active`,
+          [actor.tenantId, attemptId],
+        ),
+      ]);
+
       const sections = new Map<string, AttemptSessionSectionRecord>();
       const tasks = taskResult.rows.map((taskRow) => {
         sections.set(taskRow.section_id, {
@@ -299,6 +348,103 @@ export class PgAttemptRepository implements AttemptRepository {
         tasks,
         activeItemId: activeTask?.id ?? tasks[0]?.id ?? null,
         receiptRef: row.receipt_ref,
+        aiMessages: messageResult.rows.map((message) => ({
+          id: message.id,
+          attemptId: message.attempt_id,
+          role: message.role,
+          content: message.content?.text ?? '',
+          createdAt: message.created_at.toISOString(),
+        })),
+        artifacts: artifactResult.rows.map((artifact) => ({
+          id: artifact.id,
+          attemptId: artifact.attempt_id,
+          kind: artifact.artifact_type,
+          uri: artifact.object_uri,
+          createdAt: artifact.created_at.toISOString(),
+          scanStatus: artifact.malware_scan_status,
+        })),
+        pluginExecutions: pluginResult.rows.map((execution) => ({
+          id: execution.id,
+          attemptId: execution.attempt_id,
+          pluginCode: execution.plugin_code,
+          status: execution.status,
+          output: execution.output_json,
+          input: execution.input_json,
+          startedAt: execution.started_at.toISOString(),
+        })),
+        breakActive: breakResult.rows[0]?.active ?? false,
+      };
+    });
+  }
+
+  async getLatestPrecheck(actor: Actor, attemptId: string): Promise<AttemptPrecheckRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const result = await client.query<PrecheckRow>(
+        `SELECT precheck.attempt_id, precheck.status, precheck.checks
+           FROM runtime.precheck_runs AS precheck
+           JOIN runtime.attempts AS attempt ON attempt.id = precheck.attempt_id
+          WHERE precheck.tenant_id = $1
+            AND precheck.attempt_id = $2
+            AND attempt.tenant_id = precheck.tenant_id
+          ORDER BY precheck.started_at DESC, precheck.id DESC
+          LIMIT 1`,
+        [actor.tenantId, attemptId],
+      );
+      const row = result.rows[0];
+      return row === undefined
+        ? null
+        : { attemptId: row.attempt_id, passed: row.status === 'passed', checks: row.checks };
+    });
+  }
+
+  async getSubmissionPreview(
+    actor: Actor,
+    attemptId: string,
+  ): Promise<AttemptSubmissionPreviewRecord | null> {
+    return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const attempt = await client.query<{ id: string; status: string }>(
+        `SELECT id, status FROM runtime.attempts WHERE tenant_id = $1 AND id = $2`,
+        [actor.tenantId, attemptId],
+      );
+      if (attempt.rows[0] === undefined) return null;
+      const items = await client.query<{ id: string; completed: boolean }>(
+        `SELECT item.id,
+                response.id IS NOT NULL
+                AND response.response_json ? 'value'
+                AND length(trim(COALESCE(response.response_json->>'value', ''))) > 0 AS completed
+           FROM runtime.attempt_version_bindings AS binding
+           JOIN assessment.assessment_sections AS section
+             ON section.assessment_version_id = binding.assessment_version_id
+           JOIN assessment.assessment_items AS item ON item.section_id = section.id
+      LEFT JOIN runtime.responses AS response
+             ON response.tenant_id = $1
+            AND response.attempt_id = binding.attempt_id
+            AND response.assessment_item_id = item.id
+          WHERE binding.tenant_id = $1 AND binding.attempt_id = $2
+          ORDER BY section.display_order, item.display_order`,
+        [actor.tenantId, attemptId],
+      );
+      const artifacts = await client.query<{ count: number; unsafe_count: number }>(
+        `SELECT count(*) FILTER (WHERE malware_scan_status = 'clean')::int AS count,
+                count(*) FILTER (WHERE malware_scan_status <> 'clean')::int AS unsafe_count
+           FROM runtime.artifacts
+          WHERE tenant_id = $1 AND attempt_id = $2`,
+        [actor.tenantId, attemptId],
+      );
+      const incompleteItemIds = items.rows.filter((item) => !item.completed).map((item) => item.id);
+      const blockers: string[] = [];
+      if (!['in_progress', 'paused'].includes(attempt.rows[0].status)) {
+        blockers.push('attempt_not_submittable');
+      }
+      if (incompleteItemIds.length > 0) blockers.push('responses_incomplete');
+      if ((artifacts.rows[0]?.unsafe_count ?? 0) > 0) blockers.push('artifact_scan_incomplete');
+      return {
+        attemptId,
+        ready: blockers.length === 0,
+        incompleteItemIds,
+        blockers,
+        responseCount: items.rows.length - incompleteItemIds.length,
+        artifactCount: artifacts.rows[0]?.count ?? 0,
       };
     });
   }
@@ -326,13 +472,94 @@ export class PgAttemptRepository implements AttemptRepository {
 
   async submitAttempt(actor: Actor, attemptId: string): Promise<AttemptRecord | null> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
+      const locked = await client.query<AttemptRow>(
+        `SELECT ${ATTEMPT_COLUMNS}
+           FROM runtime.attempts AS a
+           JOIN runtime.attempt_version_bindings AS b ON b.attempt_id = a.id
+          WHERE a.tenant_id = $1 AND a.id = $2
+          FOR UPDATE OF a`,
+        [actor.tenantId, attemptId],
+      );
+      const current = locked.rows[0];
+      if (current === undefined) return null;
+      if (current.status === 'submitted') return toAttempt(current);
+      if (!['in_progress', 'paused'].includes(current.status)) {
+        throw new AttemptSubmissionConflictError('The attempt is not in a submittable state.');
+      }
+
+      const incomplete = await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+           FROM runtime.attempt_version_bindings AS binding
+           JOIN assessment.assessment_sections AS section
+             ON section.assessment_version_id = binding.assessment_version_id
+           JOIN assessment.assessment_items AS item ON item.section_id = section.id
+      LEFT JOIN runtime.responses AS response
+             ON response.tenant_id = $1
+            AND response.attempt_id = binding.attempt_id
+            AND response.assessment_item_id = item.id
+          WHERE binding.tenant_id = $1
+            AND binding.attempt_id = $2
+            AND (
+              response.id IS NULL
+              OR NOT (response.response_json ? 'value')
+              OR length(trim(COALESCE(response.response_json->>'value', ''))) = 0
+            )`,
+        [actor.tenantId, attemptId],
+      );
+      if ((incomplete.rows[0]?.count ?? 0) > 0) {
+        throw new AttemptSubmissionConflictError(
+          'Every required assessment item must have a response before submission.',
+        );
+      }
+
+      const manifestResult = await client.query<{
+        binding_hash: string;
+        response_ids: string[];
+        artifact_ids: string[];
+      }>(
+        `SELECT binding.binding_hash,
+                ARRAY(
+                  SELECT response.id::text FROM runtime.responses AS response
+                   WHERE response.tenant_id = $1 AND response.attempt_id = $2
+                   ORDER BY response.assessment_item_id
+                ) AS response_ids,
+                ARRAY(
+                  SELECT artifact.id::text FROM runtime.artifacts AS artifact
+                   WHERE artifact.tenant_id = $1 AND artifact.attempt_id = $2
+                   ORDER BY artifact.id
+                ) AS artifact_ids
+           FROM runtime.attempt_version_bindings AS binding
+          WHERE binding.tenant_id = $1 AND binding.attempt_id = $2`,
+        [actor.tenantId, attemptId],
+      );
+      const manifestSource = manifestResult.rows[0];
+      if (manifestSource === undefined) return null;
+      const manifest = {
+        bindingHash: manifestSource.binding_hash,
+        responseIds: manifestSource.response_ids,
+        artifactIds: manifestSource.artifact_ids,
+      };
+      const manifestHash = createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
+      const confirmationCode = `CPF-${randomUUID().toUpperCase()}`;
+      await client.query(
+        `INSERT INTO runtime.submissions
+           (tenant_id, attempt_id, manifest, manifest_hash, status, submitted_at,
+            confirmation_code)
+         VALUES ($1, $2, $3::jsonb, $4, 'submitted', now(), $5)
+         ON CONFLICT (attempt_id) DO NOTHING`,
+        [actor.tenantId, attemptId, JSON.stringify(manifest), manifestHash, confirmationCode],
+      );
+      await client.query(
+        `UPDATE runtime.responses SET state = 'final'
+          WHERE tenant_id = $1 AND attempt_id = $2`,
+        [actor.tenantId, attemptId],
+      );
       const result = await client.query<AttemptRow>(
         `UPDATE runtime.attempts AS a
             SET status = 'submitted', submitted_at = COALESCE(a.submitted_at, now()),
                 row_version = a.row_version + 1, updated_at = now()
            FROM runtime.attempt_version_bindings AS b
           WHERE a.tenant_id = $1 AND a.id = $2 AND b.attempt_id = a.id
-            AND a.status IN ('in_progress', 'paused')
         RETURNING ${ATTEMPT_COLUMNS}`,
         [actor.tenantId, attemptId],
       );
@@ -346,6 +573,8 @@ export class PgAttemptRepository implements AttemptRepository {
         'attempt.submitted',
         {
           submittedAt: row.submitted_at?.toISOString() ?? null,
+          manifestHash,
+          confirmationCode,
         },
       );
       return toAttempt(row);
@@ -704,19 +933,13 @@ export class PgAttemptRepository implements AttemptRepository {
         `INSERT INTO evidence.plugin_executions
            (tenant_id, attempt_id, plugin_id, action, input_json, output_json,
             status, started_at, completed_at)
-         SELECT $1, a.id, p.id, 'execute', $4::jsonb, $5::jsonb,
-                'succeeded', now(), now()
+         SELECT $1, a.id, p.id, 'execute', $4::jsonb, NULL,
+                'requested', now(), NULL
            FROM runtime.attempts AS a
            JOIN assessment.plugin_registry AS p ON p.code = $3 AND p.status = 'active'
           WHERE a.tenant_id = $1 AND a.id = $2
        RETURNING id, attempt_id, $3::text AS plugin_code, status, output_json`,
-        [
-          actor.tenantId,
-          attemptId,
-          pluginCode,
-          JSON.stringify(input.input ?? {}),
-          JSON.stringify({ accepted: true }),
-        ],
+        [actor.tenantId, attemptId, pluginCode, JSON.stringify(input.input ?? {})],
       );
       const row = result.rows[0];
       if (row === undefined) return null;
@@ -725,7 +948,7 @@ export class PgAttemptRepository implements AttemptRepository {
         actor,
         attemptId,
         'attempt.plugin.execute',
-        'attempt.plugin.executed',
+        'attempt.plugin.requested',
         {
           executionId: row.id,
           pluginCode,

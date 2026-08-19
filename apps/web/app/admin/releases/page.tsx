@@ -36,11 +36,13 @@ function fmt(iso: string): string {
 export default function ReleasesPage(): React.JSX.Element {
   const headingId = useId();
   const titleId = useId();
-  const kindId = useId();
+  const startsId = useId();
+  const endsId = useId();
   const load = useCallback(() => apiClient.getReleases(), []);
   const { state, reload, setData } = useAsync<Collection<ReleaseView>>(load);
   const [title, setTitle] = useState('');
-  const [kind, setKind] = useState<'maintenance' | 'release'>('maintenance');
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,9 +50,15 @@ export default function ReleasesPage(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const created = await apiClient.scheduleRelease(title.trim(), kind);
+      const created = await apiClient.scheduleRelease(
+        title.trim(),
+        new Date(startsAt).toISOString(),
+        new Date(endsAt).toISOString(),
+      );
       setData({ items: [created, ...current.items], total: current.total + 1 });
       setTitle('');
+      setStartsAt('');
+      setEndsAt('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not schedule the release.');
     } finally {
@@ -103,18 +111,34 @@ export default function ReleasesPage(): React.JSX.Element {
                     gap: 'calc(var(--space-unit) * 1)',
                   }}
                 >
-                  <label htmlFor={kindId} style={{ fontWeight: 600 }}>
-                    Kind
+                  <label htmlFor={startsId} style={{ fontWeight: 600 }}>
+                    Starts at
                   </label>
-                  <select
-                    id={kindId}
-                    value={kind}
-                    onChange={(e) => setKind(e.target.value as 'maintenance' | 'release')}
+                  <input
+                    id={startsId}
+                    type="datetime-local"
+                    value={startsAt}
+                    onChange={(e) => setStartsAt(e.target.value)}
                     style={fieldStyle}
-                  >
-                    <option value="maintenance">Maintenance</option>
-                    <option value="release">Release</option>
-                  </select>
+                  />
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'calc(var(--space-unit) * 1)',
+                  }}
+                >
+                  <label htmlFor={endsId} style={{ fontWeight: 600 }}>
+                    Ends at
+                  </label>
+                  <input
+                    id={endsId}
+                    type="datetime-local"
+                    value={endsAt}
+                    onChange={(e) => setEndsAt(e.target.value)}
+                    style={fieldStyle}
+                  />
                 </div>
                 {error ? (
                   <p role="alert" style={{ margin: 0, color: 'var(--color-red)' }}>
@@ -123,7 +147,13 @@ export default function ReleasesPage(): React.JSX.Element {
                 ) : null}
                 <div>
                   <Button
-                    disabled={busy || title.trim().length < 2}
+                    disabled={
+                      busy ||
+                      title.trim().length < 2 ||
+                      startsAt === '' ||
+                      endsAt === '' ||
+                      Date.parse(endsAt) <= Date.parse(startsAt)
+                    }
                     onClick={() => void schedule(data)}
                   >
                     {busy ? 'Scheduling…' : 'Schedule maintenance'}

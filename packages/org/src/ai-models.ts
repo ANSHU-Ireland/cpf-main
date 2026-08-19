@@ -83,6 +83,11 @@ export interface AiModelRepository {
   listModels(actor: Actor, limit: number, cursor: string | null): Promise<AiModelListResult>;
   getModel(actor: Actor, id: string): Promise<AiModelRecord | null>;
   createModel(actor: Actor, input: AiModelCreate): Promise<AiModelRecord>;
+  recordEvaluation(
+    actor: Actor,
+    id: string,
+    input: { readonly outcome: string; readonly rationale: string },
+  ): Promise<AiModelRecord | null>;
   activateModel(actor: Actor, id: string): Promise<AiModelRecord | null>;
   suspendModel(actor: Actor, id: string): Promise<AiModelRecord | null>;
 }
@@ -102,6 +107,7 @@ export type GetAiModelResult = Result<{ model: AiModelDto }>;
 export type CreateAiModelResult = Result<{ model: AiModelDto }>;
 export type ActivateAiModelResult = Result<{ model: AiModelDto }>;
 export type SuspendAiModelResult = Result<{ model: AiModelDto }>;
+export type RecordAiModelEvaluationResult = Result<{ model: AiModelDto }>;
 
 export async function listAiModels(
   deps: AiModelDeps,
@@ -173,6 +179,24 @@ export async function createAiModel(
     }
     throw err;
   }
+}
+
+export async function recordAiModelEvaluation(
+  deps: AiModelDeps,
+  actor: Actor,
+  id: string,
+  input: { readonly outcome: string; readonly rationale: string },
+): Promise<RecordAiModelEvaluationResult> {
+  const decision = can(
+    { userId: actor.userId, tenantId: actor.tenantId, roles: actor.roles },
+    'write',
+    { type: 'ai_model', tenantId: actor.tenantId },
+    ORG_PERMISSIONS,
+  );
+  if (!decision.allowed) return { ok: false, status: 403, reason: decision.reason };
+  const record = await deps.repository.recordEvaluation(actor, id, input);
+  if (record === null) return { ok: false, status: 404, reason: 'AI model not found.' };
+  return { ok: true, model: record };
 }
 
 export async function activateAiModel(

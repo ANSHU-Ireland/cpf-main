@@ -1,4 +1,8 @@
-import { candidateStore } from '../../../lib/synthetic.server';
+import {
+  candidateAccommodations,
+  type PlatformAccommodation,
+} from '../../../lib/candidate-self-service.server';
+import { callPlatform, PlatformApiError, projectPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +11,11 @@ interface CreateBody {
   readonly summary?: unknown;
 }
 
-export function GET(): Response {
-  return Response.json(candidateStore.getAccommodations());
+export function GET(request: Request): Promise<Response> {
+  return projectPlatform<
+    { readonly items: readonly PlatformAccommodation[]; readonly total: number },
+    object
+  >({ request, path: '/candidate/accommodations', method: 'GET' }, candidateAccommodations);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -26,5 +33,19 @@ export async function POST(request: Request): Promise<Response> {
       { status: 422 },
     );
   }
-  return Response.json(candidateStore.createAccommodation(category, summary), { status: 201 });
+  try {
+    const result = await callPlatform<PlatformAccommodation>({
+      request,
+      path: '/candidate/accommodations',
+      method: 'POST',
+      body: { requestSummary: summary, operationalAdjustments: { category } },
+    });
+    return Response.json(candidateAccommodations({ items: [result.data], total: 1 }).items[0], {
+      status: 201,
+      headers: { 'x-correlation-id': result.correlationId },
+    });
+  } catch (error) {
+    if (error instanceof PlatformApiError) return error.toResponse();
+    throw error;
+  }
 }

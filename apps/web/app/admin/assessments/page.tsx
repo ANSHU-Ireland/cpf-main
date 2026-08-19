@@ -25,8 +25,6 @@ const RISK_TONE: Record<RiskTier, BadgeTone> = {
   high: 'warning',
 };
 
-const TIERS: readonly RiskTier[] = ['minimal', 'limited', 'high'];
-
 const fieldStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-control)',
   border: '1px solid var(--color-line)',
@@ -55,13 +53,15 @@ export default function AssessmentsPage(): React.JSX.Element {
   const headingId = useId();
   const nameId = useId();
   const roleId = useId();
+  const seniorityId = useId();
   const tierId = useId();
   const searchId = useId();
   const load = useCallback(() => apiClient.getAssessments(), []);
   const { state, reload, setData } = useAsync<Collection<AssessmentView>>(load);
   const [name, setName] = useState('');
   const [roleFamily, setRoleFamily] = useState('');
-  const [tier, setTier] = useState<RiskTier>('limited');
+  const [seniority, setSeniority] = useState('');
+  const tier: RiskTier = 'high';
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,11 +70,16 @@ export default function AssessmentsPage(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const created = await apiClient.createAssessment(name.trim(), roleFamily.trim(), tier);
+      const created = await apiClient.createAssessment(
+        name.trim(),
+        roleFamily.trim(),
+        seniority.trim(),
+        tier,
+      );
       setData({ items: [created, ...current.items], total: current.total + 1 });
       setName('');
       setRoleFamily('');
-      setTier('limited');
+      setSeniority('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not create the assessment.');
     } finally {
@@ -143,21 +148,26 @@ export default function AssessmentsPage(): React.JSX.Element {
                     />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label htmlFor={seniorityId} style={{ fontWeight: 600 }}>
+                      Seniority
+                    </label>
+                    <input
+                      id={seniorityId}
+                      value={seniority}
+                      onChange={(e) => setSeniority(e.target.value)}
+                      style={fieldStyle}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <label htmlFor={tierId} style={{ fontWeight: 600 }}>
                       Risk tier
                     </label>
-                    <select
+                    <input
                       id={tierId}
-                      value={tier}
-                      onChange={(e) => setTier(e.target.value as RiskTier)}
+                      value="high — employment assessment"
+                      readOnly
                       style={fieldStyle}
-                    >
-                      {TIERS.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                   {error ? (
                     <p role="alert" style={{ margin: 0, color: 'var(--color-red)' }}>
@@ -166,7 +176,12 @@ export default function AssessmentsPage(): React.JSX.Element {
                   ) : null}
                   <div>
                     <Button
-                      disabled={busy || name.trim().length < 2 || roleFamily.trim().length < 2}
+                      disabled={
+                        busy ||
+                        name.trim().length < 2 ||
+                        roleFamily.trim().length < 2 ||
+                        seniority.trim().length < 2
+                      }
                       onClick={() => void create(data)}
                     >
                       {busy ? 'Creating…' : 'Create assessment'}

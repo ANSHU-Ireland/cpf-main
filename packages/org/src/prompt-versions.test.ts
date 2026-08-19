@@ -19,6 +19,8 @@ const pv: PromptVersionRecord = {
   version: 1,
   status: 'draft',
   body: 'b',
+  purpose: 'reviewer guidance',
+  safetyPolicy: {},
   createdAt: '',
 };
 
@@ -32,7 +34,15 @@ function repo(ov: Partial<PromptVersionRepository> = {}): PromptVersionRepositor
 }
 
 describe('parsePromptVersionCreate', () => {
-  it('valid', () => expect(parsePromptVersionCreate({ promptCode: 'c', body: 'b' }).ok).toBe(true));
+  it('valid', () =>
+    expect(
+      parsePromptVersionCreate({
+        promptCode: 'c',
+        purpose: 'reviewer guidance',
+        body: 'b',
+        safetyPolicy: {},
+      }).ok,
+    ).toBe(true));
   it('invalid', () => expect(parsePromptVersionCreate({}).ok).toBe(false));
 });
 describe('parsePromptVersionId', () => {
@@ -48,12 +58,25 @@ describe('listPromptVersions', () => {
 describe('createPromptVersion', () => {
   it('ok', async () =>
     expect(
-      (await createPromptVersion({ repository: repo() }, admin, { promptCode: 'c', body: 'b' })).ok,
+      (
+        await createPromptVersion({ repository: repo() }, admin, {
+          promptCode: 'c',
+          purpose: 'reviewer guidance',
+          body: 'b',
+          safetyPolicy: {},
+        })
+      ).ok,
     ).toBe(true));
   it('403', async () =>
     expect(
-      (await createPromptVersion({ repository: repo() }, noRole, { promptCode: 'c', body: 'b' }))
-        .ok,
+      (
+        await createPromptVersion({ repository: repo() }, noRole, {
+          promptCode: 'c',
+          purpose: 'reviewer guidance',
+          body: 'b',
+          safetyPolicy: {},
+        })
+      ).ok,
     ).toBe(false));
 });
 describe('activatePromptVersion', () => {

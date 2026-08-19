@@ -1,79 +1,87 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-10 · branch `codex/continuation-baseline` · baseline checkpoint `0db818e`_
+_Last updated: 2026-08-16 · branch `agent/complete-remaining-scope`_
 
 ## Release judgement
 
-**NOT READY.** CPF is a substantial synthetic product demo plus a sizeable domain/API library. It
-is not yet an end-to-end, persisted, authenticated implementation of the master build contract.
+**NOT READY.** CPF has a large runnable product surface, persistent reference journeys and broad
+domain/API coverage. It is not yet an end-to-end, persisted, externally approved implementation of
+the full build contract.
 
 ## Verified facts
 
-- Source package: 362 requirements (336 Must), 244 OpenAPI operations, 125 interface SVGs, 1,543
-  dictionary rows, and 139 physical / 138 logical PostgreSQL tables are present and hash-verified.
-- Repository verification on 2026-08-10 after the shared UI repair:
-  - `pnpm verify`: PASS.
-  - Formatting: PASS.
-  - Lint: PASS with 14 `no-console` warnings and no errors.
-  - TypeScript: PASS across all workspace packages.
-  - Vitest: 155 files / 1,526 tests PASS, including live PostgreSQL integration tests.
-  - `pnpm --filter @cpf/web build`: PASS; 97 static pages generated.
-- Web route inventory: 136 `page.tsx` files; the executable inventory test resolves all 125/125
-  handoff routes canonically.
-- Application/API inventory: 202 exported handler functions, 22 PostgreSQL repository classes, and
-  153 test files.
-- The latest uncommitted web expansion was preserved in checkpoint `0db818e`; execution documents
-  and temporary extraction files were deliberately excluded.
+- The verified source package contains 362 requirements (336 Must), 244 OpenAPI operations, 125
+  interface SVGs, 1,543 dictionary rows and 139 physical / 138 logical PostgreSQL tables.
+- `pnpm verify` passes on 2026-08-16: clean format/lint/typecheck and 145 test files with 1,519
+  passing tests. The 52 database-gated tests skip without `DATABASE_URL`; CI now runs database,
+  account and organisation repository tests against PostgreSQL 16.
+- The production web build generates 97 static pages.
+- The executable route inventory derives 125/125 canonical routes directly from tracked SVGs. It
+  no longer depends on an ignored generated `coverage/` file.
+- The concrete-dispatch classifier matches all 244 baseline operation IDs. The test exposed and
+  fixed the omitted `post_candidates_merge_preview` operation.
+- Authentication operations now route to their own contract handlers. Provider-dependent commands
+  fail closed until a real identity/MFA provider is configured.
+- A leased outbox processor implements event-ID idempotency, bounded retry, hashed failure details
+  and dead-letter behavior with an additive PostgreSQL migration.
+- Governed AI and companion policy packages enforce the core scope, version, budget, output,
+  signature, disclosure and telemetry invariants under unit tests.
+
+## 2026-08-16 continuation checkpoint
+
+- `@cpf/org`, `@cpf/api`, `@cpf/server` and `@cpf/web` typechecks pass after the checkpoint batch.
+- No route or page under `apps/web/app` imports `synthetic.server.ts` or
+  `persistence.server.ts`. Contract-backed journeys use authenticated platform calls; incomplete
+  screen/API/schema combinations now return an explicit `501 application/problem+json` response.
+- `pnpm verify` passes at this checkpoint: formatting, lint and all workspace typechecks are green;
+  148 test files / 1,559 tests pass and 21 database-gated files / 53 tests skip without
+  `DATABASE_URL`. Production build, contract checks and live PostgreSQL integration remain for the
+  next session.
+- The ordered continuation and known local adapter gaps are recorded in
+  `NEXT_SESSION_PLAN_2026-08-16.md`.
 
 ## Important scope boundaries
 
 ### Web product
 
-The Next.js product is runnable and covers most role surfaces, but its route handlers are backed by
-`apps/web/app/lib/synthetic.server.ts`, a process-local in-memory demo store. It does not issue real
-sessions, persist the critical journeys, or enforce tenant identity through verified server context.
+The Next.js product covers most role surfaces and no longer imports its process-local synthetic or
+persistence stores. Several screens now fail closed because their visual contract requires fields or
+lifecycle operations absent from the approved public API or canonical persistence model. Completing
+those vertical slices—with contract, migration, tenant-negative and browser evidence—remains a major
+release blocker.
 
-### API and server
+### API and persistence
 
-`apps/api` contains substantial typed handlers and domain use-cases. `apps/server`, however, exposes
-the 244-operation manifest through a generic in-memory catch-all and is not wired to those handlers.
-The browser product is also not wired to `apps/api`. Therefore “244/244” means contract/router
-surface coverage, not 244 production-complete persisted vertical slices.
+All baseline operation IDs reach the concrete dispatcher, but classification is not proof that all
+244 operations have correct, production-complete semantics. Some related operations intentionally
+share compatibility projections. Each needs contract, tenant-isolation and live integration proof.
 
-### Interface implementation
+### Controlled runtimes
 
-The shared UI contract repair is complete. AUTH-04, ACC-04, ACC-05, and DS-01 now have functional
-canonical surfaces; the six semantic aliases now have canonical routes; and all 125 handoff routes
-are guarded by an executable inventory test. Multi-word font families are quoted correctly and the
-browser resolves Public Sans first.
+The worker, AI gateway and companion policy foundations exist. Production publishers/webhook
+delivery, a PostgreSQL AI evidence adapter, an approved real model provider and a packaged signed
+desktop application do not. Safe defaults remain disabled or fail closed.
 
-AUTH-04, ACC-04, ACC-05, and DS-01 passed source/implementation visual comparison at 1280 × 720,
-including primary interaction checks and a clean browser console. Evidence is recorded in
-`design-qa.md` and `docs/execution/evidence/screenshots/`.
+### Traceability and release evidence
 
-This does not mean all 125 SVGs have visual-fidelity evidence. Earlier representative comparisons
-of REV-08 and RUN-02 still showed material layout and interaction differences and are the next
-translation slice.
-
-### Traceability
-
-The authoritative requirements CSV still marks all 362 requirements as “Specified; evidence not yet
-supplied”. The implementation ledger links only a small early subset and is not a live completion
-ledger. Generated screen/API/schema coverage is design coverage, not implementation evidence.
+The authoritative requirements CSV still marks all 362 requirements as specified without supplied
+implementation evidence. Evidence must be linked requirement by requirement; source/interface/API
+coverage alone is not completion.
 
 ## Major remaining workstreams
 
-1. Translate the critical RUN-02 and REV-08 journeys with visual and accessibility evidence, then
-   continue through the remaining interface inventory.
-2. Wire authenticated web requests to real `apps/api` handlers and PostgreSQL repositories.
-3. Replace critical synthetic workflows with persistent, tenant-isolated vertical slices.
-4. Resolve EMP-11, EMP-15, GOV-09, and OPS-02 through additive contract proposals and tests.
-5. Implement transactional outbox/workers, AI gateway, integrations, communications, and companion.
-6. Complete security, privacy, accessibility, performance, resilience, backup/restore, and E2E gates.
-7. Prepare and verify protected Vercel preview and AWS IaC/runbook artifacts.
+1. Replace process-local Next route state with authenticated platform API calls and persistent,
+   tenant-isolated vertical slices.
+2. Add operation-specific semantic/integration evidence for the 244-operation dispatcher.
+3. Complete identity-provider, MFA/step-up, upload/object-storage and field-level controls.
+4. Add production event transports, webhook signing/replay defense and PostgreSQL AI ledger binding.
+5. Build and sign the actual desktop companion and its governed update channel.
+6. Complete route-state visual/accessibility evidence and the 362-requirement live ledger.
+7. Run performance, restore/failover, security, privacy, accessibility and independent release gates.
+8. Prepare/apply protected preview and pilot infrastructure only when credentials and authority exist.
 
 ## Active external blockers
 
-See `EXTERNAL_ACTIONS_REQUIRED.md`. Local PostgreSQL is available. Vercel/AWS credentials, real AI
-provider evidence, signing certificates, legal/DPO determinations, and validated assessment content
-remain external blockers for their respective later release stages.
+See `EXTERNAL_ACTIONS_REQUIRED.md`. Vercel/AWS authority, approved AI-provider evidence, desktop
+signing certificates, legal/DPO determinations and validated assessment content remain external
+gates. They do not block repository-local engineering but do block the corresponding release claims.

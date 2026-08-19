@@ -72,10 +72,12 @@ export default function CandidateProfilePage() {
                     <dt className="text-sm font-medium text-muted">Email</dt>
                     <dd className="text-sm text-ink mt-1">{data.email}</dd>
                   </div>
-                  <div>
-                    <dt className="text-sm font-medium text-muted">Date of birth</dt>
-                    <dd className="text-sm text-ink mt-1">{data.dateOfBirth}</dd>
-                  </div>
+                  {data.dateOfBirth && (
+                    <div>
+                      <dt className="text-sm font-medium text-muted">Date of birth</dt>
+                      <dd className="text-sm text-ink mt-1">{data.dateOfBirth}</dd>
+                    </div>
+                  )}
                   {data.phone && (
                     <div>
                       <dt className="text-sm font-medium text-muted">Phone</dt>
