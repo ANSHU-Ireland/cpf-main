@@ -80,6 +80,34 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
     });
   });
 
+  it('bootstraps bearer sessions through a scoped security-definer function', async () => {
+    const facts = await pool.query<{
+      security_definer: boolean;
+      app_can_execute: boolean;
+      public_can_execute: boolean;
+    }>(`
+      select procedure.prosecdef as security_definer,
+             has_function_privilege('cpf_app', procedure.oid, 'EXECUTE') as app_can_execute,
+             exists (
+               select 1
+                 from aclexplode(coalesce(procedure.proacl, acldefault('f', procedure.proowner))) as acl
+                where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+             ) as public_can_execute
+        from pg_proc as procedure
+        join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+       where namespace.nspname = 'iam'
+         and procedure.proname = 'resolve_bearer_session'
+    `);
+
+    expect(facts.rows).toEqual([
+      {
+        security_definer: true,
+        app_can_execute: true,
+        public_can_execute: false,
+      },
+    ]);
+  });
+
   it('applies leased outbox worker columns additively', async () => {
     const columns = await pool.query<{ column_name: string }>(
       `select column_name

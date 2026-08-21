@@ -37,6 +37,9 @@ jobs:
         run: |
           python -m pip install cfn-lint==1.55.1
           cfn-lint infra/aws/bootstrap.yaml infra/aws/application.yaml
+      - name: PowerShell deployment syntax
+        shell: pwsh
+        run: '[scriptblock]::Create((Get-Content -Raw infra/aws/deploy.ps1)) | Out-Null'
       - name: Unit tests + coverage
         run: pnpm exec vitest run --coverage
 
@@ -73,6 +76,15 @@ jobs:
         run: pnpm exec vitest run packages/db packages/account packages/org
       - name: Create isolated UAT database
         run: docker exec ${{ job.services.postgres.id }} createdb --username postgres cpf_uat
+      - name: Release-shaped migration and runtime role
+        env:
+          APP_DB_PASSWORD: cpf-ci-runtime-password-2026
+          MASTER_DB_HOST: localhost
+          MASTER_DB_PORT: 5432
+          MASTER_DB_NAME: cpf_uat
+          MASTER_DB_USER: postgres
+          MASTER_DB_PASSWORD: postgres
+        run: node packages/db/scripts/migrate-release.mjs
       - name: Deterministic 30-tenant UAT seed
         env:
           APP_ENV: uat
@@ -86,7 +98,7 @@ jobs:
           APP_ENV: uat
           CPF_DEMO_MODE: 'true'
           CPF_DB_ROLE: cpf_app
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cpf_uat
+          DATABASE_URL: postgresql://cpf_runtime:cpf-ci-runtime-password-2026@localhost:5432/cpf_uat
         run: |
           PORT=3000 pnpm --filter @cpf/server start >/tmp/cpf-api.log 2>&1 &
           api_pid=$!

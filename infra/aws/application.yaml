@@ -50,6 +50,30 @@ Parameters:
     Type: String
     Default: ''
 
+Rules:
+  HttpsSettingsAreComplete:
+    Assertions:
+      - Assert:
+          Fn::Or:
+            - Fn::And:
+                - Fn::Equals: [!Ref CertificateArn, '']
+                - Fn::Equals: [!Ref DomainName, '']
+                - Fn::Equals: [!Ref HostedZoneId, '']
+            - Fn::And:
+                - Fn::Not: [Fn::Equals: [!Ref CertificateArn, '']]
+                - Fn::Not: [Fn::Equals: [!Ref DomainName, '']]
+                - Fn::Not: [Fn::Equals: [!Ref HostedZoneId, '']]
+        AssertDescription: CertificateArn, DomainName and HostedZoneId must be supplied together or all omitted.
+  ProductionRequiresHttps:
+    RuleCondition: !Equals [!Ref EnvironmentName, production]
+    Assertions:
+      - Assert:
+          Fn::And:
+            - Fn::Not: [Fn::Equals: [!Ref CertificateArn, '']]
+            - Fn::Not: [Fn::Equals: [!Ref DomainName, '']]
+            - Fn::Not: [Fn::Equals: [!Ref HostedZoneId, '']]
+        AssertDescription: Production requires an ACM certificate, DNS name and Route 53 hosted zone.
+
 Conditions:
   IsUat: !Equals [!Ref EnvironmentName, uat]
   HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
@@ -821,12 +845,20 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - !If
-          - HasCertificate
-          - RedirectConfig: { Protocol: HTTPS, Port: '443', StatusCode: HTTP_301 }
-            Type: redirect
-          - TargetGroupArn: !Ref WebTargetGroup
-            Type: forward
+        - TargetGroupArn: !Ref WebTargetGroup
+          Type: forward
+  HttpRedirectRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: HasCertificate
+    Properties:
+      ListenerArn: !Ref HttpListener
+      Priority: 1
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig: { Values: ['/*'] }
+      Actions:
+        - Type: redirect
+          RedirectConfig: { Protocol: HTTPS, Port: '443', StatusCode: HTTP_301 }
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HasCertificate

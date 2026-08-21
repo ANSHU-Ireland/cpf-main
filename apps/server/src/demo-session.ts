@@ -48,23 +48,7 @@ export class DemoSessionResolver {
     const token = parseBearerToken(authorization);
     if (token === null) return null;
     const result = await this.#pool.query<DemoSessionRow>(
-      `SELECT session.user_id, membership.tenant_id, role.code AS role_code,
-              membership_role.scope_type, membership_role.scope_id
-         FROM iam.user_sessions AS session
-         JOIN iam.users AS app_user ON app_user.id = session.user_id
-         JOIN iam.memberships AS membership ON membership.user_id = session.user_id
-         JOIN iam.membership_roles AS membership_role
-           ON membership_role.membership_id = membership.id
-         JOIN iam.roles AS role ON role.id = membership_role.role_id
-        WHERE session.refresh_token_hash = $1
-          AND session.revoked_at IS NULL
-          AND session.expires_at > now()
-          AND app_user.status = 'active'
-          AND membership.status = 'active'
-          AND membership.starts_at <= now()
-          AND (membership.ends_at IS NULL OR membership.ends_at > now())
-          AND (membership_role.expires_at IS NULL OR membership_role.expires_at > now())
-        ORDER BY role.code, membership_role.scope_type, membership_role.scope_id`,
+      'SELECT * FROM iam.resolve_bearer_session($1)',
       [hashDemoToken(token)],
     );
     const first = result.rows[0];

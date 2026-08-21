@@ -95,7 +95,12 @@ try {
   if ($EnvironmentName -eq 'production' -and $SeedUat) {
     throw 'Synthetic UAT seed data is prohibited in production.'
   }
-  foreach ($command in @('aws', 'docker', 'git')) {
+  $httpsValues = @($CertificateArn, $DomainName, $HostedZoneId) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+  if ($httpsValues.Count -ne 0 -and $httpsValues.Count -ne 3) {
+    throw 'CertificateArn, DomainName and HostedZoneId must be supplied together or all omitted.'
+  }
+  foreach ($command in @('aws', 'docker', 'git', 'node')) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
       throw "$command is required and was not found on PATH."
     }
@@ -104,6 +109,14 @@ try {
   Push-Location $repoRoot
   try {
     Invoke-Native -File 'aws' -Arguments @('sts', 'get-caller-identity', '--region', $Region)
+    Invoke-Native -File 'aws' -Arguments @(
+      'cloudformation', 'validate-template', '--region', $Region,
+      '--template-body', "file://$(Join-Path $PSScriptRoot 'bootstrap.yaml')"
+    )
+    Invoke-Native -File 'aws' -Arguments @(
+      'cloudformation', 'validate-template', '--region', $Region,
+      '--template-body', "file://$(Join-Path $PSScriptRoot 'application.yaml')"
+    )
 
     $bootstrapStack = "$ProjectName-bootstrap"
     Invoke-Native -File 'aws' -Arguments @(
@@ -176,6 +189,33 @@ try {
       '--services', $service, $workerService
     )
     $applicationUrl = Get-StackOutput -StackName $applicationStack -OutputKey 'ApplicationUrl'
+    if ($SeedUat) {
+      $previousUatUrl = $env:CPF_UAT_WEB_URL
+      try {
+        $env:CPF_UAT_WEB_URL = $applicationUrl
+        $uatPassed = $false
+        for ($attempt = 1; $attempt -le 30; $attempt++) {
+          Write-Host "UAT acceptance attempt $attempt of 30 against $applicationUrl"
+          & node scripts/demo-smoke.mjs
+          if ($LASTEXITCODE -eq 0) {
+            $uatPassed = $true
+            break
+          }
+          if ($attempt -lt 30) { Start-Sleep -Seconds 10 }
+        }
+        if (-not $uatPassed) {
+          throw 'The deployed database-backed UAT journeys did not pass.'
+        }
+      }
+      finally {
+        if ($null -eq $previousUatUrl) {
+          Remove-Item Env:CPF_UAT_WEB_URL -ErrorAction SilentlyContinue
+        }
+        else {
+          $env:CPF_UAT_WEB_URL = $previousUatUrl
+        }
+      }
+    }
     Write-Host "CPF deployment is stable: $applicationUrl"
     Write-Host "Deployment log: $transcriptPath"
   }

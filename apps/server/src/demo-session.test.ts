@@ -57,6 +57,7 @@ describe('demo bearer sessions', () => {
       tenantId: TENANT_ID,
       roles: ['candidate'],
     });
+    expect(query.mock.calls[0]?.[0]).toBe('SELECT * FROM iam.resolve_bearer_session($1)');
     expect(query.mock.calls[0]?.[1]).toEqual([hashDemoToken('candidate-token')]);
   });
 

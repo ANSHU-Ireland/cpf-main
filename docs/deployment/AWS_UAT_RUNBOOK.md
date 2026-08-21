@@ -60,7 +60,9 @@ pwsh ./infra/aws/deploy.ps1 `
 
 The script records every command and its output under `logs/aws-deploy/`, builds and pushes an
 immutable image, runs the release migration, applies the 30-tenant seed, then waits for both ECS
-services to become stable. Confirm the SNS email subscription after deployment.
+services to become stable. A seeded deployment also retries the complete database-backed role
+journey suite against the public `ApplicationUrl` and fails the deployment command if acceptance
+does not pass. Confirm the SNS email subscription after deployment.
 
 ## UAT credentials
 
@@ -96,7 +98,8 @@ active session is revoked after a successful password change.
 
 1. Confirm the CloudFormation stack status is `CREATE_COMPLETE` or `UPDATE_COMPLETE`.
 2. Open the `ApplicationUrl` output over HTTPS and sign in with each one-click role.
-3. Run the same automated journeys against the deployed URL:
+3. Confirm the deployment log records `All database-backed UAT journeys passed.`. To repeat the
+   same automated journeys manually against the deployed URL:
 
    ```powershell
    $env:CPF_UAT_WEB_URL = 'https://uat.example.com'
