@@ -39,6 +39,18 @@ export interface SeriousIncidentUpdate {
   readonly notes: string;
 }
 
+export const SERIOUS_INCIDENT_STATUSES = [
+  'open',
+  'assessing',
+  'reportable',
+  'reported',
+  'not_reportable_with_reason',
+  'follow_up',
+  'closed',
+] as const;
+
+const VALID_SERIOUS_INCIDENT_STATUSES: ReadonlySet<string> = new Set(SERIOUS_INCIDENT_STATUSES);
+
 export interface ChangeRequestDecision {
   readonly decision: 'approved' | 'rejected';
   readonly rationale: string;
@@ -90,8 +102,8 @@ export function parseSeriousIncidentUpdate(
   if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
   const obj = raw as Record<string, unknown>;
   const errors: string[] = [];
-  if (typeof obj['status'] !== 'string' || obj['status'].length === 0)
-    errors.push('status required');
+  if (typeof obj['status'] !== 'string' || !VALID_SERIOUS_INCIDENT_STATUSES.has(obj['status']))
+    errors.push(`status must be ${SERIOUS_INCIDENT_STATUSES.join('|')}`);
   if (typeof obj['notes'] !== 'string' || obj['notes'].length === 0) errors.push('notes required');
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, value: { status: obj['status'] as string, notes: obj['notes'] as string } };

@@ -19,6 +19,8 @@ const concreteDispatcher =
     : new ConcreteDispatcher(pool, {
         role: process.env.CPF_DB_ROLE ?? 'cpf_app',
         importDataKey: process.env.CPF_DEMO_DATA_KEY ?? 'cpf-synthetic-demo-import-key-v1',
+        integrationDataKey:
+          process.env.CPF_INTEGRATION_DATA_KEY ?? 'cpf-synthetic-demo-integration-key-v1',
       });
 const sessionResolver = pool === null ? null : new DemoSessionResolver(pool);
 const allowedOrigin = process.env.CPF_ALLOWED_ORIGIN ?? 'http://127.0.0.1:4300';

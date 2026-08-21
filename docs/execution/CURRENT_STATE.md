@@ -1,6 +1,6 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-16 · branch `agent/complete-remaining-scope`_
+_Last updated: 2026-08-21 · branch `codex/continuation-baseline`_
 
 ## Release judgement
 
@@ -11,11 +11,12 @@ the full build contract.
 ## Verified facts
 
 - The verified source package contains 362 requirements (336 Must), 244 OpenAPI operations, 125
-  interface SVGs, 1,543 dictionary rows and 139 physical / 138 logical PostgreSQL tables.
-- `pnpm verify` passes on 2026-08-16: clean format/lint/typecheck and 145 test files with 1,519
-  passing tests. The 52 database-gated tests skip without `DATABASE_URL`; CI now runs database,
-  account and organisation repository tests against PostgreSQL 16.
-- The production web build generates 97 static pages.
+  interface SVGs, 1,543 dictionary rows and a 139 physical / 138 logical PostgreSQL baseline. The
+  current additive schema contains 142 physical / 141 logical tables.
+- The complete configured PostgreSQL checkpoint passes 174 test files / 1,622 tests with zero
+  skips or failures. This includes all 10 focused live tests added for the current adapter batch.
+- The production web build generates 97 static pages after five governance routes were given
+  explicit Suspense boundaries for their search-parameter state.
 - The executable route inventory derives 125/125 canonical routes directly from tracked SVGs. It
   no longer depends on an ignored generated `coverage/` file.
 - The concrete-dispatch classifier matches all 244 baseline operation IDs. The test exposed and
@@ -26,6 +27,33 @@ the full build contract.
   and dead-letter behavior with an additive PostgreSQL migration.
 - Governed AI and companion policy packages enforce the core scope, version, budget, output,
   signature, disclosure and telemetry invariants under unit tests.
+
+## 2026-08-21 verification and persistence checkpoint
+
+- The production web build passes and generates all 97 pages.
+- Contract regeneration passes for all 244 operations with
+  `pnpm --filter @cpf/contracts run contracts:check`.
+- `pnpm verify` passes with formatting, lint and all 16 typed workspace projects green. Without a
+  configured database, 148 files / 1,559 tests pass and 26 database-gated files / 63 tests skip.
+- The complete configured PostgreSQL suite passes 174 files / 1,622 tests with no skips or failures.
+  Additive least-privilege grants were required for attempt submission and campaign-readiness
+  dependencies; unsafe campaign activation remains fail-closed.
+- Audit-export requests and platform maintenance windows now persist durable rows, append
+  hash-chained audit evidence and enqueue outbox work atomically. Their 2 focused live tests pass.
+- Governance submission envelopes, structured deployer instructions, conformity approvals,
+  serious-incident updates and change decisions now use canonical PostgreSQL rows. Their 3 focused
+  live tests pass and missing mutation targets return `null` rather than fabricated success.
+- Platform-staff invitations now encrypt email, hash tokens and retain roles across resend.
+  Platform role/status changes use tenant-checked security-definer functions rather than broad
+  grants. Their 2 focused live tests pass.
+- Privileged-access grants now use the canonical tenant, case, purpose, approver and time-bound
+  fields while retaining the requested scope/reason as evidence. Its focused live test passes.
+- Integration credential rotation and webhook creation now write encrypted secret material against
+  canonical columns, audit successful mutations and enqueue rotation work. Their 2 focused live
+  tests pass as part of the complete configured PostgreSQL suite.
+- Schema facts reconcile the three additive durable tables introduced by this batch: audit export
+  jobs, maintenance windows and governance submission envelopes. The current measured inventory is
+  141 logical / 142 physical tables while preserving the baseline partition-count distinction.
 
 ## 2026-08-16 continuation checkpoint
 
@@ -70,8 +98,8 @@ coverage alone is not completion.
 
 ## Major remaining workstreams
 
-1. Replace process-local Next route state with authenticated platform API calls and persistent,
-   tenant-isolated vertical slices.
+1. Close explicit public-contract/read-model gaps and finish persistent, tenant-isolated vertical
+   slices; no route under `apps/web/app` currently imports the obsolete process-local stores.
 2. Add operation-specific semantic/integration evidence for the 244-operation dispatcher.
 3. Complete identity-provider, MFA/step-up, upload/object-storage and field-level controls.
 4. Add production event transports, webhook signing/replay defense and PostgreSQL AI ledger binding.

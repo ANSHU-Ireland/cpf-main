@@ -3,7 +3,7 @@
  * that did not yet have a Pg adapter. Each class is wired to the v2.0 baseline schema
  * and satisfies its interface exactly (field names verified against the domain modules).
  */
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTenant, type TenantContext } from '@cpf/db';
 import { PgAuditWriter } from '@cpf/audit';
@@ -281,24 +281,79 @@ function toStaff(r: StaffRow): StaffRecord {
     userId: r.id,
     email: r.email,
     displayName: r.display_name ?? '',
-    status: r.status as StaffRecord['status'],
+    status: r.status === 'active' ? 'active' : 'suspended',
     roles: (r.roles ?? '').split(',').filter(Boolean),
     createdAt: r.created_at.toISOString(),
   };
 }
 
 export class PgStaffRepository implements StaffRepository {
-  constructor(private readonly pool: Pool) {}
+  private readonly codec: AesGcmCandidateImportCodec;
 
-  async listStaff(_a: Actor): Promise<{ items: readonly StaffRecord[]; total: number }> {
-    const r = await this.pool.query<StaffRow>(
-      `SELECT u.id, u.email, p.full_name AS display_name, u.status, string_agg(ro.code, ',') AS roles, u.created_at, u.updated_at FROM iam.users u LEFT JOIN iam.user_profiles p ON p.user_id = u.id LEFT JOIN iam.memberships m ON m.user_id = u.id LEFT JOIN iam.membership_roles mr ON mr.membership_id = m.id LEFT JOIN iam.roles ro ON ro.id = mr.role_id WHERE u.is_platform_staff = true GROUP BY u.id, p.full_name ORDER BY u.created_at DESC LIMIT 200`,
+  constructor(
+    private readonly pool: Pool,
+    private readonly role?: string,
+    dataKey = 'cpf-synthetic-demo-import-key-v1',
+  ) {
+    this.codec = new AesGcmCandidateImportCodec(dataKey);
+  }
+
+  private async findStaff(
+    client: PoolClient,
+    actor: Actor,
+    userId: string,
+  ): Promise<StaffRecord | null> {
+    const result = await client.query<StaffRow>(
+      `SELECT user_record.id, user_record.email,
+              COALESCE(user_record.display_name, '') AS display_name,
+              user_record.status,
+              COALESCE(string_agg(DISTINCT role.code, ',' ORDER BY role.code), '') AS roles,
+              user_record.created_at, user_record.updated_at
+         FROM iam.users AS user_record
+         JOIN iam.memberships AS membership
+           ON membership.user_id = user_record.id
+          AND membership.tenant_id = $1
+          AND membership.status <> 'revoked'
+         JOIN iam.membership_roles AS membership_role
+           ON membership_role.membership_id = membership.id
+         JOIN iam.roles AS role
+           ON role.id = membership_role.role_id AND role.scope = 'platform'
+        WHERE user_record.id = $2 AND user_record.user_type = 'cpf_staff'
+        GROUP BY user_record.id`,
+      [actor.tenantId, userId],
     );
-    return { items: r.rows.map(toStaff), total: r.rows.length };
+    return result.rows[0] ? toStaff(result.rows[0]) : null;
+  }
+
+  async listStaff(actor: Actor): Promise<{ items: readonly StaffRecord[]; total: number }> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<StaffRow>(
+        `SELECT user_record.id, user_record.email,
+                COALESCE(user_record.display_name, '') AS display_name,
+                user_record.status,
+                COALESCE(string_agg(DISTINCT role.code, ',' ORDER BY role.code), '') AS roles,
+                user_record.created_at, user_record.updated_at
+           FROM iam.users AS user_record
+           JOIN iam.memberships AS membership
+             ON membership.user_id = user_record.id
+            AND membership.tenant_id = $1
+            AND membership.status <> 'revoked'
+           JOIN iam.membership_roles AS membership_role
+             ON membership_role.membership_id = membership.id
+           JOIN iam.roles AS role
+             ON role.id = membership_role.role_id AND role.scope = 'platform'
+          WHERE user_record.user_type = 'cpf_staff'
+          GROUP BY user_record.id
+          ORDER BY user_record.created_at DESC
+          LIMIT 200`,
+        [actor.tenantId],
+      );
+      return { items: result.rows.map(toStaff), total: result.rows.length };
+    });
   }
 
   async createInvitation(
-    _a: Actor,
+    actor: Actor,
     input: { email: string; roles: readonly string[] },
   ): Promise<{
     id: string;
@@ -307,16 +362,58 @@ export class PgStaffRepository implements StaffRepository {
     status: string;
     createdAt: string;
   }> {
-    const id = randomUUID();
-    await this.pool.query(
-      `INSERT INTO iam.staff_invitations (id, email, invited_by, status, expires_at) VALUES ($1,$2,$3,'pending',now()+interval '7 days')`,
-      [id, input.email, _a.userId],
-    );
-    return { id, email: input.email, roles: input.roles, status: 'pending', createdAt: nowIso() };
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      const email = input.email.trim().toLowerCase();
+      const validRoles = await client.query<{ roles: string[] }>(
+        `SELECT COALESCE(array_agg(role.code ORDER BY role.code), ARRAY[]::text[]) AS roles
+           FROM iam.roles AS role
+          WHERE role.scope = 'platform' AND role.code = ANY($1::text[])`,
+        [input.roles],
+      );
+      if ((validRoles.rows[0]?.roles.length ?? 0) !== new Set(input.roles).size) {
+        throw new Error('Staff invitation contains an unknown platform role.');
+      }
+      const result = await client.query<{ status: string; created_at: Date }>(
+        `INSERT INTO iam.staff_invitations
+           (id, tenant_id, email_hash, encrypted_email, role_codes, token_hash,
+            invited_by, status, expires_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, 'sent', now() + interval '7 days')
+         RETURNING status, created_at`,
+        [
+          id,
+          actor.tenantId,
+          contentHash(email),
+          this.codec.encode(email),
+          JSON.stringify(input.roles),
+          contentHash(randomUUID()),
+          actor.userId,
+        ],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('Staff invitation row missing after insert.');
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'platform_staff.invitation.create',
+        resourceType: 'staff_invitation',
+        resourceId: id,
+        outcome: 'success',
+        metadata: { emailHash: contentHash(email), roles: input.roles },
+      });
+      return {
+        id,
+        email,
+        roles: input.roles,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+      };
+    });
   }
 
   async resendInvitation(
-    _a: Actor,
+    actor: Actor,
     id: string,
   ): Promise<{
     id: string;
@@ -325,51 +422,118 @@ export class PgStaffRepository implements StaffRepository {
     status: string;
     createdAt: string;
   } | null> {
-    const r = await this.pool.query<{ id: string; email: string; created_at: Date }>(
-      `UPDATE iam.staff_invitations SET expires_at = now()+interval '7 days', updated_at = now() WHERE id = $1 AND status = 'pending' RETURNING id, email, created_at`,
-      [id],
-    );
-    return r.rows[0]
-      ? {
-          id: r.rows[0].id,
-          email: r.rows[0].email,
-          roles: [],
-          status: 'pending',
-          createdAt: r.rows[0].created_at.toISOString(),
-        }
-      : null;
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        encrypted_email: Buffer;
+        role_codes: string[];
+        status: string;
+        created_at: Date;
+      }>(
+        `UPDATE iam.staff_invitations
+            SET token_hash = $3, status = 'sent', expires_at = now() + interval '7 days'
+          WHERE tenant_id = $1 AND id = $2
+            AND status IN ('created', 'sent', 'expired', 'failed')
+         RETURNING encrypted_email, role_codes, status, created_at`,
+        [actor.tenantId, id, contentHash(randomUUID())],
+      );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'platform_staff.invitation.resend',
+        resourceType: 'staff_invitation',
+        resourceId: id,
+        outcome: 'success',
+        metadata: {},
+      });
+      return {
+        id,
+        email: this.codec.decode(row.encrypted_email),
+        roles: row.role_codes,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+      };
+    });
   }
 
-  async revokeInvitation(_a: Actor, id: string): Promise<boolean> {
-    const r = await this.pool.query(
-      `UPDATE iam.staff_invitations SET status = 'revoked', updated_at = now() WHERE id = $1 RETURNING id`,
-      [id],
-    );
-    return (r.rowCount ?? 0) > 0;
+  async revokeInvitation(actor: Actor, id: string): Promise<boolean> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query(
+        `UPDATE iam.staff_invitations
+            SET status = 'revoked', revoked_at = now()
+          WHERE tenant_id = $1 AND id = $2 AND status NOT IN ('accepted', 'revoked')`,
+        [actor.tenantId, id],
+      );
+      if ((result.rowCount ?? 0) === 0) return false;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'platform_staff.invitation.revoke',
+        resourceType: 'staff_invitation',
+        resourceId: id,
+        outcome: 'success',
+        metadata: {},
+      });
+      return true;
+    });
   }
 
   async updateRoles(
-    _a: Actor,
+    actor: Actor,
     userId: string,
     input: { roles: readonly string[] },
   ): Promise<StaffRecord | null> {
-    const r = await this.pool.query<StaffRow>(
-      `SELECT u.id, u.email, p.full_name AS display_name, u.status, $1::text AS roles, u.created_at, u.updated_at FROM iam.users u LEFT JOIN iam.user_profiles p ON p.user_id = u.id WHERE u.id = $2`,
-      [input.roles.join(','), userId],
-    );
-    return r.rows[0] ? toStaff(r.rows[0]) : null;
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{ changed: boolean }>(
+        `SELECT iam.replace_platform_staff_roles($1, $2, $3::text[], $4) AS changed`,
+        [actor.tenantId, userId, input.roles, actor.userId],
+      );
+      if (result.rows[0]?.changed !== true) return null;
+      const staff = await this.findStaff(client, actor, userId);
+      if (staff === null) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'platform_staff.roles.update',
+        resourceType: 'platform_staff',
+        resourceId: userId,
+        outcome: 'success',
+        metadata: { roles: input.roles },
+      });
+      return staff;
+    });
   }
 
   async updateStatus(
-    _a: Actor,
+    actor: Actor,
     userId: string,
     input: { status: string; reason: string },
   ): Promise<StaffRecord | null> {
-    const r = await this.pool.query<StaffRow>(
-      `UPDATE iam.users SET status = $1, updated_at = now() WHERE id = $2 RETURNING id, email, status, NULL AS display_name, '' AS roles, created_at, updated_at`,
-      [input.status, userId],
-    );
-    return r.rows[0] ? toStaff(r.rows[0]) : null;
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const databaseStatus = input.status === 'active' ? 'active' : 'disabled';
+      const result = await client.query<{ changed: boolean }>(
+        `SELECT iam.set_platform_staff_status($1, $2, $3) AS changed`,
+        [actor.tenantId, userId, databaseStatus],
+      );
+      if (result.rows[0]?.changed !== true) return null;
+      const staff = await this.findStaff(client, actor, userId);
+      if (staff === null) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'platform_staff.status.update',
+        resourceType: 'platform_staff',
+        resourceId: userId,
+        outcome: 'success',
+        metadata: { status: input.status, reason: input.reason },
+      });
+      return staff;
+    });
   }
 }
 
@@ -547,10 +711,25 @@ export class PgReleaseRepository implements ReleaseRepository {
 
 // ─── Admin: Audit ─────────────────────────────────────────────────────────────
 
-import type { AuditEventRecord, AdminAuditRepository } from './admin-audit.js';
+import type {
+  AuditEventRecord,
+  AuditExportCreate,
+  AuditExportRecord,
+  AdminAuditRepository,
+} from './admin-audit.js';
+
+interface AuditExportRow {
+  id: string;
+  status: string;
+  format: AuditExportRecord['format'];
+  created_at: Date;
+}
 
 export class PgAdminAuditRepository implements AdminAuditRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly role?: string,
+  ) {}
 
   async listEvents(_a: Actor): Promise<{ items: readonly AuditEventRecord[]; total: number }> {
     const r = await this.pool.query<{
@@ -575,11 +754,51 @@ export class PgAdminAuditRepository implements AdminAuditRepository {
     return { items, total: items.length };
   }
 
-  async createExport(
-    _a: Actor,
-    _input: unknown,
-  ): Promise<{ id: string; status: string; format: 'csv' | 'json'; createdAt: string }> {
-    return { id: randomUUID(), status: 'queued', format: 'csv', createdAt: nowIso() };
+  async createExport(actor: Actor, input: AuditExportCreate): Promise<AuditExportRecord> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      const result = await client.query<AuditExportRow>(
+        `INSERT INTO audit.export_jobs
+           (id, tenant_id, requested_by, from_at, to_at, format, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+         RETURNING id, status, format, created_at`,
+        [id, actor.tenantId, actor.userId, input.from, input.to, input.format],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('audit export row missing after insert');
+
+      await client.query(
+        `INSERT INTO audit.outbox_events
+           (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+            data_classification, correlation_id, status)
+         VALUES ($1, $2, 'audit_export', $3, 'audit.export.requested', $4::jsonb,
+                 'confidential', $5, 'pending')`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          row.id,
+          JSON.stringify({ from: input.from, to: input.to, format: input.format }),
+          randomUUID(),
+        ],
+      );
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'audit_export.create',
+        resourceType: 'audit_export',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { from: input.from, to: input.to, format: input.format },
+      });
+
+      return {
+        id: row.id,
+        status: row.status,
+        format: row.format,
+        createdAt: row.created_at.toISOString(),
+      };
+    });
   }
 }
 
@@ -681,24 +900,100 @@ import type {
   AdminMaintenanceRepository,
 } from './admin-maintenance.js';
 
+interface MaintenanceWindowRow {
+  id: string;
+  starts_at: Date;
+  ends_at: Date;
+  description: string;
+  status: string;
+  created_at: Date;
+}
+
+function toMaintenanceWindow(row: MaintenanceWindowRow): MaintenanceWindowRecord {
+  return {
+    id: row.id,
+    startsAt: row.starts_at.toISOString(),
+    endsAt: row.ends_at.toISOString(),
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 export class PgAdminMaintenanceRepository implements AdminMaintenanceRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly role?: string,
+  ) {}
 
   async listWindows(
-    _a: Actor,
+    actor: Actor,
   ): Promise<{ items: readonly MaintenanceWindowRecord[]; total: number }> {
-    return { items: [], total: 0 };
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<MaintenanceWindowRow>(
+        `SELECT id, starts_at, ends_at, description,
+                CASE
+                  WHEN status = 'cancelled' THEN 'cancelled'
+                  WHEN now() >= ends_at THEN 'completed'
+                  WHEN now() >= starts_at THEN 'active'
+                  ELSE 'scheduled'
+                END AS status,
+                created_at
+           FROM audit.maintenance_windows
+          ORDER BY starts_at DESC, created_at DESC
+          LIMIT 200`,
+      );
+      return { items: result.rows.map(toMaintenanceWindow), total: result.rows.length };
+    });
   }
 
-  async createWindow(_a: Actor, input: MaintenanceWindowCreate): Promise<MaintenanceWindowRecord> {
-    return {
-      id: randomUUID(),
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      description: input.description,
-      status: 'scheduled',
-      createdAt: nowIso(),
-    };
+  async createWindow(
+    actor: Actor,
+    input: MaintenanceWindowCreate,
+  ): Promise<MaintenanceWindowRecord> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      const result = await client.query<MaintenanceWindowRow>(
+        `INSERT INTO audit.maintenance_windows
+           (id, starts_at, ends_at, description, status, created_by)
+         VALUES ($1, $2, $3, $4, 'scheduled', $5)
+         RETURNING id, starts_at, ends_at, description, status, created_at`,
+        [id, input.startsAt, input.endsAt, input.description, actor.userId],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('maintenance window row missing after insert');
+
+      await client.query(
+        `INSERT INTO audit.outbox_events
+           (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+            data_classification, correlation_id, status)
+         VALUES ($1, $2, 'maintenance_window', $3, 'maintenance_window.scheduled', $4::jsonb,
+                 'internal', $5, 'pending')`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          row.id,
+          JSON.stringify({
+            startsAt: row.starts_at.toISOString(),
+            endsAt: row.ends_at.toISOString(),
+            description: row.description,
+          }),
+          randomUUID(),
+        ],
+      );
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'maintenance_window.create',
+        resourceType: 'maintenance_window',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { startsAt: input.startsAt, endsAt: input.endsAt },
+      });
+
+      return toMaintenanceWindow(row);
+    });
   }
 }
 
@@ -806,7 +1101,10 @@ export class PgAdminSupportCaseRepository implements AdminSupportCaseRepository 
 import type { AdminPrivilegedAccessRepository } from './admin-privileged-access.js';
 
 export class PgAdminPrivilegedAccessRepository implements AdminPrivilegedAccessRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly role?: string,
+  ) {}
 
   async createGrant(
     actor: Actor,
@@ -819,27 +1117,103 @@ export class PgAdminPrivilegedAccessRepository implements AdminPrivilegedAccessR
     expiresAt: string;
     createdAt: string;
   }> {
-    const id = randomUUID();
-    await this.pool.query(
-      `INSERT INTO iam.privileged_access_grants (id, grantee_id, scope, reason, granted_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [id, input.userId, input.scope, input.reason, actor.userId, new Date(input.expiresAt)],
-    );
-    return {
-      id,
-      userId: input.userId,
-      scope: input.scope,
-      reason: input.reason,
-      expiresAt: input.expiresAt,
-      createdAt: nowIso(),
-    };
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      const purpose = input.scope.startsWith('security')
+        ? 'security'
+        : input.scope.startsWith('compliance')
+          ? 'compliance'
+          : input.scope.startsWith('legal')
+            ? 'legal'
+            : 'support';
+      const result = await client.query<{
+        id: string;
+        user_id: string;
+        scope: string;
+        reason: string;
+        expires_at: Date;
+        created_at: Date;
+      }>(
+        `INSERT INTO iam.privileged_access_grants
+           (id, tenant_id, user_id, case_reference, purpose, approved_by, starts_at,
+            expires_at, scope, reason)
+         VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8, $9)
+         RETURNING id, user_id, scope, reason, expires_at, created_at`,
+        [
+          id,
+          actor.tenantId,
+          input.userId,
+          `PAM-${id.slice(0, 8).toUpperCase()}`,
+          purpose,
+          actor.userId,
+          input.expiresAt,
+          input.scope,
+          input.reason,
+        ],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('privileged access grant row missing after insert');
+      await client.query(
+        `INSERT INTO audit.outbox_events
+           (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+            data_classification, correlation_id, status)
+         VALUES ($1, $2, 'privileged_access_grant', $3, 'privileged_access.granted',
+                 $4::jsonb, 'restricted', $5, 'pending')`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          row.id,
+          JSON.stringify({ userId: row.user_id, scope: row.scope, expiresAt: row.expires_at }),
+          randomUUID(),
+        ],
+      );
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'privileged_access.grant',
+        resourceType: 'privileged_access_grant',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: {
+          userId: row.user_id,
+          scope: row.scope,
+          expiresAt: row.expires_at.toISOString(),
+        },
+      });
+      return {
+        id: row.id,
+        userId: row.user_id,
+        scope: row.scope,
+        reason: row.reason,
+        expiresAt: row.expires_at.toISOString(),
+        createdAt: row.created_at.toISOString(),
+      };
+    });
   }
 
-  async revokeGrant(_a: Actor, id: string): Promise<boolean> {
-    const r = await this.pool.query(
-      `UPDATE iam.privileged_access_grants SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING id`,
-      [id],
-    );
-    return (r.rowCount ?? 0) > 0;
+  async revokeGrant(actor: Actor, id: string): Promise<boolean> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query(
+        `UPDATE iam.privileged_access_grants
+            SET revoked_at = now()
+          WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL
+         RETURNING id`,
+        [actor.tenantId, id],
+      );
+      if ((result.rowCount ?? 0) === 0) return false;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'privileged_access.revoke',
+        resourceType: 'privileged_access_grant',
+        resourceId: id,
+        outcome: 'success',
+        metadata: {},
+      });
+      return true;
+    });
   }
 }
 
@@ -1224,20 +1598,47 @@ export class PgGovernanceSubmissionRepository implements GovernanceSubmissionRep
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<{
         id: string;
-        content: string;
-        version: string;
+        release_version: string;
+        intended_purpose: string;
+        input_requirements: Record<string, unknown>;
+        accuracy_metrics: Record<string, unknown>;
+        limitations: Record<string, unknown>;
+        oversight_measures: Record<string, unknown>;
+        monitoring_instructions: Record<string, unknown>;
+        incident_instructions: Record<string, unknown>;
+        maintenance_instructions: Record<string, unknown>;
+        object_uri: string;
+        sha256: string;
         created_at: Date;
       }>(
-        `SELECT id, content, version, created_at FROM governance.deployer_instructions WHERE tenant_id = $1 AND ai_system_id = $2 ORDER BY created_at DESC LIMIT 1`,
-        [actor.tenantId, systemId],
+        `SELECT id, release_version, intended_purpose, input_requirements, accuracy_metrics,
+                limitations, oversight_measures, monitoring_instructions, incident_instructions,
+                maintenance_instructions, object_uri, sha256, created_at
+           FROM governance.deployer_instructions
+          WHERE ai_system_id = $1 AND status IN ('approved', 'effective')
+          ORDER BY version_no DESC
+          LIMIT 1`,
+        [systemId],
       );
-      if (!r.rows[0]) return null;
+      const row = r.rows[0];
+      if (row === undefined) return null;
       return {
-        id: r.rows[0].id,
+        id: row.id,
         aiSystemId: systemId,
-        title: 'Deployer Instructions',
-        content: r.rows[0].content,
-        createdAt: r.rows[0].created_at.toISOString(),
+        title: `Deployer instructions ${row.release_version}`,
+        content: JSON.stringify({
+          intendedPurpose: row.intended_purpose,
+          inputRequirements: row.input_requirements,
+          accuracyMetrics: row.accuracy_metrics,
+          limitations: row.limitations,
+          oversightMeasures: row.oversight_measures,
+          monitoringInstructions: row.monitoring_instructions,
+          incidentInstructions: row.incident_instructions,
+          maintenanceInstructions: row.maintenance_instructions,
+          objectUri: row.object_uri,
+          sha256: row.sha256,
+        }),
+        createdAt: row.created_at.toISOString(),
       };
     });
   }
@@ -1247,38 +1648,80 @@ export class PgGovernanceSubmissionRepository implements GovernanceSubmissionRep
     submissionType: GovernanceSubmissionType,
     input: GovernanceSubmissionCreate,
   ): Promise<GovernanceSubmissionRecord> {
-    const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      const result = await client.query<{
+        id: string;
+        submission_type: GovernanceSubmissionType;
+        reference: string;
+        status: string;
+        created_at: Date;
+        updated_at: Date;
+      }>(
+        `INSERT INTO governance.submissions
+           (id, tenant_id, submission_type, reference, summary, status, submitted_by)
+         VALUES ($1, $2, $3, $4, $5, 'submitted', $6)
+         RETURNING id, submission_type, reference, status, created_at, updated_at`,
+        [id, actor.tenantId, submissionType, input.reference, input.summary, actor.userId],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('governance submission row missing after insert');
+
+      await client.query(
+        `INSERT INTO audit.outbox_events
+           (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+            data_classification, correlation_id, status)
+         VALUES ($1, $2, 'governance_submission', $3, 'governance.submission.created',
+                 $4::jsonb, 'confidential', $5, 'pending')`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          row.id,
+          JSON.stringify({ submissionType, reference: input.reference }),
+          randomUUID(),
+        ],
+      );
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
         actorId: actor.userId,
         action: `governance.${submissionType}.submit`,
         resourceType: 'governance_submission',
-        resourceId: id,
+        resourceId: row.id,
         outcome: 'success',
         metadata: { reference: input.reference, summary: input.summary },
       });
+      return {
+        id: row.id,
+        submissionType: row.submission_type,
+        reference: row.reference,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString(),
+      };
     });
-    return {
-      id,
-      submissionType,
-      reference: input.reference,
-      status: 'submitted',
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    };
   }
 
   async approveConformityAssessment(
     actor: Actor,
     assessmentId: string,
-  ): Promise<GovernanceSubmissionRecord> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      await client.query(
-        `UPDATE governance.conformity_assessments SET status = 'approved', approved_by = $1, approved_at = now(), updated_at = now() WHERE id = $2 AND tenant_id = $3`,
-        [actor.userId, assessmentId, actor.tenantId],
+  ): Promise<GovernanceSubmissionRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        id: string;
+        release_version: string;
+        assessed_at: Date;
+        approved_at: Date;
+      }>(
+        `UPDATE governance.conformity_assessments
+            SET approved_by = $1, approved_at = now()
+          WHERE id = $2
+            AND decision IN ('conformant', 'conformant_with_conditions')
+         RETURNING id, release_version, assessed_at, approved_at`,
+        [actor.userId, assessmentId],
       );
+      const row = result.rows[0];
+      if (row === undefined) return null;
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -1289,57 +1732,103 @@ export class PgGovernanceSubmissionRepository implements GovernanceSubmissionRep
         outcome: 'success',
         metadata: {},
       });
+      return {
+        id: row.id,
+        submissionType: 'conformity_assessment',
+        reference: row.release_version,
+        status: 'approved',
+        createdAt: row.assessed_at.toISOString(),
+        updatedAt: row.approved_at.toISOString(),
+      };
     });
-    return {
-      id: assessmentId,
-      submissionType: 'conformity_assessment',
-      reference: assessmentId,
-      status: 'approved',
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    };
   }
 
   async updateSeriousIncident(
     actor: Actor,
     incidentId: string,
     input: SeriousIncidentUpdate,
-  ): Promise<GovernanceSubmissionRecord> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      await client.query(
-        `UPDATE governance.serious_incident_reports SET status = $1, notes = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4`,
+  ): Promise<GovernanceSubmissionRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        id: string;
+        authority_reference: string | null;
+        status: string;
+        created_at: Date;
+        updated_at: Date;
+      }>(
+        `UPDATE governance.serious_incident_reports
+            SET status = $1, notes = $2, updated_at = now(),
+                closed_at = CASE WHEN $1 = 'closed' THEN now() ELSE closed_at END
+          WHERE id = $3 AND tenant_id = $4
+         RETURNING id, authority_reference, status, created_at, updated_at`,
         [input.status, input.notes, incidentId, actor.tenantId],
       );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'serious_incident.update',
+        resourceType: 'serious_incident',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { status: input.status },
+      });
+      return {
+        id: row.id,
+        submissionType: 'serious_incident',
+        reference: row.authority_reference ?? row.id,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString(),
+      };
     });
-    return {
-      id: incidentId,
-      submissionType: 'serious_incident',
-      reference: incidentId,
-      status: input.status,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    };
   }
 
   async decideChangeRequest(
     actor: Actor,
     changeId: string,
     input: ChangeRequestDecision,
-  ): Promise<GovernanceSubmissionRecord> {
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      await client.query(
-        `UPDATE governance.change_requests SET decision = $1, decision_reason = $2, decided_at = now(), decided_by = $3, updated_at = now() WHERE id = $4 AND tenant_id = $5`,
+  ): Promise<GovernanceSubmissionRecord | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<{
+        id: string;
+        change_code: string;
+        status: string;
+        created_at: Date;
+        updated_at: Date;
+      }>(
+        `UPDATE governance.change_requests
+            SET status = $1, decision_reason = $2, decided_at = now(), decided_by = $3,
+                approved_by = CASE WHEN $1 = 'approved' THEN $3::uuid ELSE NULL END,
+                approved_at = CASE WHEN $1 = 'approved' THEN now() ELSE NULL END,
+                updated_at = now()
+          WHERE id = $4 AND tenant_id = $5 AND status IN ('draft', 'triage', 'review')
+         RETURNING id, change_code, status, created_at, updated_at`,
         [input.decision, input.rationale, actor.userId, changeId, actor.tenantId],
       );
+      const row = result.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'change_request.decide',
+        resourceType: 'change_request',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { decision: input.decision, rationale: input.rationale },
+      });
+      return {
+        id: row.id,
+        submissionType: 'change_request',
+        reference: row.change_code,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString(),
+      };
     });
-    return {
-      id: changeId,
-      submissionType: 'change_request',
-      reference: changeId,
-      status: input.decision,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    };
   }
 }
 
@@ -2951,10 +3440,15 @@ function toIntegration(r: IntegrationRow): IntegrationRecord {
 }
 
 export class PgIntegrationRepository implements IntegrationRepository {
+  private readonly codec: AesGcmCandidateImportCodec;
+
   constructor(
     private readonly pool: Pool,
     private readonly role?: string,
-  ) {}
+    dataKey = 'cpf-synthetic-demo-integration-key-v1',
+  ) {
+    this.codec = new AesGcmCandidateImportCodec(dataKey);
+  }
 
   async listIntegrations(
     actor: Actor,
@@ -2993,8 +3487,19 @@ export class PgIntegrationRepository implements IntegrationRepository {
           JSON.stringify(input.config ?? {}),
         ],
       );
-      if (!r.rows[0]) throw new Error('integration row missing');
-      return toIntegration(r.rows[0]);
+      const row = r.rows[0];
+      if (row === undefined) throw new Error('integration row missing');
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'integration.create',
+        resourceType: 'integration',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { connectionType: input.connectionType, provider: input.provider },
+      });
+      return toIntegration(row);
     });
   }
 
@@ -3037,6 +3542,30 @@ export class PgIntegrationRepository implements IntegrationRepository {
 
   async rotateIntegration(actor: Actor, id: string): Promise<IntegrationRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const encryptedCredential = this.codec.encode(randomBytes(32).toString('base64url'));
+      const r = await client.query<IntegrationRow>(
+        `UPDATE integration.connections
+            SET encrypted_credentials = $3, credentials_rotated_at = now(), updated_at = now()
+          WHERE tenant_id = $1 AND id = $2 AND status <> 'revoked'
+         RETURNING id, connection_type, provider, status, created_at, updated_at`,
+        [actor.tenantId, id, encryptedCredential],
+      );
+      const row = r.rows[0];
+      if (row === undefined) return null;
+      await client.query(
+        `INSERT INTO audit.outbox_events
+           (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+            data_classification, correlation_id, status)
+         VALUES ($1, $2, 'integration', $3, 'integration.credentials.rotated',
+                 $4::jsonb, 'restricted', $5, 'pending')`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          row.id,
+          JSON.stringify({ provider: row.provider, connectionType: row.connection_type }),
+          randomUUID(),
+        ],
+      );
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -3047,11 +3576,7 @@ export class PgIntegrationRepository implements IntegrationRepository {
         outcome: 'success',
         metadata: {},
       });
-      const r = await client.query<IntegrationRow>(
-        `SELECT id, connection_type, provider, status, created_at, updated_at FROM integration.connections WHERE tenant_id = $1 AND id = $2`,
-        [actor.tenantId, id],
-      );
-      return r.rows[0] ? toIntegration(r.rows[0]) : null;
+      return toIntegration(row);
     });
   }
 }
@@ -3576,22 +4101,31 @@ function toWebhook(r: WebhookRow): WebhookRecord {
     id: r.id,
     targetUrl: r.target_url,
     eventTypes: r.event_types,
-    status: r.status as WebhookRecord['status'],
+    status: r.status === 'revoked' ? 'disabled' : (r.status as WebhookRecord['status']),
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
   };
 }
 
 export class PgWebhookRepository implements WebhookRepository {
+  private readonly codec: AesGcmCandidateImportCodec;
+
   constructor(
     private readonly pool: Pool,
     private readonly role?: string,
-  ) {}
+    dataKey = 'cpf-synthetic-demo-integration-key-v1',
+  ) {
+    this.codec = new AesGcmCandidateImportCodec(dataKey);
+  }
 
   async listWebhooks(actor: Actor): Promise<{ items: readonly WebhookRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
       const r = await client.query<WebhookRow>(
-        `SELECT id, target_url, event_types, status, created_at, updated_at FROM integration.webhook_subscriptions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
+        `SELECT id, endpoint_url AS target_url, event_types, status, created_at, updated_at
+           FROM integration.webhook_subscriptions
+          WHERE tenant_id = $1
+          ORDER BY created_at DESC
+          LIMIT 100`,
         [actor.tenantId],
       );
       return { items: r.rows.map(toWebhook), total: r.rows.length };
@@ -3600,12 +4134,37 @@ export class PgWebhookRepository implements WebhookRepository {
 
   async createWebhook(actor: Actor, input: WebhookCreate): Promise<WebhookRecord> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      const encryptedSecret = this.codec.encode(randomBytes(32).toString('base64url'));
       const r = await client.query<WebhookRow>(
-        `INSERT INTO integration.webhook_subscriptions (id, tenant_id, target_url, event_types, status, signing_secret) VALUES ($1,$2,$3,$4,'active',$5) RETURNING id, target_url, event_types, status, created_at, updated_at`,
-        [randomUUID(), actor.tenantId, input.targetUrl, input.eventTypes ?? [], randomUUID()],
+        `INSERT INTO integration.webhook_subscriptions
+           (id, tenant_id, name, endpoint_url, signing_secret_encrypted, event_types, status,
+            created_by)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'active', $7)
+         RETURNING id, endpoint_url AS target_url, event_types, status, created_at, updated_at`,
+        [
+          id,
+          actor.tenantId,
+          `Webhook ${new URL(input.targetUrl).hostname}`,
+          input.targetUrl,
+          encryptedSecret,
+          JSON.stringify(input.eventTypes),
+          actor.userId,
+        ],
       );
-      if (!r.rows[0]) throw new Error('webhook row missing');
-      return toWebhook(r.rows[0]);
+      const row = r.rows[0];
+      if (row === undefined) throw new Error('webhook row missing');
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'webhook.create',
+        resourceType: 'webhook',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { targetUrl: input.targetUrl, eventTypes: input.eventTypes },
+      });
+      return toWebhook(row);
     });
   }
 
@@ -3615,11 +4174,27 @@ export class PgWebhookRepository implements WebhookRepository {
     input: { status: string },
   ): Promise<WebhookRecord | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const databaseStatus = input.status === 'disabled' ? 'revoked' : input.status;
       const r = await client.query<WebhookRow>(
-        `UPDATE integration.webhook_subscriptions SET status = $1, updated_at = now() WHERE tenant_id = $2 AND id = $3 RETURNING id, target_url, event_types, status, created_at, updated_at`,
-        [input.status, actor.tenantId, id],
+        `UPDATE integration.webhook_subscriptions
+            SET status = $1, updated_at = now()
+          WHERE tenant_id = $2 AND id = $3
+         RETURNING id, endpoint_url AS target_url, event_types, status, created_at, updated_at`,
+        [databaseStatus, actor.tenantId, id],
       );
-      return r.rows[0] ? toWebhook(r.rows[0]) : null;
+      const row = r.rows[0];
+      if (row === undefined) return null;
+      await new PgAuditWriter(client).append({
+        tenantId: actor.tenantId,
+        actorType: 'user',
+        actorId: actor.userId,
+        action: 'webhook.status.update',
+        resourceType: 'webhook',
+        resourceId: row.id,
+        outcome: 'success',
+        metadata: { status: input.status },
+      });
+      return toWebhook(row);
     });
   }
 }

@@ -1,6 +1,6 @@
 # Next-session continuation plan
 
-_Checkpoint saved: 2026-08-16 · branch `agent/complete-remaining-scope`_
+_Checkpoint refreshed: 2026-08-21 · branch `codex/continuation-baseline`_
 
 ## Checkpoint facts
 
@@ -15,10 +15,11 @@ _Checkpoint saved: 2026-08-16 · branch `agent/complete-remaining-scope`_
 - The PostgreSQL audit found and repaired several adapters that compiled against invented columns,
   including plans, feature flags, audit reads, outbox jobs, support cases, AI models, assessment
   versions, plugins and prompt versions.
-- `pnpm verify` passes after the final checkpoint batch: formatting, lint and workspace typechecks
-  are green; 148 test files pass with 1,559 tests, while 21 database-gated files / 53 tests skip
-  without `DATABASE_URL`. The production build and live PostgreSQL integration were not rerun.
-  This branch is a continuation checkpoint, not a release-ready claim.
+- `pnpm verify` passes after the adapter batch: formatting, lint and all 16 workspace typechecks are
+  green; 148 test files pass with 1,559 tests, while 26 database-gated files / 63 tests skip without
+  `DATABASE_URL`. The configured PostgreSQL run passes all 174 files / 1,622 tests, the production
+  build generates 97 pages and contract regeneration passes for all 244 operations. This branch is
+  a continuation checkpoint, not a release-ready claim.
 
 ## First executable slice
 
@@ -26,19 +27,25 @@ Complete the remaining checkpoint gates and fix only evidence-backed failures:
 
 ```bash
 pnpm --filter @cpf/web build
-pnpm contracts:check
+pnpm --filter @cpf/contracts run contracts:check
 ```
 
 Then run the database-backed suites with the local PostgreSQL URL already described in the repo
 runbooks. Record exact passed/skipped counts in `CURRENT_STATE.md`.
 
+This first slice and its adapter follow-up were fully reverified on 2026-08-21: the build generated
+97 pages, contract regeneration passed for 244 operations and the configured PostgreSQL suite passed
+all 174 files / 1,622 tests with no skips. The next adapter slice is recorded in `NEXT_ACTION.md`.
+
 ## Remaining repository-local work, in order
 
 1. **Finish the PostgreSQL adapter audit.** Compare every query in
-   `packages/org/src/pg-extended-repositories.ts` with `cpf_postgresql_schema_v2.0.sql`. Highest
-   priority known gaps are platform staff/invitations and membership-role mutation, maintenance
-   windows, privileged access grants, governance documents/submissions, audit exports, webhooks and
-   integration secret rotation. No adapter may return a successful fabricated record.
+   `packages/org/src/pg-extended-repositories.ts` with `cpf_postgresql_schema_v2.0.sql`. The
+   2026-08-19 batch closed platform staff/invitations, platform role/status mutation, maintenance
+   windows, privileged access grants, governance submissions, audit exports, webhooks and
+   integration secret rotation. The next evidence-backed gaps are governance-document mappings,
+   assessment traceability, candidate profile-correction/explanation/human-review requests and
+   candidate merge preview/reversal. No adapter may return a successful fabricated record.
 2. **Close or formally specify the remaining public API gaps.** The UI now fails closed for
    incomplete governance, operations, privileged-access, administrative support-detail and audit
    workflows. For each gap, follow `SOURCE_HIERARCHY.md`: ADR/threat/privacy review where required,

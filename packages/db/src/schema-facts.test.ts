@@ -20,7 +20,7 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
     await pool?.end();
   });
 
-  it('reconciles 138 logical vs 139 physical tables (CONFLICT-001)', async () => {
+  it('reconciles 141 logical vs 142 physical tables (CONFLICT-001)', async () => {
     const logical = await pool.query<{ n: number }>(
       `select count(*)::int as n
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -32,8 +32,8 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
          from information_schema.tables
         where table_schema in (${schemaList}) and table_type = 'BASE TABLE'`,
     );
-    expect(logical.rows[0]?.n).toBe(138);
-    expect(physical.rows[0]?.n).toBe(139);
+    expect(logical.rows[0]?.n).toBe(141);
+    expect(physical.rows[0]?.n).toBe(142);
   });
 
   it('models audit.events as range-partitioned with a DEFAULT partition', async () => {

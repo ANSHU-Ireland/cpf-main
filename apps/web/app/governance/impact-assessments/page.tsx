@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useId, useState } from 'react';
+import { Suspense, useCallback, useId, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
@@ -10,7 +10,7 @@ import { useAsync } from '../../lib/useAsync';
 import type { ImpactAssessmentView } from '../../lib/types';
 import { apiClient } from '../../lib/api-client';
 
-export default function GovernanceImpactAssessmentsPage() {
+function GovernanceImpactAssessmentsPageContent() {
   const headingId = useId();
   const searchParams = useSearchParams();
   const systemId = searchParams.get('systemId') ?? '';
@@ -136,5 +136,13 @@ export default function GovernanceImpactAssessmentsPage() {
         )}
       </AsyncBoundary>
     </>
+  );
+}
+
+export default function GovernanceImpactAssessmentsPage() {
+  return (
+    <Suspense fallback={<p role="status">Loading impact assessments…</p>}>
+      <GovernanceImpactAssessmentsPageContent />
+    </Suspense>
   );
 }

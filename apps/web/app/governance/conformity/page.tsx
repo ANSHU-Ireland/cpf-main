@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useId, useState } from 'react';
+import { Suspense, useCallback, useId, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
@@ -10,7 +10,7 @@ import { useAsync } from '../../lib/useAsync';
 import type { ConformityAssessmentView } from '../../lib/types';
 import { apiClient } from '../../lib/api-client';
 
-export default function GovernanceConformityPage() {
+function GovernanceConformityPageContent() {
   const headingId = useId();
   const searchParams = useSearchParams();
   const systemId = searchParams.get('systemId') ?? '';
@@ -187,5 +187,13 @@ export default function GovernanceConformityPage() {
         )}
       </AsyncBoundary>
     </>
+  );
+}
+
+export default function GovernanceConformityPage() {
+  return (
+    <Suspense fallback={<p role="status">Loading conformity assessment…</p>}>
+      <GovernanceConformityPageContent />
+    </Suspense>
   );
 }

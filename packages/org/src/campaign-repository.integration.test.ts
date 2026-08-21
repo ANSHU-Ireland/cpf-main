@@ -53,7 +53,7 @@ describe.skipIf(!dbAvailable)('PgCampaignRepository against live Postgres', () =
     await pool?.end();
   });
 
-  it('persists lifecycle changes with atomic audit and outbox evidence', async () => {
+  it('persists creation and blocks activation without readiness evidence', async () => {
     const repository = new PgCampaignRepository(pool, { role: 'cpf_app' });
     const created = await repository.createCampaign(actor, {
       code: TEST_CODE,
@@ -66,18 +66,27 @@ describe.skipIf(!dbAvailable)('PgCampaignRepository against live Postgres', () =
     const activated = await new PgCampaignRepository(pool, {
       role: 'cpf_app',
     }).transitionStatus(actor, created.id, 'active', ['draft']);
-    expect(typeof activated === 'string' ? activated : activated.status).toBe('active');
+    expect(activated).toBe('preflight_failed');
+    expect((await repository.getCampaign(actor, created.id))?.status).toBe('draft');
 
-    const evidence = await pool.query<{ audits: number; outbox_events: number }>(
+    const evidence = await pool.query<{
+      audits: number;
+      blocked_activations: number;
+      outbox_events: number;
+    }>(
       `SELECT
          (SELECT count(*)::int FROM audit.events
            WHERE tenant_id = $1 AND resource_id = $2) AS audits,
+         (SELECT count(*)::int FROM audit.events
+           WHERE tenant_id = $1 AND resource_id = $2
+             AND action = 'campaign.activation_blocked' AND outcome = 'denied') AS blocked_activations,
          (SELECT count(*)::int FROM audit.outbox_events
            WHERE tenant_id = $1 AND aggregate_id = $2) AS outbox_events`,
       [ORG_ID, created.id],
     );
     expect(evidence.rows[0]?.audits).toBeGreaterThanOrEqual(2);
-    expect(evidence.rows[0]?.outbox_events).toBeGreaterThanOrEqual(2);
+    expect(evidence.rows[0]?.blocked_activations).toBe(1);
+    expect(evidence.rows[0]?.outbox_events).toBeGreaterThanOrEqual(1);
   });
 
   it('enforces tenant isolation for campaign reads', async () => {

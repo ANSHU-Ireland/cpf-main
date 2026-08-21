@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useId, useState } from 'react';
+import { Suspense, useCallback, useId, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
@@ -10,7 +10,7 @@ import { useAsync } from '../../lib/useAsync';
 import type { ClassificationView } from '../../lib/types';
 import { apiClient } from '../../lib/api-client';
 
-export default function GovernanceClassificationsPage() {
+function GovernanceClassificationsPageContent() {
   const headingId = useId();
   const searchParams = useSearchParams();
   const systemId = searchParams.get('systemId') ?? '';
@@ -161,5 +161,13 @@ export default function GovernanceClassificationsPage() {
         )}
       </AsyncBoundary>
     </>
+  );
+}
+
+export default function GovernanceClassificationsPage() {
+  return (
+    <Suspense fallback={<p role="status">Loading AI Act classification…</p>}>
+      <GovernanceClassificationsPageContent />
+    </Suspense>
   );
 }

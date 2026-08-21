@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useId, useState } from 'react';
+import { Suspense, useCallback, useId, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
@@ -10,7 +10,7 @@ import { useAsync } from '../../lib/useAsync';
 import type { OversightPlanView } from '../../lib/types';
 import { apiClient } from '../../lib/api-client';
 
-export default function GovernanceOversightPage() {
+function GovernanceOversightPageContent() {
   const headingId = useId();
   const searchParams = useSearchParams();
   const systemId = searchParams.get('systemId') ?? '';
@@ -187,5 +187,13 @@ export default function GovernanceOversightPage() {
         )}
       </AsyncBoundary>
     </>
+  );
+}
+
+export default function GovernanceOversightPage() {
+  return (
+    <Suspense fallback={<p role="status">Loading oversight plan…</p>}>
+      <GovernanceOversightPageContent />
+    </Suspense>
   );
 }

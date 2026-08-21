@@ -326,7 +326,7 @@ export function isConcreteOperation(operationId: string): boolean {
 
 export class ConcreteDispatcher {
   readonly #pool: Pool;
-  readonly #opts: { role?: string; importDataKey?: string };
+  readonly #opts: { role?: string; importDataKey?: string; integrationDataKey?: string };
 
   readonly #attempts;
   readonly #campaigns;
@@ -383,7 +383,10 @@ export class ConcreteDispatcher {
   readonly #supportCases;
   readonly #supportCaseDetail;
 
-  constructor(pool: Pool, options: { role?: string; importDataKey?: string } = {}) {
+  constructor(
+    pool: Pool,
+    options: { role?: string; importDataKey?: string; integrationDataKey?: string } = {},
+  ) {
     this.#pool = pool;
     this.#opts = options;
     const role = options.role;
@@ -483,9 +486,19 @@ export class ConcreteDispatcher {
       ),
     });
     this.#integrations = api.createIntegrationService({
-      repository: new PgIntegrationRepository(pool, role),
+      repository: new PgIntegrationRepository(
+        pool,
+        role,
+        options.integrationDataKey ?? 'cpf-synthetic-demo-integration-key-v1',
+      ),
     });
-    this.#webhooks = api.createWebhookService({ repository: new PgWebhookRepository(pool, role) });
+    this.#webhooks = api.createWebhookService({
+      repository: new PgWebhookRepository(
+        pool,
+        role,
+        options.integrationDataKey ?? 'cpf-synthetic-demo-integration-key-v1',
+      ),
+    });
     this.#aiSystems = api.createAiSystemService({
       repository: new PgAiSystemRepository(pool, role),
     });
@@ -499,7 +512,13 @@ export class ConcreteDispatcher {
       repository: new PgGovernanceSubmissionRepository(pool, role),
     });
     this.#tenants = api.createTenantService({ repository: new PgTenantRepository(pool) });
-    this.#staff = api.createStaffService({ repository: new PgStaffRepository(pool) });
+    this.#staff = api.createStaffService({
+      repository: new PgStaffRepository(
+        pool,
+        role,
+        options.importDataKey ?? 'cpf-synthetic-demo-import-key-v1',
+      ),
+    });
     this.#plans = api.createPlanService({ repository: new PgPlanRepository(pool) });
     this.#featureFlags = api.createFeatureFlagService({
       repository: new PgFeatureFlagRepository(pool),
@@ -516,7 +535,7 @@ export class ConcreteDispatcher {
       repository: new PgAdminSupportCaseRepository(pool),
     });
     this.#adminPrivilegedAccess = api.createAdminPrivilegedAccessService({
-      repository: new PgAdminPrivilegedAccessRepository(pool),
+      repository: new PgAdminPrivilegedAccessRepository(pool, role),
     });
     this.#securityEvents = new PgSecurityEventRepository(pool);
     this.#notifPrefs = new PgNotificationPreferenceRepository(pool);
