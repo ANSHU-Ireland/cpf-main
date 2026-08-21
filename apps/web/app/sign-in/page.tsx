@@ -9,7 +9,7 @@ import { apiClient, ApiError } from '../lib/api-client';
 
 type Status = 'idle' | 'submitting';
 
-const DEMO_PASSWORD = 'CPF-DEMO-2026';
+const DEMO_PASSWORD = 'CPF-UAT-ChangeMe-2026!';
 const DEMO_WORKSPACES = [
   {
     label: 'Candidate',
@@ -32,25 +32,25 @@ const DEMO_WORKSPACES = [
   {
     label: 'Platform admin',
     description: 'Tenants, models, assessments, jobs, audit and privileged access.',
-    email: 'admin@northstar.invalid',
+    email: 'platform.admin@cpf-uat.invalid',
     href: '/admin',
   },
   {
     label: 'Governance',
     description: 'AI systems, risk, conformity, incidents and post-market records.',
-    email: 'admin@northstar.invalid',
+    email: 'governance@tenant-01.cpf-uat.invalid',
     href: '/governance',
   },
   {
     label: 'Operations',
     description: 'Service health, integration delivery and incident controls.',
-    email: 'admin@northstar.invalid',
+    email: 'operations@tenant-01.cpf-uat.invalid',
     href: '/operations',
   },
   {
     label: 'Support',
     description: 'Support queue, case handling and justified access workflows.',
-    email: 'admin@northstar.invalid',
+    email: 'support@tenant-01.cpf-uat.invalid',
     href: '/support',
   },
 ] as const;
@@ -71,12 +71,18 @@ export default function SignInPage(): React.JSX.Element {
     setStatus('submitting');
     setFormError(null);
     try {
-      const { mfaRequired, redirectTo } = await apiClient.signIn(
+      const { mfaRequired, passwordResetRequired, redirectTo } = await apiClient.signIn(
         nextEmail,
         nextPassword,
         workspace,
       );
-      router.push(mfaRequired ? '/mfa' : (redirectTo ?? '/account/profile'));
+      router.push(
+        mfaRequired
+          ? '/mfa'
+          : passwordResetRequired
+            ? '/account/security?passwordResetRequired=true'
+            : (redirectTo ?? '/account/profile'),
+      );
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : 'Unable to sign in. Please try again.';
@@ -100,7 +106,7 @@ export default function SignInPage(): React.JSX.Element {
     <AuthCard
       title="Sign in"
       headingId="signin-heading"
-      intro="Choose a synthetic role for the click-through demo, or enter one of the demo accounts."
+      intro="Choose a seeded UAT role, or enter any account from the generated credential manifest."
       maxWidth="1040px"
       footer={
         <span>
@@ -115,7 +121,8 @@ export default function SignInPage(): React.JSX.Element {
               Open a demo workspace
             </h2>
             <p className="mb-0 mt-2 max-w-2xl text-sm text-muted">
-              Pick the job you want to explore. All identities and records are fabricated for UAT.
+              Pick the job you want to explore. All identities and records are fabricated for UAT;
+              temporary passwords must be changed before live use.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -145,7 +152,7 @@ export default function SignInPage(): React.JSX.Element {
           <div>
             <h2 className="m-0 text-lg font-semibold text-ink">Use credentials</h2>
             <p className="mb-0 mt-2 text-sm text-muted">
-              Shared demo password: <strong className="text-ink">{DEMO_PASSWORD}</strong>
+              Shared UAT password: <strong className="text-ink">{DEMO_PASSWORD}</strong>
             </p>
           </div>
           {formError ? (

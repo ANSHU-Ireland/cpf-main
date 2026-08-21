@@ -12,7 +12,7 @@ the full build contract.
 
 - The verified source package contains 362 requirements (336 Must), 244 OpenAPI operations, 125
   interface SVGs, 1,543 dictionary rows and a 139 physical / 138 logical PostgreSQL baseline. The
-  current additive schema contains 142 physical / 141 logical tables.
+  current additive schema contains 143 physical / 142 logical tables.
 - The complete configured PostgreSQL checkpoint passes 174 test files / 1,622 tests with zero
   skips or failures. This includes all 10 focused live tests added for the current adapter batch.
 - The production web build generates 98 pages after the Governance overview was added and five governance routes were given
@@ -21,12 +21,31 @@ the full build contract.
   no longer depends on an ignored generated `coverage/` file.
 - The concrete-dispatch classifier matches all 244 baseline operation IDs. The test exposed and
   fixed the omitted `post_candidates_merge_preview` operation.
-- Authentication operations now route to their own contract handlers. Provider-dependent commands
-  fail closed until a real identity/MFA provider is configured.
+- Password authentication is PostgreSQL-backed with bcrypt verifiers, hashed expiring session
+  tokens, lockout counters, forced first-login reset and session revocation after password change.
+  Provider-dependent recovery, email verification and MFA commands still fail closed.
 - A leased outbox processor implements event-ID idempotency, bounded retry, hashed failure details
   and dead-letter behavior with an additive PostgreSQL migration.
 - Governed AI and companion policy packages enforce the core scope, version, budget, output,
   signature, disclosure and telemetry invariants under unit tests.
+
+## 2026-08-21 AWS-shaped UAT and identity checkpoint
+
+- The deterministic UAT seed creates exactly 30 organizations, 120 campaigns and 360 applications,
+  with nine usable role personas for Northstar and 242+ reset-required tenant credentials. Reseeding
+  preserves passwords users have already changed.
+- Database-backed role smoke testing passes 34 reads/actions across Candidate, Reviewer, Employer,
+  Platform Admin, Governance, Operations and Support; a separate auth smoke validates nine personas
+  and wrong-password rejection.
+- Browser UAT verifies first-login reset, readable security activity, employer and platform
+  dashboards, campaign navigation, permission denial and a phone-sized navigation drawer without
+  horizontal overflow.
+- AWS CloudFormation now covers ECR, two-AZ networking, private Fargate services, Multi-AZ encrypted
+  RDS, Secrets Manager, KMS/S3, WAF, EventBridge, CloudWatch and rollback controls. Both templates
+  pass `cfn-lint` 1.55.1. The stack is authored but not applied because this workstation has no AWS
+  CLI, Docker or AWS account authority.
+- `docs/deployment/AWS_UAT_RUNBOOK.md` and `docs/deployment/GO_LIVE_CHECKLIST.md` define the exact
+  deployment, credential, acceptance and production-boundary process.
 
 ## 2026-08-21 verification and persistence checkpoint
 
@@ -53,7 +72,7 @@ the full build contract.
   tests pass as part of the complete configured PostgreSQL suite.
 - Schema facts reconcile the three additive durable tables introduced by this batch: audit export
   jobs, maintenance windows and governance submission envelopes. The current measured inventory is
-  141 logical / 142 physical tables while preserving the baseline partition-count distinction.
+  142 logical / 143 physical tables while preserving the baseline partition-count distinction.
 
 ## 2026-08-21 functional-demo UAT checkpoint
 

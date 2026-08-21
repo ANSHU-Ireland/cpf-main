@@ -18,6 +18,7 @@ import type { Actor } from './types.js';
 const T = '11111111-1111-1111-1111-111111111111';
 const U = '22222222-2222-2222-2222-222222222222';
 const admin: Actor = { tenantId: T, userId: U, roles: ['employer_admin'] };
+const governanceOfficer: Actor = { tenantId: T, userId: U, roles: ['governance_officer'] };
 const noRole: Actor = { tenantId: T, userId: U, roles: ['viewer'] };
 
 const sys: AiSystemRecord = {
@@ -84,6 +85,10 @@ describe('parseAiSystemId', () => {
 describe('listAiSystems', () => {
   it('ok', async () => {
     const r = await listAiSystems({ repository: repo() }, admin);
+    expect(r.ok).toBe(true);
+  });
+  it('allows the tenant governance officer', async () => {
+    const r = await listAiSystems({ repository: repo() }, governanceOfficer);
     expect(r.ok).toBe(true);
   });
   it('403', async () => {

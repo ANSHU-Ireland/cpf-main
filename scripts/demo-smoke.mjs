@@ -1,7 +1,7 @@
 /* global fetch, process */
 
-const baseUrl = (process.env.CPF_DEMO_WEB_URL ?? 'http://127.0.0.1:4300').replace(/\/$/, '');
-const password = 'CPF-DEMO-2026';
+const baseUrl = (process.env.CPF_UAT_WEB_URL ?? 'http://127.0.0.1:4300').replace(/\/$/, '');
+const password = process.env.CPF_UAT_SHARED_PASSWORD ?? 'CPF-UAT-ChangeMe-2026!';
 
 const journeys = [
   {
@@ -52,13 +52,13 @@ const journeys = [
   },
   {
     name: 'Platform admin',
-    email: 'admin@northstar.invalid',
+    email: 'platform.admin@cpf-uat.invalid',
     workspace: '/admin',
     paths: ['/api/admin/dashboard', '/api/admin/tenants', '/api/admin/jobs'],
   },
   {
     name: 'Governance',
-    email: 'admin@northstar.invalid',
+    email: 'governance@tenant-01.cpf-uat.invalid',
     workspace: '/governance',
     paths: [
       '/api/governance/ai-systems',
@@ -81,7 +81,7 @@ const journeys = [
   },
   {
     name: 'Operations',
-    email: 'admin@northstar.invalid',
+    email: 'operations@tenant-01.cpf-uat.invalid',
     workspace: '/operations',
     paths: ['/api/operations/dashboard', '/api/operations/security', '/api/operations/deliveries'],
     actions: [
@@ -93,7 +93,7 @@ const journeys = [
   },
   {
     name: 'Support',
-    email: 'admin@northstar.invalid',
+    email: 'support@tenant-01.cpf-uat.invalid',
     workspace: '/support',
     paths: ['/api/support/queue', '/api/support/jit-access', '/api/support/cases/demo-uat-case'],
     actions: [
@@ -176,5 +176,5 @@ if (failures.length > 0) {
   process.stderr.write(`\nDemo smoke failures (${failures.length}):\n${failures.join('\n')}\n`);
   process.exitCode = 1;
 } else {
-  process.stdout.write('\nAll functional demo journeys passed.\n');
+  process.stdout.write('\nAll database-backed UAT journeys passed.\n');
 }

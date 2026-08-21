@@ -131,4 +131,20 @@ describe('demo resource authorization', () => {
       }),
     ).toBe(false);
   });
+
+  it('allows a support agent to use only the approved admin support-case operations', () => {
+    const support = session('support_agent', TENANT_ID);
+    expect(authorizeDemoOperation(support, 'get_admin_support_cases', {})).toBe(true);
+    expect(authorizeDemoOperation(support, 'put_admin_support_cases_caseId_status', {})).toBe(true);
+    expect(authorizeDemoOperation(support, 'get_admin_tenants', {})).toBe(false);
+  });
+
+  it('allows a platform-scoped system administrator across admin operations', () => {
+    const systemAdmin: DemoSession = {
+      actor: { tenantId: TENANT_ID, userId: 'system-admin', roles: ['system_admin'] },
+      scopes: [{ role: 'system_admin', scopeType: 'platform', scopeId: TENANT_ID }],
+    };
+    expect(authorizeDemoOperation(systemAdmin, 'get_admin_tenants', {})).toBe(true);
+    expect(authorizeDemoOperation(systemAdmin, 'get_operations_dashboard', {})).toBe(true);
+  });
 });

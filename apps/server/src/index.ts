@@ -12,18 +12,45 @@ const HOST = process.env.HOST ?? '127.0.0.1';
 
 const router = new Router();
 const demoMode = process.env.CPF_DEMO_MODE === 'true';
-const pool = demoMode && isDatabaseConfigured() ? createPool() : null;
+const appEnvironment = process.env.APP_ENV ?? 'local';
+if (!['local', 'preview', 'uat', 'pilot', 'production'].includes(appEnvironment)) {
+  throw new Error(`Unsupported APP_ENV: ${appEnvironment}`);
+}
+if (demoMode && appEnvironment === 'production') {
+  throw new Error('CPF_DEMO_MODE must never be enabled when APP_ENV=production.');
+}
+if (
+  appEnvironment === 'production' &&
+  (!process.env.CPF_IMPORT_DATA_KEY || !process.env.CPF_INTEGRATION_DATA_KEY)
+) {
+  throw new Error('Production requires managed import and integration encryption keys.');
+}
+const pool = isDatabaseConfigured() ? createPool() : null;
 const concreteDispatcher =
   pool === null
     ? null
     : new ConcreteDispatcher(pool, {
         role: process.env.CPF_DB_ROLE ?? 'cpf_app',
-        importDataKey: process.env.CPF_DEMO_DATA_KEY ?? 'cpf-synthetic-demo-import-key-v1',
+        importDataKey:
+          process.env.CPF_IMPORT_DATA_KEY ??
+          process.env.CPF_DEMO_DATA_KEY ??
+          'cpf-synthetic-demo-import-key-v1',
         integrationDataKey:
           process.env.CPF_INTEGRATION_DATA_KEY ?? 'cpf-synthetic-demo-integration-key-v1',
       });
 const sessionResolver = pool === null ? null : new DemoSessionResolver(pool);
 const allowedOrigin = process.env.CPF_ALLOWED_ORIGIN ?? 'http://127.0.0.1:4300';
+
+const PUBLIC_OPERATIONS = new Set([
+  'post_auth_login',
+  'post_auth_password_forgot',
+  'post_auth_password_reset',
+  'post_auth_email_verify',
+  'post_auth_email_resend',
+  'post_auth_mfa_challenge',
+]);
+
+const PUBLIC_ACTOR = { userId: '', tenantId: '', roles: [] } as const;
 
 function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
@@ -53,6 +80,10 @@ function send(res: ServerResponse, status: number, correlationId: string, body: 
     'Access-Control-Allow-Headers':
       'Authorization, Content-Type, X-Correlation-Id, Idempotency-Key',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
   });
   res.end(payload);
 }
@@ -65,6 +96,10 @@ function sendHttpResponse(res: ServerResponse, response: HttpResponse): void {
     'Access-Control-Allow-Headers':
       'Authorization, Content-Type, X-Correlation-Id, Idempotency-Key',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
   });
   res.end(payload);
 }
@@ -89,11 +124,24 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (method === 'GET' && (pathname === '/health' || pathname === '/healthz')) {
     return send(res, 200, correlationId, { status: 'ok', operations: OPERATIONS.length });
   }
+  if (method === 'GET' && pathname === '/readyz') {
+    if (pool === null) {
+      return send(res, 503, correlationId, { status: 'not-ready', database: 'not-configured' });
+    }
+    try {
+      await pool.query('SELECT 1');
+      return send(res, 200, correlationId, { status: 'ready', database: 'reachable' });
+    } catch {
+      return send(res, 503, correlationId, { status: 'not-ready', database: 'unreachable' });
+    }
+  }
   if (method === 'GET' && pathname === '/') {
     return send(res, 200, correlationId, {
       name: 'CPF service',
       operations: OPERATIONS.length,
-      concretePersistence: concreteDispatcher === null ? 'disabled' : 'postgresql-demo',
+      concretePersistence: concreteDispatcher === null ? 'disabled' : 'postgresql',
+      environment: appEnvironment,
+      demoMode,
       note: 'Contract operations use authenticated PostgreSQL-backed handlers. Persistence fails closed when the controlled runtime is not configured.',
       routes: '/__routes',
       health: '/health',
@@ -132,6 +180,18 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       });
     }
     try {
+      const body = await readBody(req);
+      if (PUBLIC_OPERATIONS.has(route.op.operationId)) {
+        const response = await concreteDispatcher.dispatch(
+          route.op.operationId,
+          PUBLIC_ACTOR,
+          params,
+          body,
+          Object.fromEntries(url.searchParams.entries()),
+          typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : '',
+        );
+        if (response !== null) return sendHttpResponse(res, response);
+      }
       const session = await sessionResolver.resolve(req.headers.authorization);
       if (session === null) {
         return send(res, 401, correlationId, {
@@ -151,7 +211,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           detail: 'This session cannot access the requested demo resource.',
         });
       }
-      const body = await readBody(req);
       const response = await concreteDispatcher.dispatch(
         route.op.operationId,
         session.actor,
@@ -191,7 +250,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
 server.listen(PORT, HOST, () => {
   process.stdout.write(
-    `CPF demo server listening on http://${HOST}:${PORT} (${OPERATIONS.length} operations)\n` +
+    `CPF API listening on http://${HOST}:${PORT} (${OPERATIONS.length} operations, ${appEnvironment})\n` +
       `  health:  http://${HOST}:${PORT}/health\n` +
       `  routes:  http://${HOST}:${PORT}/__routes\n`,
   );

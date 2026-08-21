@@ -190,6 +190,11 @@ export const apiClient = {
     request<void>(`/api/account/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getSecurityEvents: (): Promise<Collection<SecurityEventView>> =>
     request<Collection<SecurityEventView>>('/api/account/security-events'),
+  changePassword: (currentPassword: string, newPassword: string): Promise<void> =>
+    request<void>('/api/account/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   getNotices: (): Promise<Collection<NoticeView>> =>
     request<Collection<NoticeView>>('/api/account/notices'),
   acknowledgeNotice: (id: string): Promise<NoticeView> =>
@@ -198,11 +203,14 @@ export const apiClient = {
     email: string,
     password: string,
     workspace?: string,
-  ): Promise<{ mfaRequired: boolean; redirectTo?: string }> =>
-    request<{ mfaRequired: boolean; redirectTo?: string }>('/api/auth/sign-in', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, workspace }),
-    }),
+  ): Promise<{ mfaRequired: boolean; passwordResetRequired?: boolean; redirectTo?: string }> =>
+    request<{ mfaRequired: boolean; passwordResetRequired?: boolean; redirectTo?: string }>(
+      '/api/auth/sign-in',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password, workspace }),
+      },
+    ),
 
   // ── Candidate journey ──
   getApplications: (): Promise<Collection<CandidateApplicationView>> =>

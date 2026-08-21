@@ -8,6 +8,7 @@ export const EMPLOYER_ADMIN_ROLE = 'employer_admin';
 export const EMPLOYER_APPROVER_ROLE = 'employer_admin_approver';
 export const CANDIDATE_ROLE = 'candidate';
 export const REVIEWER_ROLE = 'reviewer';
+export const GOVERNANCE_OFFICER_ROLE = 'governance_officer';
 
 /** Minimal grants for the Employer Admin organisation surface. */
 export const ORG_PERMISSIONS: readonly Permission[] = [
@@ -96,4 +97,16 @@ export const ORG_PERMISSIONS: readonly Permission[] = [
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'audit_evidence' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'read', resourceType: 'submission_report' },
   { role: EMPLOYER_ADMIN_ROLE, action: 'write', resourceType: 'submission_report' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'read', resourceType: 'ai_system' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'write', resourceType: 'ai_system' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'read', resourceType: 'risk_control' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'write', resourceType: 'risk_control' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'read', resourceType: 'governance_doc' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'write', resourceType: 'governance_doc' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'read', resourceType: 'governance_submission' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'write', resourceType: 'governance_submission' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'read', resourceType: 'deployer_readiness' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'write', resourceType: 'deployer_readiness' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'read', resourceType: 'audit_evidence' },
+  { role: GOVERNANCE_OFFICER_ROLE, action: 'write', resourceType: 'audit_evidence' },
 ];

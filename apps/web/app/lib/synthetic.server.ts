@@ -179,24 +179,21 @@ const sessions: SessionView[] = [
 const securityEvents: SecurityEventView[] = [
   {
     id: 'evt_signin_new_device',
-    type: 'sign_in',
-    description: 'Signed in from a new device (Safari on iPad).',
+    eventType: 'sign_in_new_device',
+    outcome: 'succeeded',
     occurredAt: '2026-07-28T18:40:00.000Z',
-    severity: 'info',
   },
   {
     id: 'evt_password_changed',
-    type: 'password_changed',
-    description: 'Account password was changed.',
+    eventType: 'password_changed',
+    outcome: 'succeeded',
     occurredAt: '2026-07-20T11:02:00.000Z',
-    severity: 'warning',
   },
   {
     id: 'evt_mfa_enabled',
-    type: 'mfa_enabled',
-    description: 'Two-factor authentication was enabled.',
+    eventType: 'mfa_enabled',
+    outcome: 'succeeded',
     occurredAt: '2026-07-19T08:15:00.000Z',
-    severity: 'info',
   },
 ];
 
