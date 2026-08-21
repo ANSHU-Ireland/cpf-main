@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      'server-only': fileURLToPath(new URL('./vitest.server-only.ts', import.meta.url)),
+    },
+  },
   // Use the React automatic runtime so JSX needs no explicit React import.
   esbuild: { jsx: 'automatic' },
   test: {

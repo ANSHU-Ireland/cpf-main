@@ -101,107 +101,102 @@ export default function SignInPage(): React.JSX.Element {
       title="Sign in"
       headingId="signin-heading"
       intro="Choose a synthetic role for the click-through demo, or enter one of the demo accounts."
+      maxWidth="1040px"
       footer={
         <span>
           Trouble signing in? <Link href="/forgot-password">Reset your password</Link>.
         </span>
       }
     >
-      <section aria-labelledby="demo-workspaces-heading" style={{ marginBottom: 28 }}>
-        <h2 id="demo-workspaces-heading" style={{ margin: '0 0 8px', fontSize: 18 }}>
-          Open a demo workspace
-        </h2>
-        <p style={{ margin: '0 0 16px', color: 'var(--color-muted)', fontSize: 13 }}>
-          All identities and records are fabricated. Shared password:{' '}
-          <strong>{DEMO_PASSWORD}</strong>
-        </p>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-            gap: 10,
-          }}
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.8fr)]">
+        <section aria-labelledby="demo-workspaces-heading">
+          <div className="mb-4">
+            <h2 id="demo-workspaces-heading" className="m-0 text-lg font-semibold text-ink">
+              Open a demo workspace
+            </h2>
+            <p className="mb-0 mt-2 max-w-2xl text-sm text-muted">
+              Pick the job you want to explore. All identities and records are fabricated for UAT.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {DEMO_WORKSPACES.map((workspace) => (
+              <button
+                key={workspace.label}
+                type="button"
+                disabled={status === 'submitting'}
+                onClick={() =>
+                  void submitCredentials(workspace.email, DEMO_PASSWORD, workspace.href)
+                }
+                className="group min-h-28 rounded-control border border-line bg-paper p-4 text-left transition-colors hover:border-blue hover:bg-blue-soft disabled:cursor-wait"
+              >
+                <strong className="mb-2 block text-sm font-semibold text-blue group-hover:underline">
+                  {workspace.label}
+                </strong>
+                <span className="block text-sm leading-5 text-muted">{workspace.description}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <form
+          onSubmit={onSubmit}
+          noValidate
+          className="flex flex-col gap-4 rounded-surface border border-line bg-soft p-6"
         >
-          {DEMO_WORKSPACES.map((workspace) => (
-            <button
-              key={workspace.label}
-              type="button"
-              disabled={status === 'submitting'}
-              onClick={() => void submitCredentials(workspace.email, DEMO_PASSWORD, workspace.href)}
+          <div>
+            <h2 className="m-0 text-lg font-semibold text-ink">Use credentials</h2>
+            <p className="mb-0 mt-2 text-sm text-muted">
+              Shared demo password: <strong className="text-ink">{DEMO_PASSWORD}</strong>
+            </p>
+          </div>
+          {formError ? (
+            <p
+              role="alert"
               style={{
-                minHeight: 96,
-                padding: 14,
-                textAlign: 'left',
-                border: '1px solid var(--color-line)',
+                margin: 0,
+                padding: 'calc(var(--space-unit) * 2) calc(var(--space-unit) * 3)',
+                background: 'var(--color-red-soft)',
+                color: 'var(--color-red)',
                 borderRadius: 'var(--radius-control)',
-                background: 'var(--color-paper)',
-                color: 'var(--color-ink)',
-                cursor: status === 'submitting' ? 'wait' : 'pointer',
               }}
             >
-              <strong style={{ display: 'block', color: 'var(--color-blue)', marginBottom: 6 }}>
-                {workspace.label}
-              </strong>
-              <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--color-muted)' }}>
-                {workspace.description}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-      <form
-        onSubmit={onSubmit}
-        noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--space-unit) * 4)' }}
-      >
-        {formError ? (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              padding: 'calc(var(--space-unit) * 2) calc(var(--space-unit) * 3)',
-              background: 'var(--color-red-soft)',
-              color: 'var(--color-red)',
-              borderRadius: 'var(--radius-control)',
-            }}
-          >
-            {formError}
-          </p>
-        ) : null}
-        <Field label="Email" required error={fieldErrors.email}>
-          {({ id, invalid, describedBy }) => (
-            <Input
-              id={id}
-              type="email"
-              name="email"
-              autoComplete="username"
-              value={email}
-              invalid={invalid}
-              aria-describedby={describedBy}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@northstar.invalid"
-            />
-          )}
-        </Field>
-        <Field label="Password" required error={fieldErrors.password}>
-          {({ id, invalid, describedBy }) => (
-            <Input
-              id={id}
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              value={password}
-              invalid={invalid}
-              aria-describedby={describedBy}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={DEMO_PASSWORD}
-            />
-          )}
-        </Field>
-        <Button type="submit" disabled={status === 'submitting'}>
-          {status === 'submitting' ? 'Signing in…' : 'Sign in'}
-        </Button>
-      </form>
+              {formError}
+            </p>
+          ) : null}
+          <Field label="Email" required error={fieldErrors.email}>
+            {({ id, invalid, describedBy }) => (
+              <Input
+                id={id}
+                type="email"
+                name="email"
+                autoComplete="username"
+                value={email}
+                invalid={invalid}
+                aria-describedby={describedBy}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@northstar.invalid"
+              />
+            )}
+          </Field>
+          <Field label="Password" required error={fieldErrors.password}>
+            {({ id, invalid, describedBy }) => (
+              <Input
+                id={id}
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                value={password}
+                invalid={invalid}
+                aria-describedby={describedBy}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={DEMO_PASSWORD}
+              />
+            )}
+          </Field>
+          <Button type="submit" disabled={status === 'submitting'} style={{ width: '100%' }}>
+            {status === 'submitting' ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
+      </div>
     </AuthCard>
   );
 }

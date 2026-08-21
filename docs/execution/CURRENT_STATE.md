@@ -15,7 +15,7 @@ the full build contract.
   current additive schema contains 142 physical / 141 logical tables.
 - The complete configured PostgreSQL checkpoint passes 174 test files / 1,622 tests with zero
   skips or failures. This includes all 10 focused live tests added for the current adapter batch.
-- The production web build generates 97 static pages after five governance routes were given
+- The production web build generates 98 pages after the Governance overview was added and five governance routes were given
   explicit Suspense boundaries for their search-parameter state.
 - The executable route inventory derives 125/125 canonical routes directly from tracked SVGs. It
   no longer depends on an ignored generated `coverage/` file.
@@ -30,7 +30,7 @@ the full build contract.
 
 ## 2026-08-21 verification and persistence checkpoint
 
-- The production web build passes and generates all 97 pages.
+- The production web build passes and generates all 98 pages.
 - Contract regeneration passes for all 244 operations with
   `pnpm --filter @cpf/contracts run contracts:check`.
 - `pnpm verify` passes with formatting, lint and all 16 typed workspace projects green. Without a
@@ -54,6 +54,19 @@ the full build contract.
 - Schema facts reconcile the three additive durable tables introduced by this batch: audit export
   jobs, maintenance windows and governance submission envelopes. The current measured inventory is
   141 logical / 142 physical tables while preserving the baseline partition-count distinction.
+
+## 2026-08-21 functional-demo UAT checkpoint
+
+- The missing Tailwind/PostCSS compiler is restored, so the existing Penpot-aligned utility classes
+  now render across the complete web surface.
+- All seven synthetic role workspaces open successfully. The browser UAT completed Candidate,
+  Reviewer, Employer, Platform Admin, Governance, Operations and Support task journeys at 320,
+  768 and 1440 px widths.
+- The expanded functional smoke suite passes 32 authenticated reads and safe synthetic actions.
+- Governance no longer opens a 404; Support case detail and Candidate assessment launch now work in
+  demo mode; production contract gaps continue to fail closed.
+- The detailed scope, evidence and external limitations are recorded in
+  `UAT_DEMO_REPORT_2026-08-21.md`.
 
 ## 2026-08-16 continuation checkpoint
 

@@ -1,13 +1,14 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
+import { demoContractReadResponse, functionalDemoEnabled } from './demo-contracts.server';
 
 const CORRELATION_HEADER = 'x-correlation-id';
 
 /**
- * Honest boundary for a documented public-API gap. A UI route must never fall
- * back to fabricated process-local records when the authoritative contract has
- * no operation capable of fulfilling the request.
+ * Honest boundary for a documented public-API gap. Production remains fail-closed when the
+ * authoritative contract cannot fulfil a request. The explicitly labelled local demo may serve a
+ * read-only synthetic projection for UAT; unknown routes and mutations still reach this boundary.
  */
 export function contractGapResponse(
   request: Request,
@@ -17,6 +18,11 @@ export function contractGapResponse(
     readonly requirementIds: readonly string[];
   },
 ): Response {
+  if (functionalDemoEnabled()) {
+    const demoResponse = demoContractReadResponse(request);
+    if (demoResponse !== null) return demoResponse;
+  }
+
   const correlationId = request.headers.get(CORRELATION_HEADER)?.trim() || randomUUID();
   return Response.json(
     {

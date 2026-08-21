@@ -3,6 +3,10 @@ import {
   adminSupportCase,
   type PlatformAdminSupportCase,
 } from '../../../../../lib/admin-api.server';
+import {
+  functionalDemoEnabled,
+  updateDemoSupportStatus,
+} from '../../../../../lib/demo-contracts.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +33,13 @@ export async function POST(
   const status = typeof requested === 'string' ? STATUS[requested] : undefined;
   if (status === undefined) {
     return Response.json({ error: 'A valid support status is required.' }, { status: 422 });
+  }
+  if (functionalDemoEnabled()) {
+    updateDemoSupportStatus(
+      params.id,
+      requested as 'new' | 'assigned' | 'in_progress' | 'escalated' | 'resolved',
+    );
+    return new Response(null, { status: 204 });
   }
   return projectPlatform<PlatformAdminSupportCase, unknown>(
     {

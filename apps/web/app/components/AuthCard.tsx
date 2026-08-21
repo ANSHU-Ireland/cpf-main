@@ -7,6 +7,7 @@ export interface AuthCardProps {
   readonly intro?: string;
   readonly children: ReactNode;
   readonly footer?: ReactNode;
+  readonly maxWidth?: string;
 }
 
 /** Centred single-column container for unauthenticated flows (sign-in, MFA, recovery). */
@@ -16,6 +17,7 @@ export function AuthCard({
   intro,
   children,
   footer,
+  maxWidth = '420px',
 }: AuthCardProps): React.JSX.Element {
   return (
     <main
@@ -28,7 +30,7 @@ export function AuthCard({
         padding: 'calc(var(--space-unit) * 10) calc(var(--space-unit) * 4)',
       }}
     >
-      <Card style={{ width: '100%', maxWidth: '420px' }}>
+      <Card style={{ width: '100%', maxWidth }}>
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--space-unit) * 4)' }}
         >

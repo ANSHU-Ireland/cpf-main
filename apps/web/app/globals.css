@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /*
  * Base element styling. All values reference CSS custom properties emitted from `@cpf/tokens`
  * (see app/theme.ts), so this file introduces no independent design values.
@@ -20,6 +24,36 @@ body {
   line-height: 1.5;
   color: var(--color-ink);
   background: var(--color-soft);
+  min-width: 0;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+table {
+  border-collapse: collapse;
 }
 
 h1,

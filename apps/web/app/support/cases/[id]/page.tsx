@@ -27,22 +27,45 @@ export default function SupportCaseWorkspacePage() {
 
   const handleReply = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const content = (formData.get('content') as string) || '';
     const internal = formData.get('internal') === 'on';
 
     if (content.trim().length < 10) return;
 
     await apiClient.addSupportMessage(caseId, content.trim(), internal);
-    const updated = await apiClient.getSupportCase(caseId);
-    setData(updated);
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            messages: [
+              ...current.messages,
+              {
+                id: `uat-message-${Date.now()}`,
+                author: 'Support agent',
+                content: content.trim(),
+                timestamp: new Date().toISOString(),
+                internal,
+              },
+            ],
+          }
+        : current,
+    );
+    form.reset();
     setShowReply(false);
   };
 
   const handleStatusChange = async (newStatus: string) => {
     await apiClient.updateSupportCaseStatus(caseId, newStatus);
-    const updated = await apiClient.getSupportCase(caseId);
-    setData(updated);
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            status: newStatus as SupportCaseDetail['status'],
+          }
+        : current,
+    );
   };
 
   const priorityTone = {

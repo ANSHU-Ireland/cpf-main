@@ -60,6 +60,14 @@ export default function CandidateHomePage(): React.JSX.Element {
         title="Your assessments"
         headingId={headingId}
         description="Track persisted invitations, decisions and the preparation steps for your assessments."
+        actions={
+          <Link
+            href="/candidate/assessment/readiness"
+            className="inline-flex min-h-target items-center rounded-control bg-blue px-5 font-semibold text-paper no-underline hover:brightness-95"
+          >
+            Continue assessment
+          </Link>
+        }
       />
       <AsyncBoundary state={state} onRetry={reload} label="your dashboard">
         {(data) => {

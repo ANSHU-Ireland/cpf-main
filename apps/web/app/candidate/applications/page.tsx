@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useId, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
 import { Card } from '../../components/Card';
@@ -201,6 +202,18 @@ function ApplicationCard({
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 'calc(var(--space-unit) * 2)', flexWrap: 'wrap' }}>
+            {application.status === 'invited' ||
+            application.status === 'scheduled' ||
+            application.status === 'in_progress' ? (
+              <Link
+                href="/candidate/assessment/readiness"
+                className="inline-flex min-h-target items-center rounded-control bg-blue px-4 font-semibold text-paper no-underline hover:brightness-95"
+              >
+                {application.status === 'in_progress'
+                  ? 'Continue assessment'
+                  : 'Prepare assessment'}
+              </Link>
+            ) : null}
             {hasDecision ? (
               <>
                 <Button variant="secondary" onClick={() => setMode('explanation')}>

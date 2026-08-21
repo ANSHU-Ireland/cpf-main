@@ -14,10 +14,11 @@ export interface NavItem {
 export interface SidebarNavProps {
   readonly items: readonly NavItem[];
   readonly label: string;
+  readonly onNavigate?: () => void;
 }
 
 /** Accessible vertical navigation; marks the active route with aria-current. */
-export function SidebarNav({ items, label }: SidebarNavProps): React.JSX.Element {
+export function SidebarNav({ items, label, onNavigate }: SidebarNavProps): React.JSX.Element {
   const pathname = usePathname();
   return (
     <nav aria-label={label}>
@@ -42,6 +43,7 @@ export function SidebarNav({ items, label }: SidebarNavProps): React.JSX.Element
               <Link
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
+                {...(onNavigate ? { onClick: onNavigate } : {})}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

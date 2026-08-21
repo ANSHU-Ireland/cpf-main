@@ -1,5 +1,8 @@
 'use client';
 import { useCallback, useId, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight, WarningOctagon } from '@phosphor-icons/react';
+import { Button } from '@cpf/ui';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { AsyncBoundary } from '../components/AsyncBoundary';
@@ -22,8 +25,16 @@ export default function OperationsDashboardPage() {
 
   const handleAcknowledge = async (alertId: string) => {
     await apiClient.acknowledgeOperationalAlert(alertId);
-    const updated = await apiClient.getOperationsDashboard();
-    setData(updated);
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            alerts: current.alerts.map((alert) =>
+              alert.id === alertId ? { ...alert, acknowledged: true } : alert,
+            ),
+          }
+        : current,
+    );
   };
 
   const severityTone = {
@@ -37,14 +48,22 @@ export default function OperationsDashboardPage() {
     <>
       <PageHeader
         title="Operations dashboard"
-        description="Monitor system health, alerts and delivery metrics."
+        description="Monitor availability, queues, dependencies and regional controls."
         headingId={headingId}
+        actions={
+          <Link
+            href="/operations/incident"
+            className="inline-flex min-h-target items-center gap-2 rounded-control bg-blue px-5 font-semibold text-paper no-underline hover:brightness-95"
+          >
+            Open incident <ArrowRight size={18} aria-hidden />
+          </Link>
+        }
       />
 
       <AsyncBoundary state={state} onRetry={reload} label="Operations dashboard">
         {() => (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {data?.metrics.map((metric, i) => (
                 <Card key={i} aria-label={metric.label}>
                   <div className="space-y-2">
@@ -60,61 +79,67 @@ export default function OperationsDashboardPage() {
               ))}
             </div>
 
-            <Card aria-label="System alerts">
-              <h2 className="text-base font-semibold text-ink mb-4">System alerts</h2>
-              {data && data.alerts.length === 0 ? (
-                <p className="text-sm text-muted">No active alerts</p>
-              ) : (
-                <div className="space-y-3">
-                  {data?.alerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-50"
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <StatusBadge tone={severityTone[alert.severity]}>
-                            {alert.severity}
-                          </StatusBadge>
-                          {alert.acknowledged && (
-                            <StatusBadge tone="success">Acknowledged</StatusBadge>
-                          )}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.9fr)]">
+              <Card aria-label="Priority work">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="m-0 text-lg font-semibold text-ink">Priority work</h2>
+                    <p className="mb-0 mt-1 text-sm text-muted">
+                      Items that need an operator decision.
+                    </p>
+                  </div>
+                  <WarningOctagon size={24} color="var(--color-amber)" aria-hidden />
+                </div>
+                {data && data.alerts.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    No active alerts. All monitored services are within policy.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-line border-t border-line">
+                    {data?.alerts.map((alert) => (
+                      <div
+                        key={alert.id}
+                        className="flex flex-wrap items-center justify-between gap-4 py-4"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex items-center gap-2">
+                            <StatusBadge tone={severityTone[alert.severity]}>
+                              {alert.severity}
+                            </StatusBadge>
+                            {alert.acknowledged ? (
+                              <StatusBadge tone="success">Acknowledged</StatusBadge>
+                            ) : null}
+                          </div>
+                          <p className="m-0 text-sm font-medium text-ink">{alert.message}</p>
+                          <p className="mb-0 mt-1 text-xs text-muted">
+                            {new Date(alert.timestamp).toLocaleString()}
+                          </p>
                         </div>
-                        <p className="text-sm text-ink">{alert.message}</p>
-                        <p className="text-xs text-muted">
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </p>
+                        {!alert.acknowledged ? (
+                          <Button variant="secondary" onClick={() => handleAcknowledge(alert.id)}>
+                            Acknowledge
+                          </Button>
+                        ) : null}
                       </div>
-                      {!alert.acknowledged && (
-                        <button
-                          onClick={() => handleAcknowledge(alert.id)}
-                          className="text-sm text-blue hover:underline"
-                        >
-                          Acknowledge
-                        </button>
-                      )}
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card aria-label="Recent activity">
+                <h2 className="mb-4 mt-0 text-lg font-semibold text-ink">Recent activity</h2>
+                <div className="divide-y divide-line">
+                  {data?.recentActivity.map((activity) => (
+                    <div key={activity.id} className="py-3">
+                      <p className="m-0 text-sm font-medium text-ink">{activity.description}</p>
+                      <p className="mb-0 mt-1 text-xs text-muted">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </p>
                     </div>
                   ))}
                 </div>
-              )}
-            </Card>
-
-            <Card aria-label="Recent activity">
-              <h2 className="text-base font-semibold text-ink mb-4">Recent activity</h2>
-              <div className="space-y-2">
-                {data?.recentActivity.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-center justify-between py-2 border-b border-line last:border-0"
-                  >
-                    <span className="text-sm text-ink">{activity.description}</span>
-                    <span className="text-xs text-muted">
-                      {new Date(activity.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
         )}
       </AsyncBoundary>

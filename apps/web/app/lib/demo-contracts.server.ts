@@ -73,6 +73,89 @@ const incidents: DemoRecord[] = [
   },
 ];
 
+interface DemoSupportMessage {
+  readonly id: string;
+  readonly author: string;
+  readonly content: string;
+  readonly timestamp: string;
+  readonly internal: boolean;
+}
+
+interface DemoSupportCase {
+  readonly id: string;
+  readonly ticketNumber: string;
+  readonly subject: string;
+  readonly requester: string;
+  readonly priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'new' | 'assigned' | 'in_progress' | 'escalated' | 'resolved';
+  readonly category: string;
+  readonly age: string;
+  readonly assignedTo?: string;
+  readonly description: string;
+  readonly createdAt: string;
+  readonly messages: DemoSupportMessage[];
+}
+
+const supportCaseDetails = new Map<string, DemoSupportCase>();
+
+function demoSupportCase(caseId: string): DemoSupportCase {
+  const current = supportCaseDetails.get(caseId);
+  if (current) return current;
+
+  const record: DemoSupportCase = {
+    id: caseId,
+    ticketNumber: `SC-${caseId.slice(0, 8).toUpperCase()}`,
+    subject: 'Cannot sign in',
+    requester: '00000000-0000-0000-0000-00000000001b',
+    priority: 'high',
+    status: 'new',
+    category: 'account_access',
+    age: '5h',
+    description:
+      'The candidate cannot access the assessment workspace after resetting their password. Browser and account checks have already been completed.',
+    createdAt: '2026-08-21T09:30:00.000Z',
+    messages: [
+      {
+        id: 'support-message-demo-1',
+        author: 'Candidate CND-8D42',
+        content:
+          'I reset my password successfully, but the assessment link still returns me to sign in.',
+        timestamp: '2026-08-21T09:30:00.000Z',
+        internal: false,
+      },
+      {
+        id: 'support-message-demo-2',
+        author: 'Support triage',
+        content: 'Identity and invitation records match. Escalate only if a new link also fails.',
+        timestamp: '2026-08-21T09:45:00.000Z',
+        internal: true,
+      },
+    ],
+  };
+  supportCaseDetails.set(caseId, record);
+  return record;
+}
+
+export function addDemoSupportMessage(
+  caseId: string,
+  content: string,
+  internal: boolean,
+): DemoSupportMessage {
+  const message: DemoSupportMessage = {
+    id: demoId('support-message'),
+    author: 'Morgan Lee',
+    content,
+    timestamp: new Date().toISOString(),
+    internal,
+  };
+  demoSupportCase(caseId).messages.push(message);
+  return message;
+}
+
+export function updateDemoSupportStatus(caseId: string, status: DemoSupportCase['status']): void {
+  demoSupportCase(caseId).status = status;
+}
+
 const employerFixtures = {
   scheduling: collection([
     {
@@ -527,6 +610,11 @@ export function demoContractReadResponse(request: Request): Response | null {
   const path = url.pathname.replace(/^\/api/, '');
   const systemId = url.searchParams.get('systemId') ?? currentSystemId();
 
+  const supportCaseMatch = path.match(/^\/support\/cases\/([^/]+)$/);
+  if (supportCaseMatch?.[1]) {
+    return json(demoSupportCase(decodeURIComponent(supportCaseMatch[1])));
+  }
+
   switch (path) {
     case '/employer/candidates':
       return json(collection(candidates));
@@ -612,17 +700,30 @@ export function demoContractReadResponse(request: Request): Response | null {
     case '/operations/dashboard':
       return json({
         metrics: [
-          { label: 'Active assessments', value: '4', trend: '+1', tone: 'success' },
-          { label: 'System uptime', value: '99.98%', tone: 'success' },
-          { label: 'Average response time', value: '142ms', trend: '-8ms', tone: 'success' },
-          { label: 'Support queue', value: '3', trend: '-2', tone: 'warning' },
+          { label: 'Ready now', value: '18', trend: 'Live', tone: 'success' },
+          { label: 'Needs attention', value: '6', trend: 'Review', tone: 'warning' },
+          { label: 'In progress', value: '42', trend: 'Live', tone: 'info' },
         ],
         alerts: [
           {
             id: 'ops-alert-demo-1',
             severity: 'warning',
-            message: 'Synthetic delivery retry is awaiting operator review.',
+            message: 'Resolve assessment-readiness blocker for Northstar Logistics.',
             timestamp: '2026-08-21T14:30:00.000Z',
+            acknowledged: false,
+          },
+          {
+            id: 'ops-alert-demo-2',
+            severity: 'warning',
+            message: 'Review three human-review assignments approaching their deadline.',
+            timestamp: '2026-08-21T13:55:00.000Z',
+            acknowledged: false,
+          },
+          {
+            id: 'ops-alert-demo-3',
+            severity: 'error',
+            message: 'Check the failed Northstar ATS webhook delivery.',
+            timestamp: '2026-08-21T13:40:00.000Z',
             acknowledged: false,
           },
         ],
@@ -631,6 +732,16 @@ export function demoContractReadResponse(request: Request): Response | null {
             id: 'ops-activity-demo-1',
             description: 'Northstar assessment campaign activated',
             timestamp: '2026-08-21T13:00:00.000Z',
+          },
+          {
+            id: 'ops-activity-demo-3',
+            description: 'Evidence version recorded for assessment v3',
+            timestamp: '2026-08-21T12:15:00.000Z',
+          },
+          {
+            id: 'ops-activity-demo-4',
+            description: 'Just-in-time support access expired automatically',
+            timestamp: '2026-08-21T11:45:00.000Z',
           },
           {
             id: 'ops-activity-demo-2',

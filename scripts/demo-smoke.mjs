@@ -16,6 +16,13 @@ const journeys = [
       '/api/candidate/notices',
       '/api/candidate/attempt/11111111-0000-4000-8000-000000000300',
     ],
+    actions: [
+      {
+        path: '/api/candidate/attempt/11111111-0000-4000-8000-000000000300',
+        method: 'POST',
+        body: { action: 'start' },
+      },
+    ],
   },
   {
     name: 'Reviewer',
@@ -33,6 +40,14 @@ const journeys = [
       '/api/employer/campaigns',
       '/api/employer/candidates',
       '/api/employer/invitations',
+      '/api/employer/scheduling',
+    ],
+    actions: [
+      {
+        path: '/api/employer/candidates',
+        method: 'POST',
+        body: { displayName: 'UAT Candidate', campaignName: 'UAT Campaign' },
+      },
     ],
   },
   {
@@ -45,19 +60,57 @@ const journeys = [
     name: 'Governance',
     email: 'admin@northstar.invalid',
     workspace: '/governance',
-    paths: ['/api/governance/ai-systems', '/api/governance/risks', '/api/governance/incidents'],
+    paths: [
+      '/api/governance/ai-systems',
+      '/api/governance/risks',
+      '/api/governance/incidents',
+      '/api/governance/oversight/ais_frontend_demo',
+    ],
+    actions: [
+      {
+        path: '/api/governance/risks',
+        method: 'POST',
+        body: {
+          title: 'UAT control verification',
+          riskLevel: 'medium',
+          controls: 'Human approval and immutable evidence',
+          residual: 'Low',
+        },
+      },
+    ],
   },
   {
     name: 'Operations',
     email: 'admin@northstar.invalid',
     workspace: '/operations',
-    paths: ['/api/operations/dashboard', '/api/operations/deliveries'],
+    paths: ['/api/operations/dashboard', '/api/operations/security', '/api/operations/deliveries'],
+    actions: [
+      {
+        path: '/api/operations/alerts/ops-alert-demo-1/acknowledge',
+        method: 'POST',
+      },
+    ],
   },
   {
     name: 'Support',
     email: 'admin@northstar.invalid',
     workspace: '/support',
-    paths: ['/api/support/queue', '/api/support/jit-access'],
+    paths: ['/api/support/queue', '/api/support/jit-access', '/api/support/cases/demo-uat-case'],
+    actions: [
+      {
+        path: '/api/support/cases/demo-uat-case/status',
+        method: 'POST',
+        body: { status: 'in_progress' },
+      },
+      {
+        path: '/api/support/cases/demo-uat-case/messages',
+        method: 'POST',
+        body: {
+          content: 'UAT support reply confirms the synthetic workflow is operational.',
+          internal: false,
+        },
+      },
+    ],
   },
 ];
 
@@ -96,6 +149,25 @@ for (const journey of journeys) {
     if (!response.ok) {
       const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
       failures.push(`${journey.name} ${path}: ${response.status} ${detail}`);
+    }
+  }
+  for (const action of journey.actions ?? []) {
+    const response = await fetch(`${baseUrl}${action.path}`, {
+      method: action.method,
+      headers: {
+        cookie,
+        ...(action.body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      ...(action.body === undefined ? {} : { body: JSON.stringify(action.body) }),
+      redirect: 'manual',
+    });
+    const outcome = response.ok ? 'PASS' : 'FAIL';
+    process.stdout.write(`  ${outcome} ${response.status} ${action.method} ${action.path}\n`);
+    if (!response.ok) {
+      const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
+      failures.push(
+        `${journey.name} ${action.method} ${action.path}: ${response.status} ${detail}`,
+      );
     }
   }
 }

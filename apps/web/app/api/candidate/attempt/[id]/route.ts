@@ -4,6 +4,7 @@ import {
   mutateThenProject,
   projectPlatform,
 } from '../../../../lib/platform-api.server';
+import { functionalDemoEnabled } from '../../../../lib/demo-contracts.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +36,13 @@ export async function POST(
   if (body.action === 'reset') {
     return forwardPlatform({ request, path: `/attempts/${id}/ai/reset`, method: 'POST', body: {} });
   }
-  return mutateThenProject<PlatformAttempt, object>({
+  const response = await mutateThenProject<PlatformAttempt, object>({
     mutation: { request, path: `/attempts/${id}/start`, method: 'POST', body: {} },
     read: { request, path: `/attempts/${id}`, method: 'GET' },
     project: attemptView,
   });
+  if (functionalDemoEnabled() && response.status === 404) {
+    return GET(request, { params });
+  }
+  return response;
 }
