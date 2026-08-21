@@ -19,6 +19,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
       - run: pnpm install --frozen-lockfile
       - name: Format check
         run: pnpm run format
@@ -28,6 +31,15 @@ jobs:
         run: pnpm run typecheck
       - name: Contract drift check (OpenAPI → generated)
         run: pnpm --filter @cpf/contracts run contracts:check
+      - name: AWS template syntax
+        run: node infra/aws/validate-templates.mjs
+      - name: AWS CloudFormation semantics
+        run: |
+          python -m pip install cfn-lint==1.55.1
+          cfn-lint infra/aws/bootstrap.yaml infra/aws/application.yaml
+      - name: PowerShell deployment syntax
+        shell: pwsh
+        run: '[scriptblock]::Create((Get-Content -Raw infra/aws/deploy.ps1)) | Out-Null'
       - name: Unit tests + coverage
         run: pnpm exec vitest run --coverage
 
@@ -62,3 +74,54 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: DB integration + schema/RLS/repository tests
         run: pnpm exec vitest run packages/db packages/account packages/org
+      - name: Create isolated UAT database
+        run: docker exec ${{ job.services.postgres.id }} createdb --username postgres cpf_uat
+      - name: Release-shaped migration and runtime role
+        env:
+          APP_DB_PASSWORD: cpf-ci-runtime-password-2026
+          MASTER_DB_HOST: localhost
+          MASTER_DB_PORT: 5432
+          MASTER_DB_NAME: cpf_uat
+          MASTER_DB_USER: postgres
+          MASTER_DB_PASSWORD: postgres
+        run: node packages/db/scripts/migrate-release.mjs
+      - name: Deterministic 30-tenant UAT seed
+        env:
+          APP_ENV: uat
+          CPF_UAT_CREDENTIALS_DIR: ${{ runner.temp }}/cpf-uat-credentials
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cpf_uat
+        run: node packages/db/scripts/seed-uat.mjs
+      - name: Build the production web application
+        run: pnpm --filter @cpf/web build
+      - name: Database-backed role journey UAT
+        env:
+          APP_ENV: uat
+          CPF_DEMO_MODE: 'true'
+          CPF_DB_ROLE: cpf_app
+          DATABASE_URL: postgresql://cpf_runtime:cpf-ci-runtime-password-2026@localhost:5432/cpf_uat
+        run: |
+          PORT=3000 pnpm --filter @cpf/server start >/tmp/cpf-api.log 2>&1 &
+          api_pid=$!
+          CPF_API_BASE_URL=http://127.0.0.1:3000 pnpm --filter @cpf/web exec next start -H 127.0.0.1 -p 4300 >/tmp/cpf-web.log 2>&1 &
+          web_pid=$!
+          trap 'kill $api_pid $web_pid 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3000/readyz >/dev/null && curl --fail --silent http://127.0.0.1:4300/sign-in >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              cat /tmp/cpf-api.log /tmp/cpf-web.log
+              exit 1
+            fi
+            sleep 1
+          done
+          CPF_API_BASE_URL=http://127.0.0.1:3000 node scripts/uat-auth-smoke.mjs
+          CPF_UAT_WEB_URL=http://127.0.0.1:4300 node scripts/demo-smoke.mjs
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production container
+        run: docker build --tag cpf-ci:${{ github.sha }} .

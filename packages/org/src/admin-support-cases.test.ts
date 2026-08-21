@@ -12,6 +12,7 @@ import {
 import type { Actor } from './types.js';
 
 const staff: Actor = { userId: 'u1', tenantId: 't1', roles: ['platform_staff'] };
+const supportAgent: Actor = { userId: 'u3', tenantId: 't1', roles: ['support_agent'] };
 const outsider: Actor = { userId: 'u2', tenantId: 't1', roles: ['employer_admin'] };
 const ID = '11111111-1111-1111-1111-111111111111';
 
@@ -66,6 +67,8 @@ describe('parseSupportCaseId', () => {
 describe('listAdminSupportCases', () => {
   it('allows staff', async () =>
     expect((await listAdminSupportCases(deps(), staff)).ok).toBe(true));
+  it('allows a support agent', async () =>
+    expect((await listAdminSupportCases(deps(), supportAgent)).ok).toBe(true));
   it('denies an outsider', async () => {
     const r = await listAdminSupportCases(deps(), outsider);
     expect(r.ok === false && r.status).toBe(403);

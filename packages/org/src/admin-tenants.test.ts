@@ -19,6 +19,7 @@ import {
 import type { Actor } from './types.js';
 
 const staff: Actor = { userId: 'u1', tenantId: 't1', roles: ['platform_staff'] };
+const systemAdmin: Actor = { userId: 'u3', tenantId: 't1', roles: ['system_admin'] };
 const outsider: Actor = { userId: 'u2', tenantId: 't1', roles: ['employer_admin'] };
 const ID = '11111111-1111-1111-1111-111111111111';
 
@@ -110,6 +111,10 @@ describe('parseTenantId', () => {
 describe('listTenants', () => {
   it('returns items for platform staff', async () => {
     const r = await listTenants(deps(), staff);
+    expect(r.ok && r.total).toBe(1);
+  });
+  it('returns items for a system administrator', async () => {
+    const r = await listTenants(deps(), systemAdmin);
     expect(r.ok && r.total).toBe(1);
   });
   it('denies a non-staff actor', async () => {

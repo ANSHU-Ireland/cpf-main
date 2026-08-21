@@ -63,7 +63,6 @@ import {
   PgGovernanceSubmissionRepository,
   PgReviewAssignmentRepository,
   PgAssessmentVersionRepository,
-  DemoAuthRepository,
 } from '@cpf/org';
 
 import {
@@ -76,6 +75,10 @@ import {
   PgSupportCaseRepository,
   PgSupportCaseDetailRepository,
   PgReviewerRepository,
+  PgPasswordAuthRepository,
+  getMe,
+  listSecurityEvents,
+  updateMe,
 } from '@cpf/account';
 
 const CONCRETE_OPERATIONS = new Set<string>([
@@ -433,7 +436,10 @@ export class ConcreteDispatcher {
       ),
     });
     this.#auth = api.createAuthService({
-      repository: new DemoAuthRepository(pool) as never,
+      repository: new PgPasswordAuthRepository(pool, {
+        role: options.role ?? 'cpf_app',
+        sessionTtlSeconds: Number(process.env.CPF_SESSION_TTL_SECONDS ?? 28_800),
+      }),
     });
     this.#reviewer = api.createReviewerService({ repository: new PgReviewerRepository(pool) });
     this.#accommodations = api.createAccommodationService({
@@ -1242,15 +1248,15 @@ export class ConcreteDispatcher {
 
       // ── Account / Me ──────────────────────────────────────────────────────
       case 'get_me': {
-        const svc = { getMe: (a: Actor) => new PgAccountRepository(this.#pool).findProfileData(a) };
-        return api.handleGetMe(svc as never, { actor });
+        const repository = new PgAccountRepository(this.#pool);
+        return api.handleGetMe({ getMe: (a: Actor) => getMe({ repository }, a) }, { actor });
       }
       case 'patch_me': {
-        const svc = {
-          updateMe: (a: Actor, u: unknown) =>
-            new PgAccountRepository(this.#pool).applyProfileUpdate(a, u as never),
-        };
-        return api.handlePatchMe(svc as never, { actor, body });
+        const repository = new PgAccountRepository(this.#pool);
+        return api.handlePatchMe(
+          { updateMe: (a: Actor, u: never) => updateMe({ repository }, a, u) },
+          { actor, body },
+        );
       }
       case 'post_me_data_export':
       case 'post_me_deactivation':
@@ -1275,7 +1281,8 @@ export class ConcreteDispatcher {
       // ── Me Security Events ────────────────────────────────────────────────
       case 'get_me_security_events': {
         const svc = {
-          listSecurityEvents: (a: Actor, q: never) => this.#securityEvents.listSecurityEvents(a, q),
+          listSecurityEvents: (a: Actor, q: never) =>
+            listSecurityEvents({ repository: this.#securityEvents }, a, q),
         };
         return api.handleGetMeSecurityEvents(svc as never, { actor, query: {} as never });
       }

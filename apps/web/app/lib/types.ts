@@ -44,10 +44,9 @@ export type SecuritySeverity = 'info' | 'warning' | 'critical';
 
 export interface SecurityEventView {
   readonly id: string;
-  readonly type: string;
-  readonly description: string;
+  readonly eventType: string;
+  readonly outcome: string;
   readonly occurredAt: string;
-  readonly severity: SecuritySeverity;
 }
 
 export interface NoticeView {

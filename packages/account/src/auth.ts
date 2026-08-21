@@ -18,6 +18,8 @@ export interface AuthSessionRecord {
   readonly refreshToken: string;
   readonly expiresAt: string;
   readonly mfaRequired: boolean;
+  /** True when the password was generated for UAT or issued as a temporary credential. */
+  readonly passwordResetRequired?: boolean;
 }
 
 export interface AuthMethodRecord {

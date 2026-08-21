@@ -20,7 +20,7 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
     await pool?.end();
   });
 
-  it('reconciles 141 logical vs 142 physical tables (CONFLICT-001)', async () => {
+  it('reconciles 142 logical vs 143 physical tables after auth hardening', async () => {
     const logical = await pool.query<{ n: number }>(
       `select count(*)::int as n
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -32,8 +32,8 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
          from information_schema.tables
         where table_schema in (${schemaList}) and table_type = 'BASE TABLE'`,
     );
-    expect(logical.rows[0]?.n).toBe(141);
-    expect(physical.rows[0]?.n).toBe(142);
+    expect(logical.rows[0]?.n).toBe(142);
+    expect(physical.rows[0]?.n).toBe(143);
   });
 
   it('models audit.events as range-partitioned with a DEFAULT partition', async () => {
@@ -59,6 +59,53 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
         where n.nspname = 'runtime' and c.relname = 'sessions'`,
     );
     expect(rls.rows[0]?.relrowsecurity).toBe(true);
+  });
+
+  it('grants the restricted application role access to repository tables', async () => {
+    const privileges = await pool.query<{
+      organization_read: boolean;
+      assignments_read: boolean;
+      candidate_write: boolean;
+    }>(`
+      select
+        has_table_privilege('cpf_app', 'tenant.organizations', 'SELECT') as organization_read,
+        has_table_privilege('cpf_app', 'review.reviewer_assignments', 'SELECT') as assignments_read,
+        has_table_privilege('cpf_app', 'hiring.candidates', 'INSERT') as candidate_write
+    `);
+
+    expect(privileges.rows[0]).toEqual({
+      organization_read: true,
+      assignments_read: true,
+      candidate_write: true,
+    });
+  });
+
+  it('bootstraps bearer sessions through a scoped security-definer function', async () => {
+    const facts = await pool.query<{
+      security_definer: boolean;
+      app_can_execute: boolean;
+      public_can_execute: boolean;
+    }>(`
+      select procedure.prosecdef as security_definer,
+             has_function_privilege('cpf_app', procedure.oid, 'EXECUTE') as app_can_execute,
+             exists (
+               select 1
+                 from aclexplode(coalesce(procedure.proacl, acldefault('f', procedure.proowner))) as acl
+                where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+             ) as public_can_execute
+        from pg_proc as procedure
+        join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+       where namespace.nspname = 'iam'
+         and procedure.proname = 'resolve_bearer_session'
+    `);
+
+    expect(facts.rows).toEqual([
+      {
+        security_definer: true,
+        app_can_execute: true,
+        public_can_execute: false,
+      },
+    ]);
   });
 
   it('applies leased outbox worker columns additively', async () => {
