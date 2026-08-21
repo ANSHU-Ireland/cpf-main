@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<Response> {
   return projectPlatform<{ items: PlatformTrainingRecord[]; total: number }, unknown>(
-    { request, path: '/reviewer/training?limit=100', method: 'GET' },
+    { request, path: '/reviewer/training', method: 'GET' },
     reviewerTraining,
   );
 }

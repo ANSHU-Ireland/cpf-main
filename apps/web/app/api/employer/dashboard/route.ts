@@ -20,6 +20,20 @@ const TERMINAL_APPLICATION_STATUSES = new Set([
 
 export async function GET(request: Request): Promise<Response> {
   try {
+    // The approved accommodation operation is application-scoped. Until a tenant directory is
+    // approved, the local functional demo keeps this aggregate at zero instead of fabricating a
+    // platform call with an invalid application id.
+    const accommodationRequest =
+      process.env.CPF_DEMO_MODE === 'true'
+        ? Promise.resolve({
+            data: { items: [] as readonly PlatformAccommodation[], total: 0 },
+            correlationId: 'functional-demo',
+          })
+        : callPlatform<{ items: readonly PlatformAccommodation[]; total: number }>({
+            request,
+            path: '/accommodations?limit=100',
+            method: 'GET',
+          });
     const [organization, campaigns, accommodations, deployerReadiness] = await Promise.all([
       callPlatform<PlatformOrganization>({ request, path: '/organization', method: 'GET' }),
       callPlatform<PlatformCampaignPage>({
@@ -27,11 +41,7 @@ export async function GET(request: Request): Promise<Response> {
         path: '/campaigns?limit=100',
         method: 'GET',
       }),
-      callPlatform<{ items: readonly PlatformAccommodation[]; total: number }>({
-        request,
-        path: '/accommodations?limit=100',
-        method: 'GET',
-      }),
+      accommodationRequest,
       callPlatform<PlatformReadiness>({
         request,
         path: '/organization/deployer-readiness',

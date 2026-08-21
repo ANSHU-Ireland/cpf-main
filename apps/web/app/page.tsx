@@ -47,7 +47,7 @@ export default function LandingPage(): React.JSX.Element {
               Sign in
             </Link>
             <Link
-              href="/account/profile"
+              href="/sign-in"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -59,7 +59,7 @@ export default function LandingPage(): React.JSX.Element {
                 textDecoration: 'none',
               }}
             >
-              Open the workspace
+              Choose a demo workspace
             </Link>
           </div>
         </div>

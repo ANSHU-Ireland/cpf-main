@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3300';
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3000';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 30_000;
 const CORRELATION_HEADER = 'x-correlation-id';

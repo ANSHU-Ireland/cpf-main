@@ -3013,8 +3013,8 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
 
   async getProfile(actor: Actor): Promise<CandidateProfileData | null> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const ur = await client.query<{ id: string; email: string; full_name: string | null }>(
-        `SELECT u.id, u.email, p.full_name FROM iam.users u LEFT JOIN iam.user_profiles p ON p.user_id = u.id WHERE u.id = $1`,
+      const ur = await client.query<{ id: string; email: string; display_name: string | null }>(
+        `SELECT u.id, u.email, u.display_name FROM iam.users u WHERE u.id = $1`,
         [actor.userId],
       );
       if (!ur.rows[0]) return null;
@@ -3029,7 +3029,7 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
                 invitation.expires_at AS due_at,
                 decision.decision,
                 decision.reason,
-                COALESCE(decider.display_name, decider_profile.full_name) AS decided_by,
+                decider.display_name AS decided_by,
                 decision.issued_at
            FROM hiring.applications AS application
            JOIN hiring.candidates AS candidate
@@ -3057,7 +3057,6 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
                  ORDER BY issued_at DESC NULLS LAST LIMIT 1
                 ) AS decision ON true
       LEFT JOIN iam.users AS decider ON decider.id = decision.decided_by
-      LEFT JOIN iam.user_profiles AS decider_profile ON decider_profile.user_id = decision.decided_by
           WHERE application.tenant_id = $1 AND candidate.user_id = $2
           ORDER BY application.created_at DESC LIMIT 10`,
         [actor.tenantId, actor.userId],
@@ -3065,7 +3064,7 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
       return {
         candidateId: ur.rows[0].id,
         email: ur.rows[0].email,
-        displayName: ur.rows[0].full_name ?? '',
+        displayName: ur.rows[0].display_name ?? '',
         applications: ar.rows.map(toCandidateApplicationStatus),
       };
     });
@@ -3119,7 +3118,7 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
                 invitation.expires_at AS due_at,
                 decision.decision,
                 decision.reason,
-                COALESCE(decider.display_name, decider_profile.full_name) AS decided_by,
+                decider.display_name AS decided_by,
                 decision.issued_at
            FROM hiring.applications AS application
            JOIN hiring.candidates AS candidate
@@ -3147,7 +3146,6 @@ export class PgCandidatePortalRepository implements CandidatePortalRepository {
                  ORDER BY issued_at DESC NULLS LAST LIMIT 1
                 ) AS decision ON true
       LEFT JOIN iam.users AS decider ON decider.id = decision.decided_by
-      LEFT JOIN iam.user_profiles AS decider_profile ON decider_profile.user_id = decision.decided_by
           WHERE application.tenant_id = $1
             AND application.id = $2
             AND candidate.user_id = $3`,

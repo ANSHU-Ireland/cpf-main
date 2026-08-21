@@ -81,10 +81,16 @@ describe('demo resource authorization', () => {
         assignmentId: ASSIGNMENT_ID,
       }),
     ).toBe(false);
+    expect(
+      authorizeDemoOperation(candidate, 'get_applications_applicationId_bookings', {
+        applicationId: 'application-1',
+      }),
+    ).toBe(true);
   });
 
   it('limits reviewers to their assignment', () => {
     const reviewer = session('reviewer', ASSIGNMENT_ID);
+    expect(authorizeDemoOperation(reviewer, 'get_review_assignments', {})).toBe(true);
     expect(
       authorizeDemoOperation(reviewer, 'get_review_assignments_assignmentId_scorecard', {
         assignmentId: ASSIGNMENT_ID,

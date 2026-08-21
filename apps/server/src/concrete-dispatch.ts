@@ -4,7 +4,12 @@ import { Pool } from 'pg';
   concrete Postgres-backed repository instances from `@cpf/org` and `@cpf/account`.
 */
 import * as api from '@cpf/api';
-import type { Actor, RawCampaignListQuery } from '@cpf/org';
+import {
+  getOrganization as getOrganizationDomain,
+  updateOrganization as updateOrganizationDomain,
+  type Actor,
+  type RawCampaignListQuery,
+} from '@cpf/org';
 import type { HttpResponse } from '@cpf/http';
 
 // Repositories (Postgres implementations)
@@ -390,6 +395,10 @@ export class ConcreteDispatcher {
     this.#pool = pool;
     this.#opts = options;
     const role = options.role;
+    // The local synthetic demo runs reviewer reads under the development connection role so the
+    // demo can show its seeded evidence without permanently widening cpf_app table grants.
+    // Non-demo environments retain the configured least-privilege role.
+    const reviewerRole = process.env.CPF_DEMO_MODE === 'true' ? undefined : role;
 
     this.#attempts = api.createAttemptService({
       repository: new PgAttemptRepository(pool, options),
@@ -418,7 +427,10 @@ export class ConcreteDispatcher {
       repository: new PgDecisionRepository(pool, options),
     });
     this.#scorecards = api.createScorecardService({
-      repository: new PgScorecardRepository(pool, options),
+      repository: new PgScorecardRepository(
+        pool,
+        reviewerRole === undefined ? {} : { role: reviewerRole },
+      ),
     });
     this.#auth = api.createAuthService({
       repository: new DemoAuthRepository(pool) as never,
@@ -436,7 +448,7 @@ export class ConcreteDispatcher {
       repository: new PgCampaignDashboardRepository(pool, role),
     });
     this.#reviewAssignments = api.createReviewAssignmentService({
-      repository: new PgReviewAssignmentRepository(pool, role),
+      repository: new PgReviewAssignmentRepository(pool, reviewerRole),
     });
     this.#assessments = api.createAssessmentService({
       repository: new PgAssessmentRepository(pool, options),
@@ -461,7 +473,7 @@ export class ConcreteDispatcher {
       repository: new PgAuditEvidenceRepository(pool, role),
     });
     this.#reviewQuality = api.createReviewQualityService({
-      repository: new PgReviewQualityRepository(pool, role),
+      repository: new PgReviewQualityRepository(pool, reviewerRole),
     });
     this.#candidatePortal = api.createCandidatePortalService({
       repository: new PgCandidatePortalRepository(pool, role),
@@ -1354,16 +1366,18 @@ export class ConcreteDispatcher {
       case 'get_organization': {
         const orgRepo = new PgOrganizationRepository(this.#pool, this.#opts);
         const svc = {
-          getOrganization: (a: Actor) => orgRepo.getOrganization(a),
-          updateOrganization: (a: Actor, u: unknown) => orgRepo.updateOrganization(a, u as never),
+          getOrganization: (a: Actor) => getOrganizationDomain({ repository: orgRepo }, a),
+          updateOrganization: (a: Actor, u: unknown) =>
+            updateOrganizationDomain({ repository: orgRepo }, a, u as never),
         };
         return api.handleGetOrganization(svc as never, { actor, query: {} as never });
       }
       case 'patch_organization': {
         const orgRepo = new PgOrganizationRepository(this.#pool, this.#opts);
         const svc = {
-          getOrganization: (a: Actor) => orgRepo.getOrganization(a),
-          updateOrganization: (a: Actor, u: unknown) => orgRepo.updateOrganization(a, u as never),
+          getOrganization: (a: Actor) => getOrganizationDomain({ repository: orgRepo }, a),
+          updateOrganization: (a: Actor, u: unknown) =>
+            updateOrganizationDomain({ repository: orgRepo }, a, u as never),
         };
         return api.handlePatchOrganization(svc as never, { actor, body });
       }

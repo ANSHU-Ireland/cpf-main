@@ -114,7 +114,12 @@ export function authorizeDemoOperation(
     return operationId === 'post_decisions_decisionId_approvals';
   }
 
-  // reviewer: review assignment operations
+  // A reviewer may list their queue before an assignment id is available.
+  if (operationId === 'get_review_assignments') {
+    return session.actor.roles.includes('reviewer');
+  }
+
+  // reviewer: assignment-scoped operations
   if (operationId.includes('review_assignments_')) {
     return hasScope(session, 'reviewer', params['assignmentId'] ?? '');
   }
@@ -122,6 +127,15 @@ export function authorizeDemoOperation(
   // candidate: attempt operations
   if (operationId.includes('attempts_attemptId')) {
     return hasScope(session, 'candidate', params['attemptId'] ?? '');
+  }
+
+  // Candidate booking reads and writes are ownership-scoped again in PgBookingRepository.
+  if (
+    operationId === 'get_applications_applicationId_bookings' ||
+    operationId === 'post_applications_applicationId_bookings' ||
+    operationId === 'put_bookings_bookingId'
+  ) {
+    return session.actor.roles.includes('candidate');
   }
 
   // All authenticated users can access /me/* endpoints

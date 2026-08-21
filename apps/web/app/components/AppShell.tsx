@@ -95,6 +95,12 @@ export function AppShell({
           >
             {workspaceLabel}
           </strong>
+          <Link
+            href="/sign-in"
+            style={{ color: 'var(--color-blue)', fontSize: 12, fontWeight: 650 }}
+          >
+            Switch workspace
+          </Link>
         </span>
       </header>
       <div className="cpf-shell" style={{ flex: 1 }}>

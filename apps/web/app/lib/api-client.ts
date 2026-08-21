@@ -194,10 +194,14 @@ export const apiClient = {
     request<Collection<NoticeView>>('/api/account/notices'),
   acknowledgeNotice: (id: string): Promise<NoticeView> =>
     request<NoticeView>(`/api/account/notices/${encodeURIComponent(id)}`, { method: 'POST' }),
-  signIn: (email: string, password: string): Promise<{ mfaRequired: boolean }> =>
-    request<{ mfaRequired: boolean }>('/api/auth/sign-in', {
+  signIn: (
+    email: string,
+    password: string,
+    workspace?: string,
+  ): Promise<{ mfaRequired: boolean; redirectTo?: string }> =>
+    request<{ mfaRequired: boolean; redirectTo?: string }>('/api/auth/sign-in', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, workspace }),
     }),
 
   // ── Candidate journey ──

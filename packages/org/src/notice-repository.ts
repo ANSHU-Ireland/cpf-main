@@ -23,9 +23,10 @@ interface NoticeRow {
   created_at: Date;
 }
 
-const COLUMNS = 'id, application_id, notice_type, notice_version, acknowledged_at, created_at';
+const COLUMNS =
+  'id, application_id, notice_type, notice_version, acknowledged_at, acknowledged_at AS created_at';
 const QUALIFIED_COLUMNS =
-  'acknowledgement.id, acknowledgement.application_id, acknowledgement.notice_type, acknowledgement.notice_version, acknowledgement.acknowledged_at, acknowledgement.created_at';
+  'acknowledgement.id, acknowledgement.application_id, acknowledgement.notice_type, acknowledgement.notice_version, acknowledgement.acknowledged_at, acknowledgement.acknowledged_at AS created_at';
 
 function toRecord(row: NoticeRow): NoticeRecord {
   return {

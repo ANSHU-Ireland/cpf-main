@@ -1,8 +1,14 @@
 import { contractGapResponse } from '../../../../../lib/contract-gap.server';
+import { functionalDemoEnabled } from '../../../../../lib/demo-contracts.server';
 
 export const dynamic = 'force-dynamic';
 
-export function POST(request: Request): Response {
+export async function POST(request: Request): Promise<Response> {
+  if (functionalDemoEnabled()) {
+    const incidentId = new URL(request.url).pathname.split('/').at(-2) ?? 'demo';
+    void incidentId;
+    return new Response(null, { status: 204 });
+  }
   return contractGapResponse(request, {
     title: 'Security incident escalation contract is missing',
     detail:

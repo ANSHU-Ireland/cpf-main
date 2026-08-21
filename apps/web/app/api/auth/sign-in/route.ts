@@ -3,12 +3,53 @@ export const dynamic = 'force-dynamic';
 interface SignInBody {
   readonly email?: unknown;
   readonly password?: unknown;
+  readonly workspace?: unknown;
 }
 
-/**
- * Synthetic sign-in: validates shape only and reports whether an MFA step follows. It never issues
- * a real session or accepts real credentials — the demo environment carries no live identities.
- */
+const DEMO_PASSWORD = 'CPF-DEMO-2026';
+
+const DEMO_ACCOUNTS: Readonly<
+  Record<
+    string,
+    { readonly token: string; readonly redirectTo: string; readonly workspaces: string[] }
+  >
+> = {
+  'candidate.one@northstar.invalid': {
+    token: 'cpf-demo-candidate-token-2026',
+    redirectTo: '/candidate',
+    workspaces: ['/candidate'],
+  },
+  'reviewer@northstar.invalid': {
+    token: 'cpf-demo-reviewer-token-2026',
+    redirectTo: '/review',
+    workspaces: ['/review'],
+  },
+  'admin@northstar.invalid': {
+    token: 'cpf-demo-admin-token-2026',
+    redirectTo: '/employer',
+    workspaces: [
+      '/employer',
+      '/admin',
+      '/governance',
+      '/operations',
+      '/support',
+      '/audit/evidence',
+    ],
+  },
+  'approver@northstar.invalid': {
+    token: 'cpf-demo-approver-token-2026',
+    redirectTo: '/employer',
+    workspaces: ['/employer'],
+  },
+};
+
+function sessionCookie(token: string): string {
+  const name = process.env.CPF_SESSION_COOKIE_NAME?.trim() || 'cpf_session';
+  const secure = process.env.CPF_SESSION_COOKIE_SECURE === 'true' ? '; Secure' : '';
+  return `${name}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${secure}`;
+}
+
+/** Issues only deterministic, synthetic sessions that already exist in the isolated demo seed. */
 export async function POST(request: Request): Promise<Response> {
   let body: SignInBody;
   try {
@@ -30,5 +71,24 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  return Response.json({ mfaRequired: true });
+  if (process.env.CPF_DEMO_MODE !== 'true') {
+    return Response.json({ mfaRequired: true });
+  }
+
+  const account = DEMO_ACCOUNTS[email.toLowerCase()];
+  if (account === undefined || password !== DEMO_PASSWORD) {
+    return Response.json(
+      { error: 'Use one of the synthetic demo accounts and the displayed demo password.' },
+      { status: 401 },
+    );
+  }
+
+  const requestedWorkspace = typeof body.workspace === 'string' ? body.workspace.trim() : '';
+  const redirectTo = account.workspaces.includes(requestedWorkspace)
+    ? requestedWorkspace
+    : account.redirectTo;
+  return Response.json(
+    { mfaRequired: false, redirectTo },
+    { headers: { 'set-cookie': sessionCookie(account.token), 'cache-control': 'no-store' } },
+  );
 }

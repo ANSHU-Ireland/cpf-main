@@ -1,4 +1,10 @@
 import { contractGapResponse } from '../../../lib/contract-gap.server';
+import {
+  demoContractReadResponse,
+  demoValidationResponse,
+  functionalDemoEnabled,
+  readDemoObject,
+} from '../../../lib/demo-contracts.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +18,23 @@ function gap(request: Request): Response {
 }
 
 export function GET(request: Request): Response {
+  if (functionalDemoEnabled()) {
+    const response = demoContractReadResponse(request);
+    if (response !== null) return response;
+  }
   return gap(request);
 }
 
-export function POST(request: Request): Response {
+export async function POST(request: Request): Promise<Response> {
+  if (functionalDemoEnabled()) {
+    const body = await readDemoObject(request);
+    const scope = body?.['scope'];
+    const justification = body?.['justification'];
+    if (typeof scope !== 'string' || typeof justification !== 'string') {
+      return demoValidationResponse('scope and justification are required.');
+    }
+    void { scope, justification };
+    return new Response(null, { status: 204 });
+  }
   return gap(request);
 }
