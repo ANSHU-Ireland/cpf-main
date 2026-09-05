@@ -1,26 +1,30 @@
 # Next Action — exactly one executable slice
 
-## Reconcile governance-document persistence
+## Finish audit access scope and browser acceptance
 
-**Goal:** replace the remaining invented generic document mappings in `PgGovernanceDocRepository`
-with canonical, tenant-isolated PostgreSQL behavior and explicit fail-closed outcomes.
+**Checkpoint:** canonical collection creation, custody events, requirement lookup, tenant RLS,
+web API adapters and synthetic seed examples are implemented. Creation/reload and transaction
+side effects passed isolated live probes in August. Scope-specific authorization, complete
+traceability evidence and browser acceptance remain open.
 
-1. Reconcile every governance-document query with the canonical quality, governance and audit table
-   columns; remove assumptions that every resource has generic `title`, `status`, `created_at` and
-   `updated_at` fields.
-2. Preserve accepted operation payload evidence additively only where the baseline has no canonical
-   field, with tenant RLS and least-privilege grants.
-3. Return `null` or an explicit unsupported outcome for missing/unsafe mutation targets; never
-   manufacture a successful record.
-4. Add live PostgreSQL tests for each mapped document family, audit/outbox evidence and cross-tenant
-   denial.
-5. Rerun `pnpm verify`, the complete live PostgreSQL suite, the 97-page production build and the
-   244-operation contract regeneration check.
+**Goal:** finish the audit slice without treating synthetic fixtures as release approval.
 
-After this slice, continue with assessment traceability, candidate profile-correction/explanation/
-human-review persistence, then candidate merge preview/reversal. Each currently has either an
-invented column mapping or an audit-only/fabricated success path.
+1. Add approved, purpose-scoped and time-bound collection access. Tenant RLS alone is insufficient
+   to close FR-AUD-01 or FR-AUD-05.
+2. Complete collection pagination and display its scope clearly. The current list is capped at 100.
+3. Verify creation from an empty workspace, error handling, custody visibility, blocked requirement
+   status and reload persistence in browser UAT.
+4. Enforce tenant RLS and least-privilege grants; write hash-chained audit and transactional outbox
+   evidence for every accepted mutation.
+5. Add live PostgreSQL tests for persistence, repository recreation, membership counts, known and
+   unknown requirements, audit/outbox evidence and cross-tenant denial.
+6. Record fresh `pnpm verify`, live PostgreSQL, production-build and contract-check results for the
+   published commit. Keep demonstration rows separate from the 362-requirement release ledger.
 
-**Completion condition:** governance-document operations use verified canonical persistence, have
-tenant-negative live evidence, and all repository gates finish with zero unexplained skips or
-failures.
+After this slice, continue with candidate profile-correction/explanation/human-review persistence,
+then candidate merge preview/reversal. Each still has either an invented column mapping or an
+audit-only/fabricated success path.
+
+**Completion condition:** audit evidence collections and requirement traceability use verified
+tenant-scoped persistence, return no invented success or coverage, and all repository gates finish
+with zero unexplained skips or failures.

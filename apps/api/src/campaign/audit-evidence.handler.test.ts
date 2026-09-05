@@ -12,23 +12,33 @@ const actor: Actor = { tenantId: ID, userId: ID, roles: ['employer_admin'] };
 const col = {
   id: 'c1',
   title: 't',
+  purpose: 'purpose',
   framework: 'f',
-  status: 'open',
+  status: 'draft',
+  custodian: 'Auditor',
+  sealed: false,
   itemCount: 0,
+  requirementIds: [],
+  chainOfCustody: [],
   createdAt: '',
 };
 const row = {
+  id: ID,
   requirementId: 'REQ-1',
   requirementTitle: 'r',
   controls: [],
+  surfaces: [],
+  endpoints: [],
   evidence: [],
   coverage: 'full',
+  status: 'verified',
+  createdAt: '',
 };
 
 function svc(ov: Partial<AuditEvidenceService> = {}): AuditEvidenceService {
   return {
     listCollections: () => Promise.resolve({ ok: true as const, items: [col], total: 1 }),
-    createCollection: () => Promise.resolve({ status: 201, headers: {}, body: '{}' }),
+    createCollection: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
     traceability: () => Promise.resolve({ status: 200, headers: {}, body: JSON.stringify(row) }),
     ...ov,
   };
@@ -51,8 +61,8 @@ describe('handleListEvidenceCollections', () => {
     ).toBe(403));
 });
 describe('handleCreateEvidenceCollection', () => {
-  it('201', async () =>
-    expect((await handleCreateEvidenceCollection(svc(), { actor, body: {} })).status).toBe(201));
+  it('200', async () =>
+    expect((await handleCreateEvidenceCollection(svc(), { actor, body: {} })).status).toBe(200));
 });
 describe('handleGetTraceability', () => {
   it('200', async () =>

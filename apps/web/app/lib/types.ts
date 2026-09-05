@@ -1074,6 +1074,8 @@ export interface EvidenceCollectionView {
 
 // Traceability (AUD-02)
 export interface TraceabilityView {
+  readonly status?: string;
+  readonly coverage?: string;
   readonly requirementId: string;
   readonly description: string;
   readonly controls: readonly string[];

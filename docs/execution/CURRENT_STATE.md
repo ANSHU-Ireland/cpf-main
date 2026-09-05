@@ -1,6 +1,21 @@
 # Current State — durable checkpoint
 
-_Last updated: 2026-08-21 · branch `codex/continuation-baseline`_
+_Last updated: 2026-09-05 · branch `codex/enterprise-uat-completion`_
+
+## Latest publication checkpoint — 2026-09-05
+
+The governance-document and audit persistence work from the August session is included in this
+checkpoint. Audit collections now persist separately from outbox messages, record custody and
+audit/outbox events, and link tenant-scoped requirement records. The web audit routes use these
+API operations. Unknown requirements return not found.
+
+The seed now includes 120 evidence collections, 360 traceability rows and 360 evidence items,
+in addition to the earlier inventory below. The traceability rows represent **12 requirement keys
+repeated across 30 tenants**, not 360 verified product requirements. All seed evidence is synthetic;
+blocked requirements remain visible, and purpose-scoped audit access is still incomplete.
+
+See `GITHUB_CHECKPOINT_2026-09-05.md` for current verification and readiness estimates. Counts and
+UAT results in the dated sections below are historical checkpoints, not full-product sign-off.
 
 ## Release judgement
 
@@ -12,9 +27,10 @@ the full build contract.
 
 - The verified source package contains 362 requirements (336 Must), 244 OpenAPI operations, 125
   interface SVGs, 1,543 dictionary rows and a 139 physical / 138 logical PostgreSQL baseline. The
-  current additive schema contains 143 physical / 142 logical tables.
-- The complete configured PostgreSQL checkpoint passes 174 test files / 1,622 tests with zero
-  skips or failures. This includes all 10 focused live tests added for the current adapter batch.
+  current additive schema contains 144 physical / 143 logical tables.
+- The complete configured PostgreSQL checkpoint passes 178 test files / 1,657 tests with zero
+  skips or failures. This includes canonical governance-document, tenant-negative, audit/outbox and
+  least-privilege evidence.
 - The production web build generates 98 pages after the Governance overview was added and five governance routes were given
   explicit Suspense boundaries for their search-parameter state.
 - The executable route inventory derives 125/125 canonical routes directly from tracked SVGs. It
@@ -31,9 +47,9 @@ the full build contract.
 
 ## 2026-08-21 AWS-shaped UAT and identity checkpoint
 
-- The deterministic UAT seed creates exactly 30 organizations, 120 campaigns and 360 applications,
-  with nine usable role personas for Northstar and 242+ reset-required tenant credentials. Reseeding
-  preserves passwords users have already changed.
+- The deterministic UAT seed creates exactly 30 organizations, 120 campaigns, 360 applications and
+  390 canonical governance documents, with nine usable role personas for Northstar and exactly 242
+  reset-required tenant credentials. Reseeding preserves passwords users have already changed.
 - Database-backed role smoke testing passes 34 reads/actions across Candidate, Reviewer, Employer,
   Platform Admin, Governance, Operations and Support; a separate auth smoke validates nine personas
   and wrong-password rejection.
@@ -42,8 +58,10 @@ the full build contract.
   horizontal overflow.
 - AWS CloudFormation now covers ECR, two-AZ networking, private Fargate services, Multi-AZ encrypted
   RDS, Secrets Manager, KMS/S3, WAF, EventBridge, CloudWatch and rollback controls. Both templates
-  pass `cfn-lint` 1.55.1. The stack is authored but not applied because this workstation has no AWS
-  CLI, Docker or AWS account authority.
+  pass `cfn-lint` 1.55.1. HTTPS parameters are all-or-none, production requires HTTPS, and the
+  deployment command validates both templates before mutation and runs the complete UAT journey
+  suite after a seeded rollout. The stack is authored but not applied because this task has no AWS
+  account authority.
 - `docs/deployment/AWS_UAT_RUNBOOK.md` and `docs/deployment/GO_LIVE_CHECKLIST.md` define the exact
   deployment, credential, acceptance and production-boundary process.
 
@@ -54,7 +72,7 @@ the full build contract.
   `pnpm --filter @cpf/contracts run contracts:check`.
 - `pnpm verify` passes with formatting, lint and all 16 typed workspace projects green. Without a
   configured database, 148 files / 1,559 tests pass and 26 database-gated files / 63 tests skip.
-- The complete configured PostgreSQL suite passes 174 files / 1,622 tests with no skips or failures.
+- The complete configured PostgreSQL suite passes 178 files / 1,657 tests with no skips or failures.
   Additive least-privilege grants were required for attempt submission and campaign-readiness
   dependencies; unsafe campaign activation remains fail-closed.
 - Audit-export requests and platform maintenance windows now persist durable rows, append
@@ -62,6 +80,11 @@ the full build contract.
 - Governance submission envelopes, structured deployer instructions, conformity approvals,
   serious-incident updates and change decisions now use canonical PostgreSQL rows. Their 3 focused
   live tests pass and missing mutation targets return `null` rather than fabricated success.
+- All 13 governance-document families now use verified canonical tables rather than invented generic
+  columns or a quality-document fallback. Accepted GenericCommand evidence is additive, immutable,
+  tenant-RLS protected and limited to SELECT/INSERT for `cpf_app`; live tests prove every family,
+  audit/outbox evidence, explicit validation and cross-tenant denial. The dispatcher now maps plural
+  operation IDs explicitly, and the UAT seed supplies one complete 13-record workspace per tenant.
 - Platform-staff invitations now encrypt email, hash tokens and retain roles across resend.
   Platform role/status changes use tenant-checked security-definer functions rather than broad
   grants. Their 2 focused live tests pass.
@@ -70,9 +93,9 @@ the full build contract.
 - Integration credential rotation and webhook creation now write encrypted secret material against
   canonical columns, audit successful mutations and enqueue rotation work. Their 2 focused live
   tests pass as part of the complete configured PostgreSQL suite.
-- Schema facts reconcile the three additive durable tables introduced by this batch: audit export
-  jobs, maintenance windows and governance submission envelopes. The current measured inventory is
-  142 logical / 143 physical tables while preserving the baseline partition-count distinction.
+- Schema facts reconcile the additive durable tables introduced by the persistence work. The current
+  measured inventory is 143 logical / 144 physical tables while preserving the baseline
+  partition-count distinction.
 
 ## 2026-08-21 functional-demo UAT checkpoint
 
@@ -81,7 +104,7 @@ the full build contract.
 - All seven synthetic role workspaces open successfully. The browser UAT completed Candidate,
   Reviewer, Employer, Platform Admin, Governance, Operations and Support task journeys at 320,
   768 and 1440 px widths.
-- The expanded functional smoke suite passes 32 authenticated reads and safe synthetic actions.
+- The expanded functional smoke suite passes 34 authenticated reads and safe synthetic actions.
 - Governance no longer opens a 404; Support case detail and Candidate assessment launch now work in
   demo mode; production contract gaps continue to fail closed.
 - The detailed scope, evidence and external limitations are recorded in

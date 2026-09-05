@@ -20,7 +20,7 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
     await pool?.end();
   });
 
-  it('reconciles 142 logical vs 143 physical tables after auth hardening', async () => {
+  it('reconciles 147 logical vs 148 physical tables after operational hardening', async () => {
     const logical = await pool.query<{ n: number }>(
       `select count(*)::int as n
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -32,8 +32,8 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
          from information_schema.tables
         where table_schema in (${schemaList}) and table_type = 'BASE TABLE'`,
     );
-    expect(logical.rows[0]?.n).toBe(142);
-    expect(physical.rows[0]?.n).toBe(143);
+    expect(logical.rows[0]?.n).toBe(147);
+    expect(physical.rows[0]?.n).toBe(148);
   });
 
   it('models audit.events as range-partitioned with a DEFAULT partition', async () => {
@@ -106,6 +106,129 @@ describe.skipIf(!dbAvailable)('PostgreSQL v2.0 baseline schema facts', () => {
         public_can_execute: false,
       },
     ]);
+  });
+
+  it('tenant-isolates accepted governance payload evidence with least privilege', async () => {
+    // Other integration workers may idempotently replay the migration set. Hold the same schema
+    // lock so this negative privilege assertion never observes a half-replayed grant sequence.
+    const client = await pool.connect();
+    try {
+      await client.query('select pg_advisory_lock($1)', [2_026_081_600_001]);
+      const facts = await client.query<{
+        row_security: boolean;
+        forced_row_security: boolean;
+        can_select: boolean;
+        can_insert: boolean;
+        can_update: boolean;
+        can_delete: boolean;
+        public_can_select: boolean;
+      }>(`
+        select table_class.relrowsecurity as row_security,
+               table_class.relforcerowsecurity as forced_row_security,
+               has_table_privilege('cpf_app', table_class.oid, 'SELECT') as can_select,
+               has_table_privilege('cpf_app', table_class.oid, 'INSERT') as can_insert,
+               has_table_privilege('cpf_app', table_class.oid, 'UPDATE') as can_update,
+               has_table_privilege('cpf_app', table_class.oid, 'DELETE') as can_delete,
+               exists (
+                 select 1
+                   from aclexplode(coalesce(table_class.relacl, acldefault('r', table_class.relowner))) acl
+                  where acl.grantee = 0 and acl.privilege_type = 'SELECT'
+               ) as public_can_select
+          from pg_class as table_class
+          join pg_namespace as namespace on namespace.oid = table_class.relnamespace
+         where namespace.nspname = 'governance'
+           and table_class.relname = 'document_payload_evidence'
+      `);
+
+      expect(facts.rows).toEqual([
+        {
+          row_security: true,
+          forced_row_security: true,
+          can_select: true,
+          can_insert: true,
+          can_update: false,
+          can_delete: false,
+          public_can_select: false,
+        },
+      ]);
+    } finally {
+      await client.query('select pg_advisory_unlock($1)', [2_026_081_600_001]).catch(() => {});
+      client.release();
+    }
+  });
+
+  it('keeps audit evidence and traceability tenant-isolated and append-only for the app role', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('select pg_advisory_lock($1)', [2_026_081_600_001]);
+      const facts = await client.query<{
+        relname: string;
+        row_security: boolean;
+        forced_row_security: boolean;
+        can_select: boolean;
+        can_insert: boolean;
+        can_update: boolean;
+        can_delete: boolean;
+      }>(`
+        select table_class.relname,
+               table_class.relrowsecurity as row_security,
+               table_class.relforcerowsecurity as forced_row_security,
+               has_table_privilege('cpf_app', table_class.oid, 'SELECT') as can_select,
+               has_table_privilege('cpf_app', table_class.oid, 'INSERT') as can_insert,
+               has_table_privilege('cpf_app', table_class.oid, 'UPDATE') as can_update,
+               has_table_privilege('cpf_app', table_class.oid, 'DELETE') as can_delete
+          from pg_class as table_class
+          join pg_namespace as namespace on namespace.oid = table_class.relnamespace
+         where namespace.nspname = 'audit'
+           and table_class.relname in (
+             'evidence_collections', 'requirement_traceability',
+             'evidence_collection_items', 'evidence_custody_events'
+           )
+         order by table_class.relname
+      `);
+
+      expect(facts.rows).toEqual([
+        {
+          relname: 'evidence_collection_items',
+          row_security: true,
+          forced_row_security: true,
+          can_select: true,
+          can_insert: false,
+          can_update: false,
+          can_delete: false,
+        },
+        {
+          relname: 'evidence_collections',
+          row_security: true,
+          forced_row_security: true,
+          can_select: true,
+          can_insert: true,
+          can_update: false,
+          can_delete: false,
+        },
+        {
+          relname: 'evidence_custody_events',
+          row_security: true,
+          forced_row_security: true,
+          can_select: true,
+          can_insert: true,
+          can_update: false,
+          can_delete: false,
+        },
+        {
+          relname: 'requirement_traceability',
+          row_security: true,
+          forced_row_security: true,
+          can_select: true,
+          can_insert: false,
+          can_update: false,
+          can_delete: false,
+        },
+      ]);
+    } finally {
+      await client.query('select pg_advisory_unlock($1)', [2_026_081_600_001]).catch(() => {});
+      client.release();
+    }
   });
 
   it('applies leased outbox worker columns additively', async () => {

@@ -26,7 +26,8 @@ const WORKSPACE_ROLES: Readonly<Record<string, readonly string[]>> = {
   '/governance': ['governance_officer', 'employer_admin'],
   '/operations': ['operations_admin', 'system_admin', 'platform_staff'],
   '/support': ['support_agent', 'system_admin', 'platform_staff'],
-  '/audit/evidence': ['auditor', 'governance_officer', 'system_admin', 'platform_staff'],
+  '/audit/evidence': ['auditor', 'governance_officer'],
+  '/audit/traceability': ['auditor', 'governance_officer'],
 };
 
 function apiUrl(path: string): URL {
@@ -57,6 +58,7 @@ function defaultWorkspace(profile: UserProfile, roles: readonly string[]): strin
   if (profile.userType === 'candidate' || roles.includes('candidate')) return '/candidate';
   if (roles.includes('reviewer')) return '/review';
   if (roles.includes('system_admin') || roles.includes('platform_staff')) return '/admin';
+  if (roles.includes('auditor')) return '/audit/evidence';
   if (roles.includes('governance_officer')) return '/governance';
   if (roles.includes('support_agent')) return '/support';
   return '/employer';

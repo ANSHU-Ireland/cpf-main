@@ -21,13 +21,14 @@ const doc: GovernanceDocRecord = {
   status: 'draft',
   createdAt: '',
   updatedAt: '',
+  data: {},
 };
 
 function repo(ov: Partial<GovernanceDocRepository> = {}): GovernanceDocRepository {
   return {
     listDocs: () => Promise.resolve({ items: [doc], total: 1 }),
     getDocs: () => Promise.resolve(doc),
-    createDoc: () => Promise.resolve(doc),
+    createDoc: () => Promise.resolve({ ok: true, doc }),
     ...ov,
   };
 }
@@ -43,12 +44,26 @@ const TYPES: GovernanceDocType[] = [
   'technical_document',
   'vendor_evidence',
   'deployer_instruction',
+  'eu_declaration',
+  'eu_registration',
+  'ce_marking',
 ];
 
 describe('parseGovernanceDocCreate', () => {
-  it('valid', () =>
-    expect(parseGovernanceDocCreate({ title: 't', description: 'd' }).ok).toBe(true));
-  it('invalid', () => expect(parseGovernanceDocCreate({}).ok).toBe(false));
+  it('normalises a GenericCommand data envelope', () =>
+    expect(
+      parseGovernanceDocCreate({ reason: 'new version', expectedVersion: 2, data: { title: 't' } }),
+    ).toEqual({
+      ok: true,
+      value: { reason: 'new version', expectedVersion: 2, data: { title: 't' } },
+    }));
+  it('normalises existing flat operation payloads without discarding fields', () =>
+    expect(parseGovernanceDocCreate({ title: 't', policy: 'p' })).toEqual({
+      ok: true,
+      value: { data: { title: 't', policy: 'p' } },
+    }));
+  it('rejects invalid envelope fields', () =>
+    expect(parseGovernanceDocCreate({ data: [], expectedVersion: -1 }).ok).toBe(false));
 });
 
 describe('parseGovernanceDocId', () => {
@@ -89,16 +104,14 @@ describe('createGovernanceDoc', () => {
   for (const dt of TYPES) {
     it(`creates ${dt}`, async () => {
       const r = await createGovernanceDoc({ repository: repo() }, admin, dt, {
-        title: 't',
-        description: 'd',
+        data: {},
       });
       expect(r.ok).toBe(true);
     });
   }
   it('403', async () => {
     const r = await createGovernanceDoc({ repository: repo() }, noRole, 'ai_literacy', {
-      title: 't',
-      description: 'd',
+      data: {},
     });
     expect(r.ok).toBe(false);
   });

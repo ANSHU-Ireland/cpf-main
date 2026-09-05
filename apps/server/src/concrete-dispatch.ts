@@ -8,6 +8,7 @@ import {
   getOrganization as getOrganizationDomain,
   updateOrganization as updateOrganizationDomain,
   type Actor,
+  type GovernanceDocType,
   type RawCampaignListQuery,
 } from '@cpf/org';
 import type { HttpResponse } from '@cpf/http';
@@ -330,6 +331,37 @@ const CONCRETE_OPERATIONS = new Set<string>([
 
 export function isConcreteOperation(operationId: string): boolean {
   return CONCRETE_OPERATIONS.has(operationId);
+}
+
+const GOVERNANCE_DOC_OPERATION_TYPES: Readonly<Record<string, GovernanceDocType>> = {
+  get_governance_ai_literacy: 'ai_literacy',
+  get_governance_data_use_register: 'data_use_register',
+  get_governance_datasets: 'dataset',
+  get_governance_impact_assessments: 'impact_assessment',
+  get_governance_post_market_plans: 'post_market_plan',
+  get_governance_post_market_signals: 'post_market_signal',
+  get_governance_qms_documents: 'qms_document',
+  get_governance_technical_documents: 'technical_document',
+  get_governance_vendor_evidence: 'vendor_evidence',
+  post_governance_ai_literacy: 'ai_literacy',
+  post_governance_ce_marking: 'ce_marking',
+  post_governance_data_use_register: 'data_use_register',
+  post_governance_datasets: 'dataset',
+  post_governance_deployer_instructions: 'deployer_instruction',
+  post_governance_eu_declarations: 'eu_declaration',
+  post_governance_eu_registrations: 'eu_registration',
+  post_governance_impact_assessments: 'impact_assessment',
+  post_governance_post_market_plans: 'post_market_plan',
+  post_governance_post_market_signals: 'post_market_signal',
+  post_governance_qms_documents: 'qms_document',
+  post_governance_technical_documents: 'technical_document',
+  post_governance_vendor_evidence: 'vendor_evidence',
+};
+
+function governanceDocTypeFor(operationId: string): GovernanceDocType {
+  const docType = GOVERNANCE_DOC_OPERATION_TYPES[operationId];
+  if (docType === undefined) throw new Error(`No governance document mapping for ${operationId}`);
+  return docType;
 }
 
 export class ConcreteDispatcher {
@@ -1096,7 +1128,7 @@ export class ConcreteDispatcher {
       case 'get_governance_ai_literacy':
         return api.handleListGovernanceDocs(this.#governanceDocs, {
           actor,
-          docType: operationId.replace('get_governance_', '') as never,
+          docType: governanceDocTypeFor(operationId),
         });
       case 'post_governance_qms_documents':
       case 'post_governance_technical_documents':
@@ -1104,6 +1136,7 @@ export class ConcreteDispatcher {
       case 'post_governance_data_use_register':
       case 'post_governance_vendor_evidence':
       case 'post_governance_impact_assessments':
+      case 'post_governance_deployer_instructions':
       case 'post_governance_post_market_plans':
       case 'post_governance_post_market_signals':
       case 'post_governance_ai_literacy':
@@ -1112,7 +1145,7 @@ export class ConcreteDispatcher {
       case 'post_governance_eu_registrations':
         return api.handleCreateGovernanceDoc(this.#governanceDocs, {
           actor,
-          docType: operationId.replace('post_governance_', '') as never,
+          docType: governanceDocTypeFor(operationId),
           body,
         });
 
@@ -1133,12 +1166,6 @@ export class ConcreteDispatcher {
         return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
           actor,
           submissionType: 'serious_incident' as never,
-          body,
-        });
-      case 'post_governance_deployer_instructions':
-        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
-          actor,
-          submissionType: 'deployer_instruction' as never,
           body,
         });
       case 'post_governance_conformity_assessments_assessmentId_approve':

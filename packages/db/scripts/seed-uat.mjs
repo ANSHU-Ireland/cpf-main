@@ -92,7 +92,23 @@ try {
       (SELECT count(*)::int FROM hiring.candidates
         WHERE external_reference LIKE 'UAT-%') AS candidates,
       (SELECT count(*)::int FROM hiring.applications
-        WHERE source_reference LIKE 'UAT-%') AS applications
+        WHERE source_reference LIKE 'UAT-%') AS applications,
+      (SELECT count(*)::int
+         FROM governance.document_payload_evidence AS document
+         JOIN tenant.organizations AS organization ON organization.id = document.tenant_id
+        WHERE organization.settings->>'uatSeed' = 'true') AS governance_documents,
+      (SELECT count(*)::int
+         FROM audit.evidence_collections AS collection
+         JOIN tenant.organizations AS organization ON organization.id = collection.tenant_id
+        WHERE organization.settings->>'uatSeed' = 'true') AS evidence_collections,
+      (SELECT count(*)::int
+         FROM audit.requirement_traceability AS requirement
+         JOIN tenant.organizations AS organization ON organization.id = requirement.tenant_id
+        WHERE organization.settings->>'uatSeed' = 'true') AS traceability_rows,
+      (SELECT count(*)::int
+         FROM audit.evidence_collection_items AS item
+         JOIN tenant.organizations AS organization ON organization.id = item.tenant_id
+        WHERE organization.settings->>'uatSeed' = 'true') AS evidence_items
   `);
   const measured = summary.rows[0];
   if (
@@ -101,7 +117,11 @@ try {
     Number(measured.uat_credentials) !== Number(measured.tenant_users) ||
     Number(measured.reset_required_credentials) > Number(measured.tenant_users) ||
     Number(measured.campaigns) !== 120 ||
-    Number(measured.applications) !== 360
+    Number(measured.applications) !== 360 ||
+    Number(measured.governance_documents) !== 390 ||
+    Number(measured.evidence_collections) !== 120 ||
+    Number(measured.traceability_rows) !== 360 ||
+    Number(measured.evidence_items) !== 360
   ) {
     throw new Error(`UAT seed cardinality check failed: ${JSON.stringify(measured)}`);
   }

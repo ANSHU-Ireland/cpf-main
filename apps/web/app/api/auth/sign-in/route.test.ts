@@ -83,4 +83,30 @@ describe('database-backed sign-in', () => {
     await expect(response.json()).resolves.toEqual({ mfaRequired: true, redirectTo: '/mfa' });
     expect(response.headers.get('set-cookie')).toBeNull();
   });
+
+  it('routes an auditor into the audit workspace by default', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          accessToken: 'auditor-session-token',
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          mfaRequired: false,
+          passwordResetRequired: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ userType: 'tenant_member', tenant: { roles: ['auditor'] } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await POST(
+      request({
+        email: 'auditor@tenant-01.cpf-uat.invalid',
+        password: 'CPF-UAT-ChangeMe-2026!',
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({ redirectTo: '/audit/evidence' });
+  });
 });

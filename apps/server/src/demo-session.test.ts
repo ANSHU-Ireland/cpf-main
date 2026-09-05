@@ -140,6 +140,17 @@ describe('demo resource authorization', () => {
     expect(authorizeDemoOperation(support, 'get_admin_tenants', {})).toBe(false);
   });
 
+  it('keeps audit reads and writes aligned with auditor, regulator and compliance roles', () => {
+    const auditor = session('auditor', TENANT_ID);
+    const regulator = session('regulator', TENANT_ID);
+    const governance = session('governance_officer', TENANT_ID);
+    expect(authorizeDemoOperation(auditor, 'get_audit_evidence_collections', {})).toBe(true);
+    expect(authorizeDemoOperation(auditor, 'post_audit_evidence_collections', {})).toBe(true);
+    expect(authorizeDemoOperation(regulator, 'get_audit_evidence_collections', {})).toBe(true);
+    expect(authorizeDemoOperation(regulator, 'post_audit_evidence_collections', {})).toBe(false);
+    expect(authorizeDemoOperation(governance, 'post_audit_evidence_collections', {})).toBe(true);
+  });
+
   it('allows a platform-scoped system administrator across admin operations', () => {
     const systemAdmin: DemoSession = {
       actor: { tenantId: TENANT_ID, userId: 'system-admin', roles: ['system_admin'] },

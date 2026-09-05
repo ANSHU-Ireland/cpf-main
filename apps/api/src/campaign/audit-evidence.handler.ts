@@ -31,7 +31,7 @@ export function createAuditEvidenceService(deps: {
         });
       const r = await createEvidenceCollection(deps, actor, parsed.value);
       if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
-      return jsonResponse(201, r.collection, correlationId);
+      return jsonResponse(200, r.collection, correlationId);
     },
     traceability: async (actor, requirementId) => {
       const correlationId = ensureCorrelationId();

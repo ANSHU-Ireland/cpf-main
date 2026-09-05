@@ -29,6 +29,8 @@ const readiness = await fetch(`${apiBase}/readyz`, { cache: 'no-store' });
 if (!readiness.ok) throw new Error(`API readiness failed with ${readiness.status}`);
 
 const results = [];
+let governanceAccessToken;
+let auditorAccessToken;
 for (const persona of personas) {
   const loginResponse = await fetch(`${apiBase}/auth/login`, {
     method: 'POST',
@@ -42,6 +44,8 @@ for (const persona of personas) {
   if (login.mfaRequired === true) {
     throw new Error(`${persona.name} unexpectedly requires MFA in the UAT seed`);
   }
+  if (persona.name === 'governance') governanceAccessToken = login.accessToken;
+  if (persona.name === 'auditor') auditorAccessToken = login.accessToken;
 
   const profileResponse = await fetch(`${apiBase}/me`, {
     headers: { authorization: `Bearer ${login.accessToken}` },
@@ -60,6 +64,71 @@ for (const persona of personas) {
   });
 }
 
+if (typeof governanceAccessToken !== 'string') {
+  throw new Error('Governance session was not captured');
+}
+const governanceDocumentPaths = [
+  '/governance/ai-literacy',
+  '/governance/data-use-register',
+  '/governance/datasets',
+  '/governance/impact-assessments',
+  '/governance/post-market-plans',
+  '/governance/post-market-signals',
+  '/governance/qms-documents',
+  '/governance/technical-documents',
+  '/governance/vendor-evidence',
+];
+const governanceDocuments = {};
+for (const path of governanceDocumentPaths) {
+  const response = await fetch(`${apiBase}${path}`, {
+    headers: { authorization: `Bearer ${governanceAccessToken}` },
+    cache: 'no-store',
+  });
+  const body = await json(response);
+  if (!response.ok || !Array.isArray(body?.items) || body.items.length === 0) {
+    throw new Error(`${path} did not return seeded canonical documents (${response.status})`);
+  }
+  governanceDocuments[path] = body.items.length;
+}
+
+if (typeof auditorAccessToken !== 'string') {
+  throw new Error('Auditor session was not captured');
+}
+const collectionsResponse = await fetch(`${apiBase}/audit/evidence-collections`, {
+  headers: { authorization: `Bearer ${auditorAccessToken}` },
+  cache: 'no-store',
+});
+const collections = await json(collectionsResponse);
+if (!collectionsResponse.ok || !Array.isArray(collections?.items) || collections.items.length < 4) {
+  throw new Error(
+    `/audit/evidence-collections did not return the seeded collections (${collectionsResponse.status})`,
+  );
+}
+const requirementIds = [
+  ...new Set(collections.items.flatMap((collection) => collection.requirementIds ?? [])),
+];
+if (requirementIds.length < 12) {
+  throw new Error(`Seeded evidence collections link only ${requirementIds.length} requirements`);
+}
+for (const requirementId of requirementIds) {
+  const response = await fetch(`${apiBase}/audit/traceability/${requirementId}`, {
+    headers: { authorization: `Bearer ${auditorAccessToken}` },
+    cache: 'no-store',
+  });
+  const row = await json(response);
+  if (!response.ok || row?.id !== requirementId || typeof row?.requirementId !== 'string') {
+    throw new Error(`Traceability ${requirementId} failed with ${response.status}`);
+  }
+}
+const auditEvidence = {
+  collections: collections.items.length,
+  requirements: requirementIds.length,
+  evidenceItems: collections.items.reduce(
+    (total, collection) => total + Number(collection.itemCount ?? 0),
+    0,
+  ),
+};
+
 const wrongPassword = await fetch(`${apiBase}/auth/login`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
@@ -70,5 +139,9 @@ if (wrongPassword.status !== 401) {
 }
 
 process.stdout.write(
-  `${JSON.stringify({ apiBase, personas: results, wrongPassword: 401 }, null, 2)}\n`,
+  `${JSON.stringify(
+    { apiBase, personas: results, governanceDocuments, auditEvidence, wrongPassword: 401 },
+    null,
+    2,
+  )}\n`,
 );

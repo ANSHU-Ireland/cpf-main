@@ -1470,20 +1470,660 @@ import type {
   GovernanceDocCreate,
   GovernanceDocType,
   GovernanceDocRepository,
+  GovernanceDocWriteResult,
 } from './governance-docs.js';
 
-const GOV_TABLE: Record<GovernanceDocType, string> = {
-  ai_literacy: 'governance.ai_literacy_records',
-  dataset: 'governance.dataset_registry',
-  data_use_register: 'governance.data_use_register',
-  impact_assessment: 'governance.impact_assessments',
-  post_market_plan: 'governance.post_market_plans',
-  post_market_signal: 'governance.post_market_signals',
-  qms_document: 'governance.quality_documents',
-  technical_document: 'governance.technical_document_versions',
-  vendor_evidence: 'governance.vendor_evidence',
-  deployer_instruction: 'governance.deployer_instructions',
+interface GovernanceDocDescriptor {
+  readonly table: string;
+  readonly titleSql: string;
+  readonly statusSql: string;
+  readonly updatedAtSql: string;
+  readonly tenantSql?: string;
+}
+
+const GOV_DOC: Record<GovernanceDocType, GovernanceDocDescriptor> = {
+  ai_literacy: {
+    table: 'governance.ai_literacy_records',
+    titleSql: "canonical.training_code || ' — ' || canonical.role_context",
+    statusSql: 'canonical.competence_result',
+    updatedAtSql: 'COALESCE(canonical.completed_at, evidence.created_at)',
+    tenantSql: 'canonical.tenant_id = $1',
+  },
+  dataset: {
+    table: 'governance.dataset_registry',
+    titleSql: "canonical.dataset_code || ' ' || canonical.version",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'evidence.created_at',
+  },
+  data_use_register: {
+    table: 'governance.data_use_register',
+    titleSql: 'canonical.purpose',
+    statusSql: 'canonical.status',
+    updatedAtSql: 'canonical.updated_at',
+    tenantSql: 'canonical.tenant_id = $1',
+  },
+  impact_assessment: {
+    table: 'governance.impact_assessments',
+    titleSql: "upper(canonical.assessment_type) || ' — ' || canonical.scope_type",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+    tenantSql: 'canonical.tenant_id = $1',
+  },
+  post_market_plan: {
+    table: 'governance.post_market_plans',
+    titleSql: "'Post-market plan v' || canonical.version_no::text",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+  },
+  post_market_signal: {
+    table: 'governance.post_market_signals',
+    titleSql: "canonical.signal_type || ' — ' || canonical.source_reference",
+    statusSql: 'canonical.review_status',
+    updatedAtSql: 'COALESCE(canonical.reviewed_at, evidence.created_at)',
+    tenantSql: 'canonical.tenant_id = $1',
+  },
+  qms_document: {
+    table: 'governance.quality_documents',
+    titleSql: 'canonical.title',
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+  },
+  technical_document: {
+    table: 'governance.technical_document_versions',
+    titleSql: "'Technical documentation ' || canonical.release_version",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+  },
+  vendor_evidence: {
+    table: 'governance.vendor_evidence',
+    titleSql: "canonical.legal_entity || ' — ' || canonical.service_code",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+  },
+  deployer_instruction: {
+    table: 'governance.deployer_instructions',
+    titleSql: "'Deployer instructions ' || canonical.release_version",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+  },
+  eu_declaration: {
+    table: 'governance.eu_declarations',
+    titleSql: 'canonical.declaration_number',
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.signed_at, evidence.created_at)',
+  },
+  eu_registration: {
+    table: 'governance.eu_registrations',
+    titleSql: "COALESCE(canonical.registration_reference, 'EU registration')",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'canonical.updated_at',
+  },
+  ce_marking: {
+    table: 'governance.ce_marking_records',
+    titleSql: "'CE marking ' || canonical.release_version",
+    statusSql: 'canonical.status',
+    updatedAtSql: 'COALESCE(canonical.approved_at, evidence.created_at)',
+  },
 };
+
+interface GovernanceDocRow {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly created_at: Date;
+  readonly updated_at: Date;
+  readonly data: Record<string, unknown>;
+}
+
+class GovernanceDocInputError extends Error {
+  constructor(readonly errors: readonly string[]) {
+    super(errors.join('; '));
+  }
+}
+
+function requiredString(
+  data: Readonly<Record<string, unknown>>,
+  key: string,
+  allowed?: readonly string[],
+): string {
+  const value = data[key];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new GovernanceDocInputError([`${key} is required`]);
+  }
+  if (allowed !== undefined && !allowed.includes(value)) {
+    throw new GovernanceDocInputError([`${key} must be one of: ${allowed.join(', ')}`]);
+  }
+  return value;
+}
+
+function optionalString(data: Readonly<Record<string, unknown>>, key: string): string | null {
+  const value = data[key];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new GovernanceDocInputError([`${key} must be a non-empty string`]);
+  }
+  return value;
+}
+
+function requiredUuid(data: Readonly<Record<string, unknown>>, key: string): string {
+  const value = requiredString(data, key);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new GovernanceDocInputError([`${key} must be a UUID`]);
+  }
+  return value;
+}
+
+function optionalUuid(data: Readonly<Record<string, unknown>>, key: string): string | null {
+  const value = optionalString(data, key);
+  if (value === null) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new GovernanceDocInputError([`${key} must be a UUID`]);
+  }
+  return value;
+}
+
+function requiredInteger(data: Readonly<Record<string, unknown>>, key: string): number {
+  const value = data[key];
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new GovernanceDocInputError([`${key} must be a positive integer`]);
+  }
+  return value as number;
+}
+
+function optionalBoolean(
+  data: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: boolean,
+): boolean {
+  const value = data[key];
+  if (value === undefined) return fallback;
+  if (typeof value !== 'boolean') {
+    throw new GovernanceDocInputError([`${key} must be a boolean`]);
+  }
+  return value;
+}
+
+function requiredJson(data: Readonly<Record<string, unknown>>, key: string): unknown {
+  const value = data[key];
+  if (value === undefined || typeof value === 'function' || typeof value === 'symbol') {
+    throw new GovernanceDocInputError([`${key} is required`]);
+  }
+  try {
+    if (JSON.stringify(value) === undefined) throw new Error('not JSON');
+  } catch {
+    throw new GovernanceDocInputError([`${key} must be JSON-serializable`]);
+  }
+  return value;
+}
+
+function acceptedPayloadJson(data: Readonly<Record<string, unknown>>): string {
+  try {
+    const encoded = JSON.stringify(data);
+    if (encoded === undefined) throw new Error('not JSON');
+    return encoded;
+  } catch {
+    throw new GovernanceDocInputError(['data must be JSON-serializable']);
+  }
+}
+
+function requiredSha256(data: Readonly<Record<string, unknown>>): string {
+  const value = requiredString(data, 'sha256');
+  if (!/^[0-9a-f]{64}$/i.test(value)) {
+    throw new GovernanceDocInputError(['sha256 must contain exactly 64 hexadecimal characters']);
+  }
+  return value.toLowerCase();
+}
+
+function toGovernanceDoc(row: GovernanceDocRow): GovernanceDocRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    data: row.data,
+  };
+}
+
+function governanceDocSelect(docType: GovernanceDocType, byId: boolean): string {
+  const descriptor = GOV_DOC[docType];
+  const tenantPredicate = descriptor.tenantSql === undefined ? '' : ` AND ${descriptor.tenantSql}`;
+  const idPredicate = byId ? ' AND evidence.resource_id = $3' : '';
+  const orderLimit = byId ? '' : ' ORDER BY evidence.created_at DESC LIMIT 100';
+  return `SELECT canonical.id, ${descriptor.titleSql} AS title,
+                 ${descriptor.statusSql} AS status, evidence.created_at,
+                 ${descriptor.updatedAtSql} AS updated_at, evidence.accepted_payload AS data
+            FROM governance.document_payload_evidence AS evidence
+            JOIN ${descriptor.table} AS canonical ON canonical.id = evidence.resource_id
+           WHERE evidence.tenant_id = $1 AND evidence.document_type = $2${tenantPredicate}${idPredicate}${orderLimit}`;
+}
+
+async function insertCanonicalGovernanceDoc(
+  client: PoolClient,
+  id: string,
+  actor: Actor,
+  docType: GovernanceDocType,
+  data: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  switch (docType) {
+    case 'ai_literacy':
+      await client.query(
+        `INSERT INTO governance.ai_literacy_records
+           (id, tenant_id, user_id, role_context, training_code, material_version,
+            competence_result, completed_at, expires_at, evidence_uri, approved_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9::timestamptz,$10,$11)`,
+        [
+          id,
+          actor.tenantId,
+          requiredUuid(data, 'userId'),
+          requiredString(data, 'roleContext'),
+          requiredString(data, 'trainingCode'),
+          requiredString(data, 'materialVersion'),
+          requiredString(data, 'competenceResult', [
+            'assigned',
+            'passed',
+            'failed',
+            'expired',
+            'waived_with_reason',
+          ]),
+          optionalString(data, 'completedAt'),
+          optionalString(data, 'expiresAt'),
+          optionalString(data, 'evidenceUri'),
+          optionalUuid(data, 'approvedBy'),
+        ],
+      );
+      return;
+    case 'dataset':
+      await client.query(
+        `INSERT INTO governance.dataset_registry
+           (id, dataset_code, version, dataset_role, provenance, lawful_access, purpose,
+            data_subjects, representativeness, quality_checks, bias_analysis, gaps,
+            licence_terms, storage_region, retention_until, status, owner_user_id, approved_by)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,
+                 $12::jsonb,$13,$14,$15::date,$16,$17,$18)`,
+        [
+          id,
+          requiredString(data, 'datasetCode'),
+          requiredString(data, 'version'),
+          requiredString(data, 'datasetRole', [
+            'training',
+            'validation',
+            'testing',
+            'red_team',
+            'fairness',
+            'calibration',
+          ]),
+          JSON.stringify(requiredJson(data, 'provenance')),
+          requiredString(data, 'lawfulAccess'),
+          requiredString(data, 'purpose'),
+          JSON.stringify(requiredJson(data, 'dataSubjects')),
+          JSON.stringify(requiredJson(data, 'representativeness')),
+          JSON.stringify(requiredJson(data, 'qualityChecks')),
+          JSON.stringify(requiredJson(data, 'biasAnalysis')),
+          JSON.stringify(requiredJson(data, 'gaps')),
+          requiredString(data, 'licenceTerms'),
+          requiredString(data, 'storageRegion'),
+          optionalString(data, 'retentionUntil'),
+          requiredString(data, 'status', [
+            'draft',
+            'approved',
+            'restricted',
+            'expired',
+            'withdrawn',
+          ]),
+          actor.userId,
+          optionalUuid(data, 'approvedBy'),
+        ],
+      );
+      return;
+    case 'data_use_register':
+      await client.query(
+        `INSERT INTO governance.data_use_register
+           (id, tenant_id, purpose_code, purpose, data_subjects, data_fields, source,
+            cpf_role, employer_role, lawful_basis, article_9_or_10_condition, recipients,
+            subprocessors, storage_region, transfer_mechanism, retention_policy_id,
+            deletion_method, rights, security_controls, model_use, training_use, human_access,
+            dpia_status, owner_user_id, status)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,
+                 $14,$15,$16,$17,$18::jsonb,$19::jsonb,$20,$21,$22,$23,$24,$25)`,
+        [
+          id,
+          actor.tenantId,
+          requiredString(data, 'purposeCode'),
+          requiredString(data, 'purpose'),
+          JSON.stringify(requiredJson(data, 'dataSubjects')),
+          JSON.stringify(requiredJson(data, 'dataFields')),
+          requiredString(data, 'source'),
+          requiredString(data, 'cpfRole'),
+          requiredString(data, 'employerRole'),
+          optionalString(data, 'lawfulBasis'),
+          optionalString(data, 'article9Or10Condition'),
+          JSON.stringify(data['recipients'] ?? []),
+          JSON.stringify(data['subprocessors'] ?? []),
+          requiredString(data, 'storageRegion'),
+          optionalString(data, 'transferMechanism'),
+          optionalUuid(data, 'retentionPolicyId'),
+          requiredString(data, 'deletionMethod'),
+          JSON.stringify(requiredJson(data, 'rights')),
+          JSON.stringify(requiredJson(data, 'securityControls')),
+          requiredString(data, 'modelUse'),
+          requiredString(data, 'trainingUse'),
+          requiredString(data, 'humanAccess'),
+          requiredString(data, 'dpiaStatus'),
+          actor.userId,
+          requiredString(data, 'status', ['draft', 'approved', 'active', 'retired']),
+        ],
+      );
+      return;
+    case 'impact_assessment':
+      await client.query(
+        `INSERT INTO governance.impact_assessments
+           (id, tenant_id, assessment_type, scope_type, scope_id, version_no, necessity,
+            risks, measures, residual_risk, consultation_required, consultation_status,
+            status, owner_user_id, dpo_opinion, approved_by, approved_at, review_due)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,
+                 $17::timestamptz,$18::date)`,
+        [
+          id,
+          actor.tenantId,
+          requiredString(data, 'assessmentType', [
+            'dpia',
+            'fria',
+            'lia',
+            'equality',
+            'accessibility',
+            'security',
+          ]),
+          requiredString(data, 'scopeType'),
+          requiredUuid(data, 'scopeId'),
+          requiredInteger(data, 'versionNo'),
+          requiredString(data, 'necessity'),
+          JSON.stringify(requiredJson(data, 'risks')),
+          JSON.stringify(requiredJson(data, 'measures')),
+          requiredString(data, 'residualRisk'),
+          optionalBoolean(data, 'consultationRequired', false),
+          optionalString(data, 'consultationStatus'),
+          requiredString(data, 'status', [
+            'draft',
+            'consultation',
+            'approved',
+            'rejected',
+            'expired',
+            'superseded',
+          ]),
+          actor.userId,
+          optionalString(data, 'dpoOpinion'),
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'approvedAt'),
+          optionalString(data, 'reviewDue'),
+        ],
+      );
+      return;
+    case 'post_market_plan':
+      await client.query(
+        `INSERT INTO governance.post_market_plans
+           (id, ai_system_id, version_no, methodology, signal_catalogue, thresholds,
+            review_cadence, status, owner_user_id, approved_by, approved_at)
+         VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7::interval,$8,$9,$10,$11::timestamptz)`,
+        [
+          id,
+          requiredUuid(data, 'aiSystemId'),
+          requiredInteger(data, 'versionNo'),
+          JSON.stringify(requiredJson(data, 'methodology')),
+          JSON.stringify(requiredJson(data, 'signalCatalogue')),
+          JSON.stringify(requiredJson(data, 'thresholds')),
+          requiredString(data, 'reviewCadence'),
+          requiredString(data, 'status', [
+            'draft',
+            'approved',
+            'active',
+            'suspended',
+            'superseded',
+          ]),
+          actor.userId,
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'approvedAt'),
+        ],
+      );
+      return;
+    case 'post_market_signal':
+      await client.query(
+        `INSERT INTO governance.post_market_signals
+           (id, tenant_id, post_market_plan_id, signal_type, metric_window, value,
+            threshold_status, source_reference, review_status, reviewer_user_id, reviewed_at)
+         VALUES ($1,$2,$3,$4,$5::tstzrange,$6::jsonb,$7,$8,$9,$10,$11::timestamptz)`,
+        [
+          id,
+          actor.tenantId,
+          requiredUuid(data, 'postMarketPlanId'),
+          requiredString(data, 'signalType'),
+          requiredString(data, 'metricWindow'),
+          JSON.stringify(requiredJson(data, 'value')),
+          requiredString(data, 'thresholdStatus', ['normal', 'warning', 'breach', 'unknown']),
+          requiredString(data, 'sourceReference'),
+          requiredString(data, 'reviewStatus', [
+            'unreviewed',
+            'reviewing',
+            'accepted',
+            'corrective_action',
+            'suspended',
+          ]),
+          optionalUuid(data, 'reviewerUserId'),
+          optionalString(data, 'reviewedAt'),
+        ],
+      );
+      return;
+    case 'qms_document':
+      await client.query(
+        `INSERT INTO governance.quality_documents
+           (id, document_code, version_no, document_type, title, content_uri, sha256,
+            status, owner_user_id, approved_by, effective_from, review_due, approved_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::date,$12::date,$13::timestamptz)`,
+        [
+          id,
+          requiredString(data, 'documentCode'),
+          requiredInteger(data, 'versionNo'),
+          requiredString(data, 'documentType'),
+          requiredString(data, 'title'),
+          requiredString(data, 'contentUri'),
+          requiredSha256(data),
+          requiredString(data, 'status', [
+            'draft',
+            'in_review',
+            'approved',
+            'effective',
+            'superseded',
+            'retired',
+          ]),
+          actor.userId,
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'effectiveFrom'),
+          optionalString(data, 'reviewDue'),
+          optionalString(data, 'approvedAt'),
+        ],
+      );
+      return;
+    case 'technical_document':
+      await client.query(
+        `INSERT INTO governance.technical_document_versions
+           (id, ai_system_id, version_no, release_version, annex_iv_manifest, object_uri,
+            sha256, status, prepared_by, approved_by, approved_at)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11::timestamptz)`,
+        [
+          id,
+          requiredUuid(data, 'aiSystemId'),
+          requiredInteger(data, 'versionNo'),
+          requiredString(data, 'releaseVersion'),
+          JSON.stringify(requiredJson(data, 'annexIvManifest')),
+          requiredString(data, 'objectUri'),
+          requiredSha256(data),
+          requiredString(data, 'status', ['draft', 'review', 'approved', 'superseded']),
+          actor.userId,
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'approvedAt'),
+        ],
+      );
+      return;
+    case 'vendor_evidence':
+      await client.query(
+        `INSERT INTO governance.vendor_evidence
+           (id, vendor_code, service_code, evidence_version, legal_entity, ai_act_role,
+            gdpr_role, data_locations, subprocessors, transfer_mechanism, training_use,
+            retention, deletion, security_evidence, model_documentation, limitations,
+            change_notice, incident_notice, audit_rights, exit_plan, status, owner_user_id,
+            approved_by, approved_at, review_due)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14::jsonb,
+                 $15::jsonb,$16::jsonb,$17,$18,$19,$20,$21,$22,$23,$24::timestamptz,$25::date)`,
+        [
+          id,
+          requiredString(data, 'vendorCode'),
+          requiredString(data, 'serviceCode'),
+          requiredInteger(data, 'evidenceVersion'),
+          requiredString(data, 'legalEntity'),
+          requiredString(data, 'aiActRole'),
+          requiredString(data, 'gdprRole'),
+          JSON.stringify(requiredJson(data, 'dataLocations')),
+          JSON.stringify(requiredJson(data, 'subprocessors')),
+          optionalString(data, 'transferMechanism'),
+          requiredString(data, 'trainingUse'),
+          requiredString(data, 'retention'),
+          requiredString(data, 'deletion'),
+          JSON.stringify(requiredJson(data, 'securityEvidence')),
+          JSON.stringify(requiredJson(data, 'modelDocumentation')),
+          JSON.stringify(requiredJson(data, 'limitations')),
+          requiredString(data, 'changeNotice'),
+          requiredString(data, 'incidentNotice'),
+          requiredString(data, 'auditRights'),
+          requiredString(data, 'exitPlan'),
+          requiredString(data, 'status', [
+            'draft',
+            'review',
+            'approved',
+            'conditional',
+            'expired',
+            'rejected',
+          ]),
+          actor.userId,
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'approvedAt'),
+          optionalString(data, 'reviewDue'),
+        ],
+      );
+      return;
+    case 'deployer_instruction':
+      await client.query(
+        `INSERT INTO governance.deployer_instructions
+           (id, ai_system_id, version_no, release_version, intended_purpose, input_requirements,
+            accuracy_metrics, limitations, oversight_measures, monitoring_instructions,
+            incident_instructions, maintenance_instructions, object_uri, sha256, status,
+            approved_by, approved_at)
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,
+                 $11::jsonb,$12::jsonb,$13,$14,$15,$16,$17::timestamptz)`,
+        [
+          id,
+          requiredUuid(data, 'aiSystemId'),
+          requiredInteger(data, 'versionNo'),
+          requiredString(data, 'releaseVersion'),
+          requiredString(data, 'intendedPurpose'),
+          JSON.stringify(requiredJson(data, 'inputRequirements')),
+          JSON.stringify(requiredJson(data, 'accuracyMetrics')),
+          JSON.stringify(requiredJson(data, 'limitations')),
+          JSON.stringify(requiredJson(data, 'oversightMeasures')),
+          JSON.stringify(requiredJson(data, 'monitoringInstructions')),
+          JSON.stringify(requiredJson(data, 'incidentInstructions')),
+          JSON.stringify(requiredJson(data, 'maintenanceInstructions')),
+          requiredString(data, 'objectUri'),
+          requiredSha256(data),
+          requiredString(data, 'status', ['draft', 'approved', 'effective', 'superseded']),
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'approvedAt'),
+        ],
+      );
+      return;
+    case 'eu_declaration':
+      await client.query(
+        `INSERT INTO governance.eu_declarations
+           (id, conformity_assessment_id, declaration_number, declaration_version,
+            content_uri, sha256, status, signed_by, signed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz)`,
+        [
+          id,
+          requiredUuid(data, 'conformityAssessmentId'),
+          requiredString(data, 'declarationNumber'),
+          requiredInteger(data, 'declarationVersion'),
+          requiredString(data, 'contentUri'),
+          requiredSha256(data),
+          requiredString(data, 'status', ['draft', 'signed', 'withdrawn', 'superseded']),
+          optionalUuid(data, 'signedBy'),
+          optionalString(data, 'signedAt'),
+        ],
+      );
+      return;
+    case 'eu_registration':
+      await client.query(
+        `INSERT INTO governance.eu_registrations
+           (id, ai_system_id, registration_reference, registration_payload, status,
+            submitted_by, submitted_at, confirmed_at)
+         VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7::timestamptz,$8::timestamptz)`,
+        [
+          id,
+          requiredUuid(data, 'aiSystemId'),
+          optionalString(data, 'registrationReference'),
+          JSON.stringify(requiredJson(data, 'registrationPayload')),
+          requiredString(data, 'status', [
+            'draft',
+            'submitted',
+            'registered',
+            'update_required',
+            'withdrawn',
+            'rejected',
+          ]),
+          actor.userId,
+          optionalString(data, 'submittedAt'),
+          optionalString(data, 'confirmedAt'),
+        ],
+      );
+      return;
+    case 'ce_marking':
+      await client.query(
+        `INSERT INTO governance.ce_marking_records
+           (id, ai_system_id, release_version, declaration_id, marking_location, status,
+            approved_by, approved_at, evidence_uri)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9)`,
+        [
+          id,
+          requiredUuid(data, 'aiSystemId'),
+          requiredString(data, 'releaseVersion'),
+          requiredUuid(data, 'declarationId'),
+          requiredString(data, 'markingLocation'),
+          requiredString(data, 'status', ['blocked', 'approved', 'displayed', 'withdrawn']),
+          optionalUuid(data, 'approvedBy'),
+          optionalString(data, 'approvedAt'),
+          optionalString(data, 'evidenceUri'),
+        ],
+      );
+  }
+}
+
+function governanceWriteFailure(error: unknown): GovernanceDocWriteResult | null {
+  if (error instanceof GovernanceDocInputError) {
+    return { ok: false, status: 422, reason: 'invalid_governance_document', errors: error.errors };
+  }
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : null;
+  if (code === '23505') {
+    return { ok: false, status: 409, reason: 'governance_document_version_conflict' };
+  }
+  if (
+    code !== null &&
+    ['22007', '22015', '22P02', '23502', '23503', '23514', '23P01'].includes(code)
+  ) {
+    return { ok: false, status: 422, reason: 'invalid_governance_document_reference' };
+  }
+  return null;
+}
 
 export class PgGovernanceDocRepository implements GovernanceDocRepository {
   constructor(
@@ -1495,25 +2135,12 @@ export class PgGovernanceDocRepository implements GovernanceDocRepository {
     actor: Actor,
     docType: GovernanceDocType,
   ): Promise<{ items: readonly GovernanceDocRecord[]; total: number }> {
-    const table = GOV_TABLE[docType] ?? 'governance.quality_documents';
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        title: string | null;
-        status: string | null;
-        created_at: Date;
-        updated_at: Date | null;
-      }>(
-        `SELECT id, COALESCE(title, id) AS title, COALESCE(status, 'active') AS status, created_at, updated_at FROM ${table} WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
-        [actor.tenantId],
-      );
-      const items: GovernanceDocRecord[] = r.rows.map((row) => ({
-        id: row.id,
-        title: row.title ?? row.id,
-        status: row.status ?? 'active',
-        createdAt: row.created_at.toISOString(),
-        updatedAt: (row.updated_at ?? row.created_at).toISOString(),
-      }));
+      const r = await client.query<GovernanceDocRow>(governanceDocSelect(docType, false), [
+        actor.tenantId,
+        docType,
+      ]);
+      const items = r.rows.map(toGovernanceDoc);
       return { items, total: items.length };
     });
   }
@@ -1523,27 +2150,13 @@ export class PgGovernanceDocRepository implements GovernanceDocRepository {
     docType: GovernanceDocType,
     id: string,
   ): Promise<GovernanceDocRecord | null> {
-    const table = GOV_TABLE[docType] ?? 'governance.quality_documents';
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        title: string | null;
-        status: string | null;
-        created_at: Date;
-        updated_at: Date | null;
-      }>(
-        `SELECT id, COALESCE(title, id) AS title, COALESCE(status, 'active') AS status, created_at, updated_at FROM ${table} WHERE tenant_id = $1 AND id = $2`,
-        [actor.tenantId, id],
-      );
-      if (!r.rows[0]) return null;
-      const row = r.rows[0];
-      return {
-        id: row.id,
-        title: row.title ?? row.id,
-        status: row.status ?? 'active',
-        createdAt: row.created_at.toISOString(),
-        updatedAt: (row.updated_at ?? row.created_at).toISOString(),
-      };
+      const r = await client.query<GovernanceDocRow>(governanceDocSelect(docType, true), [
+        actor.tenantId,
+        docType,
+        id,
+      ]);
+      return r.rows[0] === undefined ? null : toGovernanceDoc(r.rows[0]);
     });
   }
 
@@ -1551,25 +2164,77 @@ export class PgGovernanceDocRepository implements GovernanceDocRepository {
     actor: Actor,
     docType: GovernanceDocType,
     input: GovernanceDocCreate,
-  ): Promise<GovernanceDocRecord> {
-    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const id = randomUUID();
-      await client.query(
-        `INSERT INTO governance.quality_documents (id, tenant_id, document_type, title, status, version, owner_user_id) VALUES ($1,$2,$3,$4,'draft','1.0',$5) ON CONFLICT DO NOTHING`,
-        [id, actor.tenantId, docType, input.title, actor.userId],
-      );
-      await new PgAuditWriter(client).append({
-        tenantId: actor.tenantId,
-        actorType: 'user',
-        actorId: actor.userId,
-        action: `${docType}.create`,
-        resourceType: docType,
-        resourceId: id,
-        outcome: 'success',
-        metadata: {},
+  ): Promise<GovernanceDocWriteResult> {
+    try {
+      return await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+        const id = randomUUID();
+        const payloadJson = acceptedPayloadJson(input.data);
+        await insertCanonicalGovernanceDoc(client, id, actor, docType, input.data);
+        const evidence = await client.query<GovernanceDocRow>(
+          `INSERT INTO governance.document_payload_evidence
+             (tenant_id, document_type, resource_id, accepted_payload, operation_reason,
+              expected_version, created_by)
+           VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)
+           RETURNING resource_id AS id, ''::text AS title, ''::text AS status,
+                     created_at, created_at AS updated_at, accepted_payload AS data`,
+          [
+            actor.tenantId,
+            docType,
+            id,
+            payloadJson,
+            input.reason ?? null,
+            input.expectedVersion ?? null,
+            actor.userId,
+          ],
+        );
+        await client.query(
+          `INSERT INTO audit.outbox_events
+             (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+              data_classification, correlation_id, status)
+           VALUES ($1,$2,'governance_document',$3,'governance.document.created',$4::jsonb,
+                   'confidential',$5,'pending')`,
+          [
+            randomUUID(),
+            actor.tenantId,
+            id,
+            JSON.stringify({
+              documentType: docType,
+              expectedVersion: input.expectedVersion ?? null,
+            }),
+            randomUUID(),
+          ],
+        );
+        await new PgAuditWriter(client).append({
+          tenantId: actor.tenantId,
+          actorType: 'user',
+          actorId: actor.userId,
+          action: `governance.${docType}.create`,
+          resourceType: 'governance_document',
+          resourceId: id,
+          outcome: 'success',
+          metadata: {
+            documentType: docType,
+            expectedVersion: input.expectedVersion ?? null,
+            reason: input.reason ?? null,
+          },
+        });
+        const created = evidence.rows[0];
+        if (created === undefined) throw new Error('governance evidence row missing after insert');
+        const canonical = await client.query<GovernanceDocRow>(governanceDocSelect(docType, true), [
+          actor.tenantId,
+          docType,
+          id,
+        ]);
+        const row = canonical.rows[0];
+        if (row === undefined)
+          throw new Error('canonical governance document missing after insert');
+        return { ok: true, doc: toGovernanceDoc(row) };
       });
-      return { id, title: input.title, status: 'draft', createdAt: nowIso(), updatedAt: nowIso() };
-    });
+    } catch (error) {
+      const failure = governanceWriteFailure(error);
+      if (failure !== null) return failure;
+      throw error;
+    }
   }
 }
 
@@ -2324,6 +2989,97 @@ import type {
   TraceabilityRow,
 } from './audit-evidence.js';
 
+interface EvidenceCollectionRow {
+  id: string;
+  title: string;
+  purpose: string;
+  framework: string;
+  status: string;
+  custodian: string;
+  sealed: boolean;
+  item_count: string;
+  requirement_ids: string[];
+  chain_of_custody: Array<{ actor: string; action: string; timestamp: string }>;
+  created_at: Date;
+}
+
+interface TraceabilityPgRow {
+  id: string;
+  requirement_key: string;
+  requirement_title: string;
+  controls: string[];
+  design_surfaces: string[];
+  api_operations: string[];
+  implementation_artifacts: string[];
+  evidence_labels: string[];
+  coverage: string;
+  status: string;
+  created_at: Date;
+}
+
+const evidenceCollectionSelect = `
+  SELECT collection.id, collection.title, collection.purpose, collection.framework,
+         collection.status, custodian.display_name AS custodian,
+         collection.sealed_at IS NOT NULL AS sealed,
+         COALESCE(item_summary.item_count, 0)::text AS item_count,
+         COALESCE(item_summary.requirement_ids, ARRAY[]::uuid[]) AS requirement_ids,
+         COALESCE(custody.chain_of_custody, '[]'::jsonb) AS chain_of_custody,
+         collection.created_at
+    FROM audit.evidence_collections AS collection
+    JOIN iam.users AS custodian ON custodian.id = collection.custodian_user_id
+    LEFT JOIN LATERAL (
+      SELECT count(*)::int AS item_count,
+             array_agg(DISTINCT item.requirement_traceability_id)
+               FILTER (WHERE item.requirement_traceability_id IS NOT NULL) AS requirement_ids
+        FROM audit.evidence_collection_items AS item
+       WHERE item.tenant_id = collection.tenant_id
+         AND item.collection_id = collection.id
+    ) AS item_summary ON true
+    LEFT JOIN LATERAL (
+      SELECT jsonb_agg(
+               jsonb_build_object(
+                 'actor', actor.display_name,
+                 'action', replace(event.action, '_', ' '),
+                 'timestamp', event.occurred_at
+               ) ORDER BY event.occurred_at, event.id
+             ) AS chain_of_custody
+        FROM audit.evidence_custody_events AS event
+        JOIN iam.users AS actor ON actor.id = event.actor_user_id
+       WHERE event.tenant_id = collection.tenant_id
+         AND event.collection_id = collection.id
+    ) AS custody ON true`;
+
+function toEvidenceCollection(row: EvidenceCollectionRow): EvidenceCollectionRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    purpose: row.purpose,
+    framework: row.framework,
+    status: row.status,
+    custodian: row.custodian,
+    sealed: row.sealed,
+    itemCount: Number(row.item_count),
+    requirementIds: row.requirement_ids,
+    chainOfCustody: row.chain_of_custody,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function toTraceability(row: TraceabilityPgRow): TraceabilityRow {
+  return {
+    id: row.id,
+    requirementId: row.requirement_key,
+    requirementTitle: row.requirement_title,
+    controls: row.controls,
+    surfaces: row.design_surfaces,
+    endpoints: row.api_operations,
+    evidence: [...row.implementation_artifacts, ...row.evidence_labels],
+    coverage: row.coverage,
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 export class PgAuditEvidenceRepository implements AuditEvidenceRepository {
   constructor(
     private readonly pool: Pool,
@@ -2334,33 +3090,72 @@ export class PgAuditEvidenceRepository implements AuditEvidenceRepository {
     actor: Actor,
   ): Promise<{ items: readonly EvidenceCollectionRecord[]; total: number }> {
     return withTenant(this.pool, ctx(actor, this.role), async (client) => {
-      const r = await client.query<{
-        id: string;
-        event_type: string;
-        status: string;
-        created_at: Date;
-      }>(
-        `SELECT id, event_type, status, created_at FROM audit.outbox_events WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`,
+      const result = await client.query<EvidenceCollectionRow>(
+        `${evidenceCollectionSelect}
+          WHERE collection.tenant_id = $1
+          ORDER BY collection.created_at DESC, collection.id
+          LIMIT 100`,
         [actor.tenantId],
       );
-      const items: EvidenceCollectionRecord[] = r.rows.map((row) => ({
-        id: row.id,
-        title: row.event_type,
-        framework: 'EU AI Act',
-        status: row.status === 'published' ? 'active' : 'pending',
-        itemCount: 1,
-        createdAt: row.created_at.toISOString(),
-      }));
+      const items = result.rows.map(toEvidenceCollection);
       return { items, total: items.length };
     });
   }
 
   async createCollection(
     actor: Actor,
-    input: { title: string; framework: string },
+    input: {
+      title: string;
+      purpose: string;
+      framework: string;
+      reason: string | null;
+      expectedVersion: number | null;
+    },
   ): Promise<EvidenceCollectionRecord> {
-    const id = randomUUID();
-    await withTenant(this.pool, ctx(actor, this.role), async (client) => {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const id = randomUUID();
+      await client.query(
+        `INSERT INTO audit.evidence_collections
+           (id, tenant_id, title, purpose, framework, custodian_user_id,
+            status, creation_reason, version, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, 1, $6)`,
+        [
+          id,
+          actor.tenantId,
+          input.title,
+          input.purpose,
+          input.framework,
+          actor.userId,
+          input.reason,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit.evidence_custody_events
+           (id, tenant_id, collection_id, actor_user_id, action, detail, metadata)
+         VALUES ($1, $2, $3, $4, 'created', $5, $6::jsonb)`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          id,
+          actor.userId,
+          input.reason,
+          JSON.stringify({ framework: input.framework, expectedVersion: input.expectedVersion }),
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit.outbox_events
+           (id, tenant_id, aggregate_type, aggregate_id, event_type, payload,
+            data_classification, correlation_id, status)
+         VALUES ($1, $2, 'evidence_collection', $3, 'audit.evidence_collection.created',
+                 $4::jsonb, 'confidential', $5, 'pending')`,
+        [
+          randomUUID(),
+          actor.tenantId,
+          id,
+          JSON.stringify({ title: input.title, framework: input.framework }),
+          randomUUID(),
+        ],
+      );
       await new PgAuditWriter(client).append({
         tenantId: actor.tenantId,
         actorType: 'user',
@@ -2369,27 +3164,43 @@ export class PgAuditEvidenceRepository implements AuditEvidenceRepository {
         resourceType: 'evidence_collection',
         resourceId: id,
         outcome: 'success',
-        metadata: { title: input.title },
+        purpose: input.reason,
+        metadata: { title: input.title, framework: input.framework },
       });
+      const result = await client.query<EvidenceCollectionRow>(
+        `${evidenceCollectionSelect}
+          WHERE collection.tenant_id = $1 AND collection.id = $2`,
+        [actor.tenantId, id],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('evidence collection row missing after insert');
+      return toEvidenceCollection(row);
     });
-    return {
-      id,
-      title: input.title,
-      framework: input.framework,
-      status: 'active',
-      itemCount: 0,
-      createdAt: nowIso(),
-    };
   }
 
-  async getTraceability(_actor: Actor, requirementId: string): Promise<TraceabilityRow> {
-    return {
-      requirementId,
-      requirementTitle: requirementId,
-      controls: [],
-      evidence: [],
-      coverage: 'unlinked',
-    };
+  async getTraceability(actor: Actor, requirementId: string): Promise<TraceabilityRow | null> {
+    return withTenant(this.pool, ctx(actor, this.role), async (client) => {
+      const result = await client.query<TraceabilityPgRow>(
+        `SELECT requirement.id, requirement.requirement_key, requirement.requirement_title,
+                requirement.controls, requirement.design_surfaces, requirement.api_operations,
+                requirement.implementation_artifacts, requirement.coverage, requirement.status,
+                requirement.created_at,
+                COALESCE(
+                  array_agg(DISTINCT item.display_label ORDER BY item.display_label)
+                    FILTER (WHERE item.id IS NOT NULL),
+                  ARRAY[]::text[]
+                ) AS evidence_labels
+           FROM audit.requirement_traceability AS requirement
+           LEFT JOIN audit.evidence_collection_items AS item
+             ON item.tenant_id = requirement.tenant_id
+            AND item.requirement_traceability_id = requirement.id
+          WHERE requirement.tenant_id = $1 AND requirement.id = $2
+          GROUP BY requirement.id`,
+        [actor.tenantId, requirementId],
+      );
+      const row = result.rows[0];
+      return row === undefined ? null : toTraceability(row);
+    });
   }
 }
 

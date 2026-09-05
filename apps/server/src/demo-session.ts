@@ -167,8 +167,17 @@ export function authorizeDemoOperation(
   }
 
   if (
-    (operationId.startsWith('get_audit') || operationId.startsWith('post_audit')) &&
-    session.actor.roles.includes('auditor')
+    operationId.startsWith('get_audit') &&
+    session.actor.roles.some((role) =>
+      ['auditor', 'regulator', 'governance_officer'].includes(role),
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    operationId.startsWith('post_audit') &&
+    session.actor.roles.some((role) => ['auditor', 'governance_officer'].includes(role))
   ) {
     return true;
   }
