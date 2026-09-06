@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useId, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { Button, Field, Input } from '@cpf/ui';
 import { PageHeader } from '../../components/PageHeader';
 import { Card } from '../../components/Card';
@@ -9,6 +10,7 @@ import { AsyncBoundary } from '../../components/AsyncBoundary';
 import { apiClient } from '../../lib/api-client';
 import { useAsync } from '../../lib/useAsync';
 import type { SecurityEventView, SecuritySeverity } from '../../lib/types';
+import { passwordChangedEntry, safeWorkspace, WORKSPACE_NAMES } from '../../lib/workspace-entry';
 
 const SEVERITY_TONE: Record<SecuritySeverity, BadgeTone> = {
   info: 'info',
@@ -40,10 +42,24 @@ export default function SecurityPage(): React.JSX.Element {
   const [confirmation, setConfirmation] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<'idle' | 'saving'>('idle');
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [resetRequired, setResetRequired] = useState(false);
+  const [workspace, setWorkspace] = useState<string | undefined>();
+  const passwordPending = useRef(false);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    setResetRequired(query.get('passwordResetRequired') === 'true');
+    setWorkspace(safeWorkspace(query.get('workspace')));
+  }, []);
 
   async function changePassword(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    if (passwordPending.current) return;
     setPasswordError(null);
+    if (currentPassword.length === 0) {
+      setPasswordError('Enter your current password.');
+      return;
+    }
     if (newPassword.length < 12) {
       setPasswordError('Use at least 12 characters for the new password.');
       return;
@@ -52,25 +68,53 @@ export default function SecurityPage(): React.JSX.Element {
       setPasswordError('The new password confirmation does not match.');
       return;
     }
+    passwordPending.current = true;
     setPasswordStatus('saving');
     try {
       await apiClient.changePassword(currentPassword, newPassword);
-      window.location.assign('/sign-in?passwordChanged=true');
+      window.location.assign(passwordChangedEntry(workspace));
     } catch (error) {
       setPasswordError(error instanceof Error ? error.message : 'Unable to change password.');
       setPasswordStatus('idle');
+      passwordPending.current = false;
     }
   }
 
   return (
     <section aria-labelledby={headingId}>
       <PageHeader
-        title="Security activity"
+        title="Security and sessions"
         headingId={headingId}
-        description="Recent security-relevant events on your account."
+        description="Review sessions and security events with revocation controls."
+        actions={
+          <Link
+            href="/account/sessions"
+            className="inline-flex min-h-target items-center rounded-control bg-blue px-5 py-3 font-semibold text-paper"
+          >
+            Manage signed-in devices
+          </Link>
+        }
       />
+      {resetRequired ? (
+        <section
+          aria-labelledby="password-required-heading"
+          className="mb-5 rounded-control border border-line bg-amber-soft p-5"
+        >
+          <h2 id="password-required-heading" className="m-0 text-lg font-semibold text-ink">
+            Set your password to continue{workspace ? ` to ${WORKSPACE_NAMES[workspace]}` : ''}
+          </h2>
+          <p className="mb-0 mt-2 text-sm text-ink">
+            You signed in with a temporary password. Choose a new password below, then sign in again
+            with it. This signs out all sessions for this account. Your saved work is not deleted.
+          </p>
+        </section>
+      ) : null}
       <Card>
-        <form onSubmit={(event) => void changePassword(event)} className="grid max-w-xl gap-4">
+        <form
+          aria-label="Change account password"
+          onSubmit={(event) => void changePassword(event)}
+          className="grid max-w-xl gap-4"
+        >
           <div>
             <h2 className="m-0 text-lg font-semibold text-ink">Change password</h2>
             <p className="mb-0 mt-2 text-sm text-muted">
@@ -129,6 +173,7 @@ export default function SecurityPage(): React.JSX.Element {
           </div>
         </form>
       </Card>
+      <h2 className="mb-3 mt-8 text-lg font-semibold text-ink">Recent security events</h2>
       <AsyncBoundary
         state={state}
         onRetry={reload}

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button, Field, Input } from '@cpf/ui';
 import { AuthCard } from '../components/AuthCard';
 import { apiClient, ApiError } from '../lib/api-client';
+import { safeWorkspace, securityEntry, WORKSPACE_NAMES } from '../lib/workspace-entry';
 
 type Status = 'idle' | 'submitting';
 
@@ -75,9 +76,14 @@ export default function SignInPage(): React.JSX.Element {
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [recommendedRole, setRecommendedRole] = useState<string | null>(null);
+  const [returnWorkspace, setReturnWorkspace] = useState<string | undefined>();
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
   useEffect(() => {
-    const requestedRole = new URLSearchParams(window.location.search).get('role');
+    const query = new URLSearchParams(window.location.search);
+    const requestedRole = query.get('role');
+    setReturnWorkspace(safeWorkspace(query.get('workspace')));
+    setPasswordChanged(query.get('passwordChanged') === 'true');
     const workspace = DEMO_WORKSPACES.find((item) => item.label === requestedRole);
     if (workspace) {
       setRecommendedRole(workspace.label);
@@ -102,7 +108,7 @@ export default function SignInPage(): React.JSX.Element {
         mfaRequired
           ? '/mfa'
           : passwordResetRequired
-            ? '/account/security?passwordResetRequired=true'
+            ? securityEntry(redirectTo)
             : (redirectTo ?? '/account/profile'),
       );
     } catch (error) {
@@ -121,7 +127,7 @@ export default function SignInPage(): React.JSX.Element {
     setFieldErrors(nextFieldErrors);
     if (Object.keys(nextFieldErrors).length > 0) return;
 
-    await submitCredentials(email, password);
+    await submitCredentials(email, password, returnWorkspace);
   }
 
   return (
@@ -185,6 +191,16 @@ export default function SignInPage(): React.JSX.Element {
         >
           <div>
             <h2 className="m-0 text-lg font-semibold text-ink">Use credentials</h2>
+            {passwordChanged ? (
+              <p role="status" className="rounded-control bg-sage-soft p-3 text-sm text-ink">
+                Password changed. All previous sessions were signed out. Enter your email and new
+                password
+                {returnWorkspace
+                  ? ` to continue to ${WORKSPACE_NAMES[returnWorkspace]}`
+                  : ' to continue'}
+                . The temporary demo password no longer works for this account.
+              </p>
+            ) : null}
             <p className="mb-0 mt-2 text-sm text-muted">
               Shared UAT password: <strong className="text-ink">{DEMO_PASSWORD}</strong>
             </p>

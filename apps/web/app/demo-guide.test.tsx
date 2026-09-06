@@ -116,7 +116,7 @@ describe('guided demo entry', () => {
     {
       mfaRequired: false,
       passwordResetRequired: true,
-      target: '/account/security?passwordResetRequired=true',
+      target: '/account/security?passwordResetRequired=true&workspace=%2Femployer',
     },
     { mfaRequired: false, passwordResetRequired: false, target: '/employer' },
   ])(
