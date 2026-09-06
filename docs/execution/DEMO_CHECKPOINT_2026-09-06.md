@@ -31,7 +31,28 @@ screen improvements above were recovered from the local working tree and tested 
   15 QMS route/interaction tests passed. Web/API/server typechecks and focused lint passed.
 - The first full live suite passed 1,708 tests and failed one autosave assertion because another
   test reseeded the shared record concurrently. Database-backed test files are now serialized;
-  the complete rerun and production build are pending at this save point.
+  the complete rerun passed **185 test files / 1,709 tests, zero skips or failures**.
+
+## Verification and immediate handover
+
+- Decision/QMS implementation was pushed as `622326f`; audit recovery was pushed as `c059b4e`.
+- Production build passed and generated 98 pages. Browser inspection confirmed tenant QMS details
+  load, but caught missing utility styles after a build invoked from the monorepo root.
+- PostCSS now resolves the Tailwind configuration explicitly; content globs are relative to their
+  configuration file. `verify:web-styles` checks generated grid, border and responsive rules from
+  the monorepo root and is included in `pnpm verify`. This regression check passes.
+- The rebuild with corrected styles is in progress at this save point. **Next: finish that build,
+  restart the preview, reload QMS and verify its layout visually, then browser-test the decision
+  draft → distinct approver → admin issuance flow.** Do not claim those browser journeys passed.
+- Local demo database: `cpf_uat_final_20260821`, PostgreSQL port 55432; API port 3000; preview port 4300. Do not run integration tests against the demo database: use `cpf_uat_verify` separately.
+- Full successful test log: `logs/2026-09-06_13-55-14-538-serialized-live-suite-sept06.log` in the
+  parent workspace. Runtime logs are timestamped there too.
+- Synthetic reviewed application `11111111-0000-4000-8000-000000000217` had no decision at the
+  start of browser checks; it is suitable for the next demo decision journey.
+- Browser sign-in sends reset-required UAT users to Security. No password was changed by the
+  assistant. First-login navigation and an approver queue remain usability work, not signed off.
+- At the final quota check, the five-hour window was 89% consumed; weekly was 14%. No usage reset
+  was consumed by the assistant. Save/push is performed before waiting for the remaining checks.
 
 ## Release boundary (unchanged)
 

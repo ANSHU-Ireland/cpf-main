@@ -1,5 +1,14 @@
 # Next Action — exactly one executable slice
 
+## Immediate resume — 2026-09-06 demo checkpoint
+
+Read `DEMO_CHECKPOINT_2026-09-06.md` first. Finish the corrected-style production build, restore
+the local preview and verify QMS plus the employer decision/approval/issuance screens in-browser.
+The 1,709-test live suite already passed; do not repeat the entire codebase assessment. After
+browser verification, continue the remaining governance forms and operations/support no-op
+actions in `DEMO_SCREEN_COVERAGE_2026-09-05.md`. AWS hosting is deferred with blank settings in
+the runbook. Commit and push each bounded slice immediately.
+
 ## Finish audit access scope and browser acceptance
 
 **Checkpoint:** canonical collection creation, custody events, requirement lookup, tenant RLS,

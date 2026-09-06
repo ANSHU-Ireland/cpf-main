@@ -21,7 +21,8 @@
     "uat:journeys": "node scripts/demo-smoke.mjs",
     "serve": "pnpm --filter @cpf/server start",
     "serve:dev": "pnpm --filter @cpf/server dev",
-    "verify": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm run test"
+    "verify:web-styles": "node scripts/verify-web-styles.mjs",
+    "verify": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm run verify:web-styles && pnpm run test"
   },
   "devDependencies": {
     "@cpf/db": "workspace:*",
