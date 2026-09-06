@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Field, Input } from '@cpf/ui';
@@ -28,6 +28,18 @@ const DEMO_WORKSPACES = [
     description: 'Campaigns, candidates, invitations, decisions and reporting.',
     email: 'admin@northstar.invalid',
     href: '/employer',
+  },
+  {
+    label: 'Approver',
+    description: 'Independently approve or return an employer’s draft decision.',
+    email: 'approver@northstar.invalid',
+    href: '/employer',
+  },
+  {
+    label: 'Auditor',
+    description: 'Evidence collections, custody history and requirement traceability.',
+    email: 'auditor@tenant-01.cpf-uat.invalid',
+    href: '/audit/evidence',
   },
   {
     label: 'Platform admin',
@@ -62,6 +74,16 @@ export default function SignInPage(): React.JSX.Element {
   const [status, setStatus] = useState<Status>('idle');
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [recommendedRole, setRecommendedRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const requestedRole = new URLSearchParams(window.location.search).get('role');
+    const workspace = DEMO_WORKSPACES.find((item) => item.label === requestedRole);
+    if (workspace) {
+      setRecommendedRole(workspace.label);
+      setEmail(workspace.email);
+    }
+  }, []);
 
   async function submitCredentials(
     nextEmail: string,
@@ -106,17 +128,24 @@ export default function SignInPage(): React.JSX.Element {
     <AuthCard
       title="Sign in"
       headingId="signin-heading"
-      intro="Choose a seeded UAT role, or enter any account from the generated credential manifest."
+      intro="Choose the person whose work you want to explore. New here? Start with the demo guide."
       maxWidth="1040px"
       footer={
         <span>
-          Trouble signing in? <Link href="/forgot-password">Reset your password</Link>.
+          <Link href="/">Back to the demo guide</Link> · Trouble signing in?{' '}
+          <Link href="/forgot-password">Reset your password</Link>.
         </span>
       }
     >
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.8fr)]">
         <section aria-labelledby="demo-workspaces-heading">
           <div className="mb-4">
+            {recommendedRole ? (
+              <p role="status" className="rounded-control bg-blue-soft p-3 text-sm text-ink">
+                Next step: choose {recommendedRole} below. Its email is also filled in if you use a
+                changed password.
+              </p>
+            ) : null}
             <h2 id="demo-workspaces-heading" className="m-0 text-lg font-semibold text-ink">
               Open a demo workspace
             </h2>
@@ -138,6 +167,11 @@ export default function SignInPage(): React.JSX.Element {
               >
                 <strong className="mb-2 block text-sm font-semibold text-blue group-hover:underline">
                   {workspace.label}
+                  {workspace.label === recommendedRole ? (
+                    <span className="mt-1 block text-xs text-muted">
+                      Selected from your walkthrough
+                    </span>
+                  ) : null}
                 </strong>
                 <span className="block text-sm leading-5 text-muted">{workspace.description}</span>
               </button>
