@@ -44,7 +44,9 @@ describe('guided demo entry', () => {
     window.history.replaceState({}, '', '/sign-in?role=Approver');
     render(<SignInPage />);
     expect(await screen.findByRole('status')).toHaveTextContent('choose Approver');
-    expect(screen.getByLabelText('Email')).toHaveValue('approver@northstar.invalid');
+    expect(screen.getByRole('textbox', { name: /Email/ })).toHaveValue(
+      'approver@northstar.invalid',
+    );
     expect(screen.getByRole('button', { name: /Approver/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /Auditor/ })).toBeVisible();
   });
@@ -53,7 +55,7 @@ describe('guided demo entry', () => {
     window.history.replaceState({}, '', '/sign-in?role=https://example.invalid');
     render(<SignInPage />);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Email')).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: /Email/ })).toHaveValue('');
   });
 
   it.each([
@@ -117,6 +119,7 @@ describe('guided demo entry', () => {
       </AppShell>,
     );
     expect(screen.getByRole('link', { name: 'Demo guide' })).toHaveAttribute('href', '/');
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace navigation' }));
     expect(screen.getByRole('link', { name: 'My account & organisation' })).toHaveAttribute(
       'href',
       '/account/profile',

@@ -18,5 +18,9 @@ The full campaign → candidate attempt → review → decision path still needs
 acceptance testing. The previous bounded backlog remains: 26 unfinished mutation handlers plus
 five no-op actions. This guide does not make those actions functional or establish production readiness.
 
-Verification results are recorded in the next saved checkpoint after the scoped checks run.
+Verification: focused formatting, lint and web typecheck passed. All 13 targeted checks passed
+(nine walkthrough/navigation interactions and four existing sign-in route tests), including
+required password-change and MFA redirects. Initial test selectors omitted the required-field
+marker and queried a closed mobile menu; corrected selectors passed without changing authentication.
+Production rebuild and browser inspection are pending at this checkpoint.
 Hosting remains deferred; keep AWS inputs blank in the existing runbook.
