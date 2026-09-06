@@ -162,8 +162,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const fallback = `Request failed (${String(response.status)}).`;
     let message = fallback;
     try {
-      const body = (await response.json()) as { error?: string; message?: string };
-      message = body.error ?? body.message ?? fallback;
+      const body = (await response.json()) as {
+        error?: string;
+        message?: string;
+        detail?: string;
+      };
+      message = body.error ?? body.message ?? body.detail ?? fallback;
     } catch {
       /* non-JSON error body; keep fallback */
     }
@@ -576,6 +580,11 @@ export const apiClient = {
     request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
       method: 'POST',
       body: JSON.stringify({ action: 'approve' }),
+    }),
+  issueDecision: (id: string): Promise<DecisionApprovalView> =>
+    request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'issue' }),
     }),
   returnDecision: (id: string, rationale: string): Promise<DecisionApprovalView> =>
     request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {

@@ -1690,9 +1690,22 @@ function governanceDocSelect(docType: GovernanceDocType, byId: boolean): string 
   const tenantPredicate = descriptor.tenantSql === undefined ? '' : ` AND ${descriptor.tenantSql}`;
   const idPredicate = byId ? ' AND evidence.resource_id = $3' : '';
   const orderLimit = byId ? '' : ' ORDER BY evidence.created_at DESC LIMIT 100';
+  // Payload evidence is immutable input, not necessarily a complete read model (notably seeds).
+  // Canonical columns take precedence so approval/owner/artifact details cannot be spoofed by input.
+  const dataSql =
+    docType === 'qms_document'
+      ? `evidence.accepted_payload || jsonb_build_object(
+        'documentCode', canonical.document_code, 'versionNo', canonical.version_no,
+        'documentType', canonical.document_type, 'title', canonical.title,
+        'contentUri', canonical.content_uri, 'sha256', canonical.sha256,
+        'status', canonical.status, 'ownerUserId', canonical.owner_user_id,
+        'approvedBy', canonical.approved_by, 'effectiveFrom', canonical.effective_from,
+        'reviewDue', canonical.review_due,
+        'approvedAt', to_char(canonical.approved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`
+      : 'evidence.accepted_payload';
   return `SELECT canonical.id, ${descriptor.titleSql} AS title,
                  ${descriptor.statusSql} AS status, evidence.created_at,
-                 ${descriptor.updatedAtSql} AS updated_at, evidence.accepted_payload AS data
+                 ${descriptor.updatedAtSql} AS updated_at, ${dataSql} AS data
             FROM governance.document_payload_evidence AS evidence
             JOIN ${descriptor.table} AS canonical ON canonical.id = evidence.resource_id
            WHERE evidence.tenant_id = $1 AND evidence.document_type = $2${tenantPredicate}${idPredicate}${orderLimit}`;

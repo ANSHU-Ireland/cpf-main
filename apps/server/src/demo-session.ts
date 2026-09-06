@@ -117,9 +117,12 @@ export function authorizeDemoOperation(
     return true;
   }
 
-  // employer_admin_approver: only decision approvals
+  // An approver can read the tenant's decision evidence, but cannot draft or issue a decision.
   if (hasScope(session, 'employer_admin_approver', session.actor.tenantId)) {
-    return operationId === 'post_decisions_decisionId_approvals';
+    return (
+      operationId === 'post_decisions_decisionId_approvals' ||
+      operationId === 'get_applications_applicationId_decision_context'
+    );
   }
 
   // A reviewer may list their queue before an assignment id is available.

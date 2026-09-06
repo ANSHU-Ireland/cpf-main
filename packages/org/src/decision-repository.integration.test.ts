@@ -100,6 +100,15 @@ describe.skipIf(!enabled)('PgDecisionRepository', () => {
   });
 
   it('persists an auditable, tenant-isolated draft → approval → issue lifecycle', async () => {
+    const emptyContext = await repository.getDecisionContext(drafter, APPLICATION_ID);
+    expect(emptyContext?.applicationId).toBe(APPLICATION_ID);
+    expect(emptyContext?.decision).toBeNull();
+    expect(
+      await repository.getDecisionContext(
+        { ...drafter, tenantId: OTHER_TENANT_ID },
+        APPLICATION_ID,
+      ),
+    ).toBeNull();
     const created = await repository.createDecision(
       drafter,
       APPLICATION_ID,

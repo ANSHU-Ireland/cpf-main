@@ -1,4 +1,5 @@
-import { OPERATIONS, type OperationRef } from '@cpf/contracts';
+import type { OperationRef } from '@cpf/contracts';
+import { RUNTIME_OPERATIONS as OPERATIONS } from './runtime-operations.js';
 
 export interface CompiledRoute {
   readonly op: OperationRef;

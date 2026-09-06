@@ -1,5 +1,13 @@
 # Demo screen and action coverage — 2026-09-05 checkpoint
 
+## Update — 2026-09-06
+
+Three mutation gaps below have since been connected to canonical persistence: employer decision,
+employer approval/issue, and governance QMS draft creation. The historical table is retained as
+the inspected baseline, not the current closure count. This leaves **26 of the 29 listed mutation
+handlers** plus the **five no-op handlers** still open in this subset. See
+`DEMO_CHECKPOINT_2026-09-06.md` for verification and remaining limitations.
+
 This is a bounded source inspection of checkpoint `479e5725a14e036606f1f8f6ec5557d66a35d70f`,
 not a claim that all 125 Penpot interfaces have passed UAT. It follows active web API routes that
 call `contractGapResponse`, their shared demo fallback, and the corresponding API-client/page

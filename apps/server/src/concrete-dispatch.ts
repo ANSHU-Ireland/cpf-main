@@ -194,6 +194,7 @@ const CONCRETE_OPERATIONS = new Set<string>([
   'post_ai_models_modelId_suspend',
   'post_applications_applicationId_bookings',
   'post_applications_applicationId_decisions',
+  'get_applications_applicationId_decision_context',
   'post_applications_applicationId_invitations',
   'post_assessment_versions_versionId_activate',
   'post_assessment_versions_versionId_defects',
@@ -786,6 +787,8 @@ export class ConcreteDispatcher {
           body,
           idempotencyKey,
         });
+      case 'get_applications_applicationId_decision_context':
+        return api.handleGetDecisionContext(this.#decisions, { actor, applicationId });
       case 'post_decisions_decisionId_approvals':
         return api.handleApproveDecision(this.#decisions, {
           actor,

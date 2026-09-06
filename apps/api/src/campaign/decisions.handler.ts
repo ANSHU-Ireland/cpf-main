@@ -1,6 +1,7 @@
 import {
   approveDecision,
   createDecision,
+  getDecisionContext,
   issueDecision,
   parseDecisionApplicationId,
   parseDecisionApproval,
@@ -15,6 +16,7 @@ import {
 import { ensureCorrelationId, jsonResponse, problemResponse, type HttpResponse } from '@cpf/http';
 
 export interface DecisionService {
+  read(actor: Actor, applicationId: string): ReturnType<typeof getDecisionContext>;
   create(
     actor: Actor,
     applicationId: string,
@@ -32,6 +34,7 @@ export interface DecisionService {
 
 export function createDecisionService(deps: { repository: DecisionRepository }): DecisionService {
   return {
+    read: (actor, applicationId) => getDecisionContext(deps, actor, applicationId),
     create: (actor, applicationId, input, idempotencyKey) =>
       createDecision(deps, actor, applicationId, input, idempotencyKey),
     approve: (actor, decisionId, input, idempotencyKey) =>
@@ -70,6 +73,30 @@ function resultProblem(
     detail: result.reason,
     correlationId,
   });
+}
+
+export async function handleGetDecisionContext(
+  service: DecisionService,
+  req: {
+    readonly actor: Actor;
+    readonly applicationId: string;
+    readonly correlationId?: string;
+  },
+): Promise<HttpResponse> {
+  const correlationId = ensureCorrelationId(req.correlationId);
+  const applicationId = parseDecisionApplicationId(req.applicationId);
+  if (applicationId === null) {
+    return problemResponse({
+      status: 422,
+      title: 'Unprocessable Entity',
+      detail: 'applicationId must be a valid UUID.',
+      correlationId,
+    });
+  }
+  const result = await service.read(req.actor, applicationId);
+  return result.ok
+    ? jsonResponse(200, result.context, correlationId)
+    : resultProblem(result, correlationId);
 }
 
 export async function handleCreateDecision(

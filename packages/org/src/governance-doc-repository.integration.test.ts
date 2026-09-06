@@ -150,7 +150,7 @@ describe.skipIf(!dbAvailable)('governance document repository against live Postg
       reviewerUserId: ACTOR_ID,
       reviewedAt: '2026-08-21T12:00:00.000Z',
     });
-    await create('qms_document', {
+    const qms = await create('qms_document', {
       documentCode: `CPF-QMS-${suffix}`,
       versionNo: 1,
       documentType: 'quality_procedure',
@@ -161,6 +161,25 @@ describe.skipIf(!dbAvailable)('governance document repository against live Postg
       approvedBy: ACTOR_ID,
       approvedAt: '2026-08-21T12:00:00.000Z',
     });
+    // A sparse seed or old accepted payload must still expose authoritative artifact metadata.
+    await pool.query(
+      `UPDATE governance.document_payload_evidence SET accepted_payload = $2::jsonb
+        WHERE resource_id = $1`,
+      [qms.id, JSON.stringify({ contentUri: 'spoofed', ownerUserId: OTHER_ORG_ID })],
+    );
+    const reloadedQms = await new PgGovernanceDocRepository(pool, 'cpf_app').getDocs(
+      actor,
+      'qms_document',
+      qms.id,
+    );
+    expect(reloadedQms?.data).toMatchObject({
+      contentUri: `s3://cpf-test/qms-${suffix}.pdf`,
+      sha256: 'a'.repeat(64),
+      ownerUserId: ACTOR_ID,
+      approvedBy: ACTOR_ID,
+      documentCode: `CPF-QMS-${suffix}`,
+    });
+    expect(await repository.getDocs(otherTenantActor, 'qms_document', qms.id)).toBeNull();
     await create('technical_document', {
       aiSystemId: SYSTEM_ID,
       versionNo: 1,

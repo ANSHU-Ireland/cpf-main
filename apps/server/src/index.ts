@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { ensureCorrelationId, CORRELATION_HEADER } from '@cpf/http';
 import type { HttpResponse } from '@cpf/http';
-import { OPERATIONS } from '@cpf/contracts';
+import { RUNTIME_OPERATIONS as OPERATIONS } from './runtime-operations.js';
 import { createPool, isDatabaseConfigured } from '@cpf/db';
 import { Router } from './router.js';
 import { ConcreteDispatcher, isConcreteOperation } from './concrete-dispatch.js';

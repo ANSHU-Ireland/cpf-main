@@ -15,7 +15,25 @@ The interrupted session's backend work is already on GitHub at
 `479e5725a14e036606f1f8f6ec5557d66a35d70f`; both CI runs for that checkpoint passed. The audit
 screen improvements above were recovered from the local working tree and tested before saving.
 
-## Release boundary
+## Second slice — decision and QMS workspaces
+
+- Employer decision and approval adapters now use the signed-in caller and canonical records,
+  not fixed demo actors. Draft, independent approval/return and authorized issuance are separate.
+  Screens show the real signed-in name and role, and surface backend denial messages.
+- The additive authenticated decision-context read is documented in `DECISION_CONTEXT_API_DELTA.md`.
+  The generated 244-operation source baseline is unchanged; the runtime exposes 245 operations.
+- Fixed the empty decision context losing its application ID to a nullable SQL column alias.
+- QMS now reads the tenant's canonical documents and can create a validated draft with a supplied
+  document reference and checksum. Incoming approval/owner/status overrides are ignored. Artifact
+  upload and approval workflows are not implemented by this slice.
+- QMS reads merge canonical metadata over sparse accepted payloads, including the seeded examples.
+- 45 focused backend/route tests passed, including live decision and governance repository tests;
+  15 QMS route/interaction tests passed. Web/API/server typechecks and focused lint passed.
+- The first full live suite passed 1,708 tests and failed one autosave assertion because another
+  test reseeded the shared record concurrently. Database-backed test files are now serialized;
+  the complete rerun and production build are pending at this save point.
+
+## Release boundary (unchanged)
 
 The product is not yet a complete hosted demo and has not been deployed to AWS. Synthetic
 examples are not regulatory approval or enterprise UAT sign-off. Open functional gaps remain

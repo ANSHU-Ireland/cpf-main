@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   handleApproveDecision,
   handleCreateDecision,
+  handleGetDecisionContext,
   handleIssueDecision,
   type DecisionService,
 } from './decisions.handler.js';
@@ -29,6 +30,7 @@ const decision: DecisionRecord = {
 
 function service(overrides: Partial<DecisionService> = {}): DecisionService {
   return {
+    read: () => Promise.resolve({ ok: false as const, status: 404 as const, reason: 'Not found.' }),
     create: () => Promise.resolve({ ok: true as const, decision }),
     approve: () => Promise.resolve({ ok: true as const, decision }),
     issue: () => Promise.resolve({ ok: true as const, decision }),
@@ -37,6 +39,44 @@ function service(overrides: Partial<DecisionService> = {}): DecisionService {
 }
 
 describe('decision command handlers', () => {
+  it('reads the real application context and rejects malformed IDs before calling the service', async () => {
+    const context = {
+      applicationId: ID,
+      candidateRef: 'CND-TEST',
+      campaignName: 'Test campaign',
+      reviewComplete: true,
+      decision,
+      approval: null,
+    };
+    let calls = 0;
+    const reader = service({
+      read: (caller, applicationId) => {
+        calls += 1;
+        expect(caller).toBe(actor);
+        expect(applicationId).toBe(ID);
+        return Promise.resolve({ ok: true, context });
+      },
+    });
+    const response = await handleGetDecisionContext(reader, { actor, applicationId: ID });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(context);
+    expect((await handleGetDecisionContext(reader, { actor, applicationId: 'demo' })).status).toBe(
+      422,
+    );
+    expect(calls).toBe(1);
+  });
+
+  it.each([403, 404] as const)('preserves a denied or missing context (%s)', async (status) => {
+    const response = await handleGetDecisionContext(
+      service({
+        read: () => Promise.resolve({ ok: false, status, reason: 'Unavailable.' }),
+      }),
+      { actor, applicationId: ID },
+    );
+    expect(response.status).toBe(status);
+    expect(response.body).not.toHaveProperty('decision');
+  });
+
   it('creates a human draft through the application path', async () => {
     const response = await handleCreateDecision(service(), {
       actor,

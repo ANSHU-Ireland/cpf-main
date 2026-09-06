@@ -48,6 +48,7 @@ interface ApprovalRow {
 }
 
 interface ApplicationContextRow extends DecisionRow {
+  readonly context_application_id: string;
   readonly candidate_ref: string;
   readonly campaign_name: string;
   readonly review_complete: boolean;
@@ -194,7 +195,7 @@ export class PgDecisionRepository implements DecisionRepository {
   async getDecisionContext(actor: Actor, applicationId: string): Promise<DecisionContext | null> {
     return withTenant(this.#pool, this.#context(actor), async (client) => {
       const result = await client.query<ApplicationContextRow>(
-        `SELECT application.id AS application_id,
+        `SELECT application.id AS context_application_id,
                 candidate.external_reference AS candidate_ref,
                 campaign.title AS campaign_name,
                 (application.status IN ('reviewed', 'progressed', 'not_progressed')) AS review_complete,
@@ -238,7 +239,7 @@ export class PgDecisionRepository implements DecisionRepository {
         approval = approvalRow === undefined ? null : toApproval(approvalRow);
       }
       return {
-        applicationId: row.application_id,
+        applicationId: row.context_application_id,
         candidateRef: row.candidate_ref,
         campaignName: row.campaign_name,
         reviewComplete: row.review_complete,
