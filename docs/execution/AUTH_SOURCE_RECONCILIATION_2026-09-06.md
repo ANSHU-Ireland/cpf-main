@@ -32,6 +32,15 @@ do not claim its endpoint/requirement/schema acceptance gates were verified.
 - Security uses the ACC-03 title/description and links to existing real session management.
 - Password submissions reject missing current credentials and duplicate pending requests.
 
-Verification is pending in this first saved checkpoint. This is not all-screen Penpot fidelity,
-complete UAT, or a production-ready release. Continue with the real session list and confirmation
-behaviour from ACC-03, then the linked hiring journey. Hosting stays deferred.
+Saved and pushed as `14ec8ac`. Formatting, focused lint and web typecheck passed. All 31 targeted
+tests passed: 13 allowlist/continuation tests, 12 navigation/auth UI checks, four sign-in route
+tests and two live password repository tests against `cpf_uat_verify`. No demo user's password
+was changed. The live tests establish password rotation, clearing reset-required and revocation
+of old sessions in the isolated test fixture, not completed browser onboarding for the owner.
+
+The full auth visual comparison is still blocked in project-root `design-qa.md`. Diagnostic PNGs
+in `artifacts/uat-audit/*-reference-sept06.png` preserve the inspected layouts but have an incorrect
+serif font fallback from the local renderer; use original SVGs as visual authority.
+This is not all-screen Penpot fidelity, complete UAT, or a production-ready release. Continue with
+the real session list and confirmation behaviour from ACC-03, then the linked hiring journey.
+Hosting stays deferred.

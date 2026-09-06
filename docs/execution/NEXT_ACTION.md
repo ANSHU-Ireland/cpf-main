@@ -2,6 +2,13 @@
 
 ## Immediate resume — 2026-09-06 demo checkpoint
 
+Latest owner instruction: implement against Penpot and schema, and save before usage exhaustion.
+Read `AUTH_SOURCE_RECONCILIATION_2026-09-06.md` first. Password-change workspace continuation was
+pushed as `14ec8ac`; 31 targeted tests passed. Source AUTH-01/ACC-03 contain generic placeholder
+fields/rows, so actual data/behaviour must follow the API and schema. `design-qa.md` is explicitly
+blocked for the current auth slice; do not carry forward an old visual pass. Complete matching
+viewport/state verification and the real ACC-03 session list/confirmation, then the journey below.
+
 Owner priority changed after the checkpoint below: the demo workflow was unclear and the owner
 wants a coherent product evaluation, not a screen catalogue. Read
 `DEMO_WORKFLOW_ENTRY_2026-09-06.md` first. The guide, missing role choices and denied-access
