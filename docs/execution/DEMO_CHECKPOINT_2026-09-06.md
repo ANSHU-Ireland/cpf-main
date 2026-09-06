@@ -45,18 +45,37 @@ screen improvements above were recovered from the local working tree and tested 
   Browser QMS verification passed on 6 September: real tenant document loaded; input borders,
   spacing and two-column form visible. A cached stylesheet without utilities caused the initial
   failure. `@cpf/web build` now fails if required production CSS rules are absent.
-- **Next: browser-test decision draft → distinct approver → admin issuance; then implement the
-  operations/support no-op actions.** Do not claim those journeys passed. No operations code was
-  changed during the styling investigation.
+- Browser decision journey passed at approximately 14:24–14:29 local time on 6 September:
+  Admin User drafted a synthetic hold decision; the draft persisted and the drafter's approval
+  button was disabled; Approver User approved it; Admin User issued it; a hard reload still showed
+  `issued`, the distinct approver name and queued-notice timestamp. This verifies these web
+  adapters against the live demo database, not delivery to an external email provider.
+- **Next: implement the operations/support no-op actions, then the remaining governance forms.**
+  No operations code was changed during the styling investigation.
 - Local demo database: `cpf_uat_final_20260821`, PostgreSQL port 55432; API port 3000; preview port 4300. Do not run integration tests against the demo database: use `cpf_uat_verify` separately.
 - Full successful test log: `logs/2026-09-06_13-55-14-538-serialized-live-suite-sept06.log` in the
   parent workspace. Runtime logs are timestamped there too.
-- Synthetic reviewed application `11111111-0000-4000-8000-000000000217` had no decision at the
-  start of browser checks; it is suitable for the next demo decision journey.
+- Synthetic application `11111111-0000-4000-8000-000000000217` now has an issued hold decision
+  from this UAT journey. Do not silently reset it. Use another reviewed synthetic application
+  or an isolated freshly seeded test database for another create/approve/issue journey.
 - Browser sign-in sends reset-required UAT users to Security. No password was changed by the
   assistant. First-login navigation and an approver queue remain usability work, not signed off.
 - At the final quota check, the five-hour window was 89% consumed; weekly was 14%. No usage reset
   was consumed by the assistant. Save/push is performed before waiting for the remaining checks.
+
+The quota line above describes the earlier checkpoint; a subsequent user continuation restored
+available usage. No reset credit was redeemed by this task. Savepoints remain incremental.
+
+## Known usability follow-ups
+
+- The shared shell still hardcodes a date and tenant label, and highlights Overview alongside
+  a selected governance child route. Replace these with session context and one active route.
+- The approval screen retains a disabled “Approve decision” header button after issuance; give
+  that completed state a clearer label.
+- The seeded approver also has employer-admin authority, so its issuance button is enabled by
+  that additional role. The UAT journey deliberately switched back to the original admin to issue.
+- The measured backlog remains 26 unimplemented mutation handlers and five no-op handlers in
+  the inspected subset, plus broader all-screen visual/UAT coverage. This is not a complete demo.
 
 ## Release boundary (unchanged)
 
