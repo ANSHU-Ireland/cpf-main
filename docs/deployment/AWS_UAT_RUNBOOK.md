@@ -1,6 +1,33 @@
 # AWS UAT deployment runbook
 
-Date: 2026-08-21
+Date: 2026-09-06
+
+## Hosting inputs — intentionally unconfigured
+
+Hosting is deferred at the owner's request. Complete these fields at deployment time; do not
+invent an account or create cloud resources before the target and budget are confirmed.
+
+| Input                                                  | Value to fill in before hosting |
+| ------------------------------------------------------ | ------------------------------- |
+| AWS account ID                                         |                                 |
+| Local AWS SSO profile                                  |                                 |
+| Approved AWS Region                                    |                                 |
+| Demo domain                                            |                                 |
+| Route 53 hosted zone ID                                |                                 |
+| ACM certificate ARN (same Region as the load balancer) |                                 |
+| Operations alert email                                 |                                 |
+| Budget owner and approved spend limit                  |                                 |
+| Approved Git commit / immutable image tag              |                                 |
+| Final hosted URL                                       |                                 |
+
+Use a local SSO profile and Secrets Manager for real credentials. Do not paste access keys into
+this document or commit them. The example Region and domain below are examples, not configured
+deployment targets. The deployment script already defaults the domain, certificate, zone and alert
+email to empty strings.
+
+Current demo coverage and remaining action failures are tracked in
+[`DEMO_SCREEN_COVERAGE_2026-09-05.md`](../execution/DEMO_SCREEN_COVERAGE_2026-09-05.md).
+Passing a build or the role smoke script is not complete screen-by-screen UAT sign-off.
 
 ## Current deployment status
 
