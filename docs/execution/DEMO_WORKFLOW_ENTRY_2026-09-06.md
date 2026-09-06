@@ -28,5 +28,13 @@ access to the Employer example; this exposed a dead-end error screen. Added role
 and guide recovery links for 401/403 responses without exposing protected content or changing
 authorization. All 23 focused tests passed (12 navigation/recovery interactions, four sign-in
 route checks, four audit interactions and three QMS interactions). Focused lint and web typecheck
-passed. The final rebuild containing recovery links is pending at this checkpoint.
+passed. The final production rebuild generated 98 pages and passed the emitted-CSS check.
+Browser recheck at approximately 15:11 local time confirmed the denied record exposes
+“Sign in for Employer”, that link preselects Employer at sign-in, and the guide return link works.
+The existing user's account/preferences tabs were left unchanged; a separate tab is open at
+`http://127.0.0.1:4300/`. No credentials, account security settings or application data were changed.
+
+Local preview is running on port 4300. Timestamped command/output logs are in the parent
+workspace's `logs` directory, including the run labelled `final-workflow-demo-preview`.
+
 Hosting remains deferred; keep AWS inputs blank in the existing runbook.

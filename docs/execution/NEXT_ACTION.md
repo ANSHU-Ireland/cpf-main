@@ -2,6 +2,20 @@
 
 ## Immediate resume — 2026-09-06 demo checkpoint
 
+Owner priority changed after the checkpoint below: the demo workflow was unclear and the owner
+wants a coherent product evaluation, not a screen catalogue. Read
+`DEMO_WORKFLOW_ENTRY_2026-09-06.md` first. The guide, missing role choices and denied-access
+recovery are published as `86610ac`, `1aa1239` and `741e40b`.
+
+**Next executable slice:** follow one linked Northstar application from campaign/invitation
+through candidate attempt and reviewer submission into the existing decision flow. Find and fix
+the first blocking handoff; record exact IDs and browser results. Do not reset the already-issued
+example ending 217 or run integration tests against the live demo database. Preserve MFA and
+password-change requirements; ask the owner when a new password must be entered. The guide is
+orientation, not completion of the product backlog. Save each tested slice immediately.
+
+### Earlier implementation queue (still open)
+
 Read `DEMO_CHECKPOINT_2026-09-06.md` first. Corrected production CSS, QMS visual verification and
 the browser draft → distinct approval → issuance → reload journey have passed. Implement the
 operations/support no-op actions next; the scoped backlog and usability follow-ups are recorded.

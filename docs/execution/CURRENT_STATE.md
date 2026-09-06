@@ -4,8 +4,14 @@ _Last updated: 2026-09-06 · branch `codex/enterprise-uat-completion`_
 
 ## Latest demo checkpoint — 2026-09-06
 
+The owner requested an understandable, coherent evaluation workflow. A new Start here page,
+role-linked six-step guide, Approver/Auditor sign-in choices, shared guide navigation and access-error
+recovery are published through `741e40b`. See `DEMO_WORKFLOW_ENTRY_2026-09-06.md` for scoped
+verification. This does not close the 26 unfinished mutations or five no-op actions previously
+identified, nor establish complete end-to-end UAT or Penpot fidelity across all screens.
+
 See `DEMO_CHECKPOINT_2026-09-06.md`: recovered audit-page improvements were pushed as `c059b4e`.
-The next slice connects employer decision/approval and QMS to canonical data. Hosting remains
+Employer decision/approval and QMS are connected to canonical data in the subsequent saved slices. Hosting remains
 deferred by the owner; AWS account/domain fields are intentionally empty in the deployment guide.
 The whole product is not yet ready for hosting or complete screen-by-screen UAT sign-off.
 
