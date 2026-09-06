@@ -22,5 +22,11 @@ Verification: focused formatting, lint and web typecheck passed. All 13 targeted
 (nine walkthrough/navigation interactions and four existing sign-in route tests), including
 required password-change and MFA redirects. Initial test selectors omitted the required-field
 marker and queried a closed mobile menu; corrected selectors passed without changing authentication.
-Production rebuild and browser inspection are pending at this checkpoint.
+The production build and emitted-CSS check passed. Browser inspection confirmed the walkthrough
+layout and Employer selection/email handoff. The existing signed-in account was correctly denied
+access to the Employer example; this exposed a dead-end error screen. Added role-aware sign-in
+and guide recovery links for 401/403 responses without exposing protected content or changing
+authorization. All 23 focused tests passed (12 navigation/recovery interactions, four sign-in
+route checks, four audit interactions and three QMS interactions). Focused lint and web typecheck
+passed. The final rebuild containing recovery links is pending at this checkpoint.
 Hosting remains deferred; keep AWS inputs blank in the existing runbook.

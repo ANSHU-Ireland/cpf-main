@@ -4,7 +4,8 @@ import LandingPage from './page';
 import SignInPage from './sign-in/page';
 import { SidebarNav } from './components/SidebarNav';
 import { AppShell } from './components/AppShell';
-import { apiClient } from './lib/api-client';
+import { AsyncBoundary } from './components/AsyncBoundary';
+import { apiClient, ApiError } from './lib/api-client';
 
 const navigation = vi.hoisted(() => ({ pathname: '/governance/qms', push: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -23,6 +24,58 @@ afterEach(() => {
 });
 
 describe('guided demo entry', () => {
+  it.each([401, 403])(
+    'offers a safe workspace recovery path for status %s without showing protected content',
+    (status) => {
+      navigation.pathname = '/employer/applications/example/decision';
+      render(
+        <AsyncBoundary
+          state={{ status: 'error', error: new ApiError(status, 'Access denied.') }}
+          onRetry={vi.fn()}
+        >
+          {() => <p>Protected content</p>}
+        </AsyncBoundary>,
+      );
+      expect(screen.getByRole('link', { name: 'Sign in for Employer' })).toHaveAttribute(
+        'href',
+        '/sign-in?role=Employer',
+      );
+      expect(screen.getByRole('link', { name: 'Return to the demo guide' })).toHaveAttribute(
+        'href',
+        '/',
+      );
+      expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('preserves retry for service errors and does not guess a workspace for account pages', () => {
+    navigation.pathname = '/account/preferences';
+    const retry = vi.fn();
+    const { rerender } = render(
+      <AsyncBoundary
+        state={{ status: 'error', error: new ApiError(503, 'Unavailable.') }}
+        onRetry={retry}
+      >
+        {() => null}
+      </AsyncBoundary>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+    rerender(
+      <AsyncBoundary
+        state={{ status: 'error', error: new ApiError(401, 'Expired.') }}
+        onRetry={retry}
+      >
+        {() => null}
+      </AsyncBoundary>,
+    );
+    expect(screen.getByRole('link', { name: 'Sign in or switch workspace' })).toHaveAttribute(
+      'href',
+      '/sign-in',
+    );
+  });
+
   it('explains the workflow without presenting it as completed acceptance testing', () => {
     render(<LandingPage />);
     expect(screen.getByRole('heading', { name: 'Start here' })).toBeVisible();
