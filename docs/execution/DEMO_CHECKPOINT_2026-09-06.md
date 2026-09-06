@@ -41,9 +41,13 @@ screen improvements above were recovered from the local working tree and tested 
 - PostCSS now resolves the Tailwind configuration explicitly; content globs are relative to their
   configuration file. `verify:web-styles` checks generated grid, border and responsive rules from
   the monorepo root and is included in `pnpm verify`. This regression check passes.
-- The rebuild with corrected styles is in progress at this save point. **Next: finish that build,
-  restart the preview, reload QMS and verify its layout visually, then browser-test the decision
-  draft → distinct approver → admin issuance flow.** Do not claim those browser journeys passed.
+- The rebuilt production CSS now passes an emitted-artifact check, not only configuration checks.
+  Browser QMS verification passed on 6 September: real tenant document loaded; input borders,
+  spacing and two-column form visible. A cached stylesheet without utilities caused the initial
+  failure. `@cpf/web build` now fails if required production CSS rules are absent.
+- **Next: browser-test decision draft → distinct approver → admin issuance; then implement the
+  operations/support no-op actions.** Do not claim those journeys passed. No operations code was
+  changed during the styling investigation.
 - Local demo database: `cpf_uat_final_20260821`, PostgreSQL port 55432; API port 3000; preview port 4300. Do not run integration tests against the demo database: use `cpf_uat_verify` separately.
 - Full successful test log: `logs/2026-09-06_13-55-14-538-serialized-live-suite-sept06.log` in the
   parent workspace. Runtime logs are timestamped there too.

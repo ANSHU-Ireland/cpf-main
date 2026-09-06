@@ -2,8 +2,8 @@
 
 ## Immediate resume — 2026-09-06 demo checkpoint
 
-Read `DEMO_CHECKPOINT_2026-09-06.md` first. Finish the corrected-style production build, restore
-the local preview and verify QMS plus the employer decision/approval/issuance screens in-browser.
+Read `DEMO_CHECKPOINT_2026-09-06.md` first. The corrected-style production build and QMS visual
+check have passed. Verify the employer decision/approval/issuance screens in-browser next.
 The 1,709-test live suite already passed; do not repeat the entire codebase assessment. After
 browser verification, continue the remaining governance forms and operations/support no-op
 actions in `DEMO_SCREEN_COVERAGE_2026-09-05.md`. AWS hosting is deferred with blank settings in
