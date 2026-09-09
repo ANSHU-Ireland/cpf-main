@@ -188,8 +188,12 @@ export const apiClient = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }),
-  getSessions: (): Promise<Collection<SessionView>> =>
-    request<Collection<SessionView>>('/api/account/sessions'),
+  getSessions: (
+    cursor?: string,
+  ): Promise<Collection<SessionView> & { nextCursor: string | null }> =>
+    request<Collection<SessionView> & { nextCursor: string | null }>(
+      `/api/account/sessions${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    ),
   revokeSession: (id: string): Promise<void> =>
     request<void>(`/api/account/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getSecurityEvents: (): Promise<Collection<SecurityEventView>> =>

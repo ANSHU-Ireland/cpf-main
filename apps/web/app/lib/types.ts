@@ -33,11 +33,15 @@ export interface PreferencesView {
 
 export interface SessionView {
   readonly id: string;
-  readonly device: string;
-  readonly location: string;
+  readonly deviceLabel: string | null;
   readonly createdAt: string;
   readonly lastSeenAt: string;
-  readonly current: boolean;
+  readonly expiresAt: string;
+  readonly status: 'active' | 'expired' | 'revoked';
+}
+
+export interface SessionPage extends Collection<SessionView> {
+  readonly nextCursor: string | null;
 }
 
 export type SecuritySeverity = 'info' | 'warning' | 'critical';

@@ -160,19 +160,19 @@ let preferences: PreferencesView = {
 const sessions: SessionView[] = [
   {
     id: 'sess_current',
-    device: 'Chrome on Windows',
-    location: 'London, GB',
+    deviceLabel: 'Chrome on Windows',
     createdAt: '2026-08-01T09:12:00.000Z',
     lastSeenAt: '2026-08-04T14:30:00.000Z',
-    current: true,
+    expiresAt: '2026-08-08T09:12:00.000Z',
+    status: 'expired',
   },
   {
     id: 'sess_ipad',
-    device: 'Safari on iPad',
-    location: 'London, GB',
+    deviceLabel: 'Safari on iPad',
     createdAt: '2026-07-28T18:40:00.000Z',
     lastSeenAt: '2026-08-02T21:05:00.000Z',
-    current: false,
+    expiresAt: '2026-08-04T18:40:00.000Z',
+    status: 'expired',
   },
 ];
 
@@ -231,9 +231,9 @@ export const syntheticStore = {
     return { items: sessions, total: sessions.length };
   },
   revokeSession(id: string): boolean {
-    const index = sessions.findIndex((s) => s.id === id && !s.current);
+    const index = sessions.findIndex((s) => s.id === id && s.status === 'active');
     if (index === -1) return false;
-    sessions.splice(index, 1);
+    sessions[index] = { ...sessions[index]!, status: 'revoked' };
     return true;
   },
   getSecurityEvents(): Collection<SecurityEventView> {
