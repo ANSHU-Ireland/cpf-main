@@ -2,6 +2,11 @@
 
 ## Immediate resume — 2026-09-06 demo checkpoint
 
+September 9 update: session contract, cursor pagination, searchable status table and confirmed
+revocation are saved as `68fcbb9`. Read `SESSION_CHECKPOINT_2026-09-09.md` for the 22 passing
+focused tests and outstanding visual checks. Port 4300 belongs to a different Desktop checkout;
+do not assume it displays this branch or stop it. Use a separate preview port for this worktree.
+
 Latest owner instruction: implement against Penpot and schema, and save before usage exhaustion.
 Read `AUTH_SOURCE_RECONCILIATION_2026-09-06.md` first. Password-change workspace continuation was
 pushed as `14ec8ac`; 31 targeted tests passed. Source AUTH-01/ACC-03 contain generic placeholder

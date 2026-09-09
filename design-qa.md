@@ -1,5 +1,25 @@
 # Design QA — shared UI contract and production journey repair
 
+## Session checkpoint — 9 September 2026
+
+final result: blocked
+
+ACC-03 now has a canonical-data table, search/status filters, pagination and confirmed revocation.
+Eight UI tests, one adapter test, ten domain tests and three isolated live database tests passed.
+Static type and lint checks passed. These are functional checks, not a visual acceptance pass.
+
+- Typography: another source raster still resolves to serif; unsuitable for typography sign-off.
+  The original SVG remains unchanged. Browser file navigation was security-blocked; no workaround
+  was attempted.
+- Layout: responsive table/stacked-row rules implemented; matched desktop/mobile captures pending.
+- Colors: existing Penpot-derived application tokens used; visual parity pending.
+- Assets: no new artwork or replacement source designs introduced.
+- Content: actual session fields replace generic handoff records. No invented location/current
+  device, no restore action. Pagination/filter scope and revocation consequences are explicit.
+
+The browser at port 4300 was found to be a different Desktop checkout. Its observed 401 state
+does not validate this worktree's revised screen. Do not carry forward a historical visual pass.
+
 ## Current checkpoint — AUTH-01 / ACC-03, 6 September 2026
 
 final result: blocked

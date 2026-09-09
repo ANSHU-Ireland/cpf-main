@@ -10,10 +10,10 @@ and successful revocation status. Search explicitly covers loaded history only.
 The web adapter forwards cursor/limit and retains caller authentication. Placeholder Restore
 actions from the source SVG are deliberately not implemented for revoked sessions.
 
-Validation checkpoint: canonical route test, 10 domain tests and 3 isolated PostgreSQL tests
-passed. The initial 8 UI tests stopped at missing native dialog methods in jsdom; a test-only
-dialog shim has been added and the UI suite must be rerun. Type-check initially identified old
-synthetic-store fields; those fixtures are now aligned and require a clean recheck.
+Validation: all 22 focused tests passed (8 UI tests, 1 web adapter test, 10 domain tests,
+3 isolated PostgreSQL tests). The first UI run exposed missing native dialog methods in jsdom;
+the test-only shim fixed that harness issue and all 8 passed on rerun. Type-check passed after
+aligning the old synthetic-store fields. Production build and visual verification are separate.
 
 Important runtime finding: port 4300 is running a DIFFERENT checkout under
 `C:/Users/adikr/Desktop/6 sept cpf/cpf-main`, not this Codex worktree. Do not stop or overwrite it
