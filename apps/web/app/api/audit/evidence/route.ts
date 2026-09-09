@@ -1,20 +1,38 @@
-import { contractGapResponse } from '../../../lib/contract-gap.server';
+import { forwardPlatform } from '../../../lib/platform-api.server';
 
 export const dynamic = 'force-dynamic';
 
-function gap(request: Request): Response {
-  return contractGapResponse(request, {
-    title: 'Evidence collection persistence contract is incomplete',
-    detail:
-      'The approved API names evidence collections, but the canonical schema has no collection aggregate or chain-of-custody record for this screen.',
-    requirementIds: ['AUD-01', 'FR-AUD-01'],
+export function GET(request: Request): Promise<Response> {
+  return forwardPlatform({
+    request,
+    path: '/audit/evidence-collections',
+    method: 'GET',
   });
 }
 
-export function GET(request: Request): Response {
-  return gap(request);
-}
-
-export function POST(request: Request): Response {
-  return gap(request);
+export async function POST(request: Request): Promise<Response> {
+  let body: { readonly title?: unknown; readonly purpose?: unknown };
+  try {
+    body = (await request.json()) as { readonly title?: unknown; readonly purpose?: unknown };
+  } catch {
+    return Response.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
+  }
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const purpose = typeof body.purpose === 'string' ? body.purpose.trim() : '';
+  if (title.length < 4 || purpose.length < 4) {
+    return Response.json(
+      { error: 'title and purpose must each contain at least 4 characters.' },
+      { status: 422 },
+    );
+  }
+  return forwardPlatform({
+    request,
+    path: '/audit/evidence-collections',
+    method: 'POST',
+    body: {
+      reason: 'Create a purpose-scoped evidence collection.',
+      expectedVersion: 0,
+      data: { title, purpose, framework: 'EU AI Act' },
+    },
+  });
 }

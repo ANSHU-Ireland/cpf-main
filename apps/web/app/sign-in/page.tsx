@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Field, Input } from '@cpf/ui';
 import { AuthCard } from '../components/AuthCard';
 import { apiClient, ApiError } from '../lib/api-client';
+import { safeWorkspace, securityEntry, WORKSPACE_NAMES } from '../lib/workspace-entry';
 
 type Status = 'idle' | 'submitting';
 
-const DEMO_PASSWORD = 'CPF-DEMO-2026';
+const DEMO_PASSWORD = 'CPF-UAT-ChangeMe-2026!';
 const DEMO_WORKSPACES = [
   {
     label: 'Candidate',
@@ -30,27 +31,39 @@ const DEMO_WORKSPACES = [
     href: '/employer',
   },
   {
+    label: 'Approver',
+    description: 'Independently approve or return an employer’s draft decision.',
+    email: 'approver@northstar.invalid',
+    href: '/employer',
+  },
+  {
+    label: 'Auditor',
+    description: 'Evidence collections, custody history and requirement traceability.',
+    email: 'auditor@tenant-01.cpf-uat.invalid',
+    href: '/audit/evidence',
+  },
+  {
     label: 'Platform admin',
     description: 'Tenants, models, assessments, jobs, audit and privileged access.',
-    email: 'admin@northstar.invalid',
+    email: 'platform.admin@cpf-uat.invalid',
     href: '/admin',
   },
   {
     label: 'Governance',
     description: 'AI systems, risk, conformity, incidents and post-market records.',
-    email: 'admin@northstar.invalid',
+    email: 'governance@tenant-01.cpf-uat.invalid',
     href: '/governance',
   },
   {
     label: 'Operations',
     description: 'Service health, integration delivery and incident controls.',
-    email: 'admin@northstar.invalid',
+    email: 'operations@tenant-01.cpf-uat.invalid',
     href: '/operations',
   },
   {
     label: 'Support',
     description: 'Support queue, case handling and justified access workflows.',
-    email: 'admin@northstar.invalid',
+    email: 'support@tenant-01.cpf-uat.invalid',
     href: '/support',
   },
 ] as const;
@@ -62,6 +75,21 @@ export default function SignInPage(): React.JSX.Element {
   const [status, setStatus] = useState<Status>('idle');
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [recommendedRole, setRecommendedRole] = useState<string | null>(null);
+  const [returnWorkspace, setReturnWorkspace] = useState<string | undefined>();
+  const [passwordChanged, setPasswordChanged] = useState(false);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const requestedRole = query.get('role');
+    setReturnWorkspace(safeWorkspace(query.get('workspace')));
+    setPasswordChanged(query.get('passwordChanged') === 'true');
+    const workspace = DEMO_WORKSPACES.find((item) => item.label === requestedRole);
+    if (workspace) {
+      setRecommendedRole(workspace.label);
+      setEmail(workspace.email);
+    }
+  }, []);
 
   async function submitCredentials(
     nextEmail: string,
@@ -71,12 +99,18 @@ export default function SignInPage(): React.JSX.Element {
     setStatus('submitting');
     setFormError(null);
     try {
-      const { mfaRequired, redirectTo } = await apiClient.signIn(
+      const { mfaRequired, passwordResetRequired, redirectTo } = await apiClient.signIn(
         nextEmail,
         nextPassword,
         workspace,
       );
-      router.push(mfaRequired ? '/mfa' : (redirectTo ?? '/account/profile'));
+      router.push(
+        mfaRequired
+          ? '/mfa'
+          : passwordResetRequired
+            ? securityEntry(redirectTo)
+            : (redirectTo ?? '/account/profile'),
+      );
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : 'Unable to sign in. Please try again.';
@@ -93,29 +127,37 @@ export default function SignInPage(): React.JSX.Element {
     setFieldErrors(nextFieldErrors);
     if (Object.keys(nextFieldErrors).length > 0) return;
 
-    await submitCredentials(email, password);
+    await submitCredentials(email, password, returnWorkspace);
   }
 
   return (
     <AuthCard
       title="Sign in"
       headingId="signin-heading"
-      intro="Choose a synthetic role for the click-through demo, or enter one of the demo accounts."
+      intro="Choose the person whose work you want to explore. New here? Start with the demo guide."
       maxWidth="1040px"
       footer={
         <span>
-          Trouble signing in? <Link href="/forgot-password">Reset your password</Link>.
+          <Link href="/">Back to the demo guide</Link> · Trouble signing in?{' '}
+          <Link href="/forgot-password">Reset your password</Link>.
         </span>
       }
     >
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.8fr)]">
         <section aria-labelledby="demo-workspaces-heading">
           <div className="mb-4">
+            {recommendedRole ? (
+              <p role="status" className="rounded-control bg-blue-soft p-3 text-sm text-ink">
+                Next step: choose {recommendedRole} below. Its email is also filled in if you use a
+                changed password.
+              </p>
+            ) : null}
             <h2 id="demo-workspaces-heading" className="m-0 text-lg font-semibold text-ink">
               Open a demo workspace
             </h2>
             <p className="mb-0 mt-2 max-w-2xl text-sm text-muted">
-              Pick the job you want to explore. All identities and records are fabricated for UAT.
+              Pick the job you want to explore. All identities and records are fabricated for UAT;
+              temporary passwords must be changed before live use.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -131,6 +173,11 @@ export default function SignInPage(): React.JSX.Element {
               >
                 <strong className="mb-2 block text-sm font-semibold text-blue group-hover:underline">
                   {workspace.label}
+                  {workspace.label === recommendedRole ? (
+                    <span className="mt-1 block text-xs text-muted">
+                      Selected from your walkthrough
+                    </span>
+                  ) : null}
                 </strong>
                 <span className="block text-sm leading-5 text-muted">{workspace.description}</span>
               </button>
@@ -144,8 +191,18 @@ export default function SignInPage(): React.JSX.Element {
         >
           <div>
             <h2 className="m-0 text-lg font-semibold text-ink">Use credentials</h2>
+            {passwordChanged ? (
+              <p role="status" className="rounded-control bg-sage-soft p-3 text-sm text-ink">
+                Password changed. All previous sessions were signed out. Enter your email and new
+                password
+                {returnWorkspace
+                  ? ` to continue to ${WORKSPACE_NAMES[returnWorkspace]}`
+                  : ' to continue'}
+                . The temporary demo password no longer works for this account.
+              </p>
+            ) : null}
             <p className="mb-0 mt-2 text-sm text-muted">
-              Shared demo password: <strong className="text-ink">{DEMO_PASSWORD}</strong>
+              Shared UAT password: <strong className="text-ink">{DEMO_PASSWORD}</strong>
             </p>
           </div>
           {formError ? (

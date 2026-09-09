@@ -8,7 +8,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "migrate:operational": "node --env-file-if-exists=../../.env scripts/migrate-operational.mjs",
+    "migrate:release": "node --env-file-if-exists=../../.env scripts/migrate-release.mjs",
     "seed:demo": "node --env-file-if-exists=../../.env scripts/seed-demo.mjs",
+    "seed:uat": "node --env-file-if-exists=../../.env scripts/seed-uat.mjs",
+    "rotate:uat-credentials": "node --env-file-if-exists=../../.env scripts/rotate-uat-credentials.mjs --confirm-uat-rotation",
+    "audit:credentials": "node --env-file-if-exists=../../.env scripts/audit-credentials.mjs",
+    "audit:live-gate": "node --env-file-if-exists=../../.env scripts/audit-credentials.mjs --live-gate",
     "inspect:demo": "node --env-file-if-exists=../../.env scripts/inspect-demo.mjs"
   },
   "dependencies": {

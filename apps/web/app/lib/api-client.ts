@@ -162,8 +162,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const fallback = `Request failed (${String(response.status)}).`;
     let message = fallback;
     try {
-      const body = (await response.json()) as { error?: string; message?: string };
-      message = body.error ?? body.message ?? fallback;
+      const body = (await response.json()) as {
+        error?: string;
+        message?: string;
+        detail?: string;
+      };
+      message = body.error ?? body.message ?? body.detail ?? fallback;
     } catch {
       /* non-JSON error body; keep fallback */
     }
@@ -184,12 +188,21 @@ export const apiClient = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }),
-  getSessions: (): Promise<Collection<SessionView>> =>
-    request<Collection<SessionView>>('/api/account/sessions'),
+  getSessions: (
+    cursor?: string,
+  ): Promise<Collection<SessionView> & { nextCursor: string | null }> =>
+    request<Collection<SessionView> & { nextCursor: string | null }>(
+      `/api/account/sessions${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    ),
   revokeSession: (id: string): Promise<void> =>
     request<void>(`/api/account/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getSecurityEvents: (): Promise<Collection<SecurityEventView>> =>
     request<Collection<SecurityEventView>>('/api/account/security-events'),
+  changePassword: (currentPassword: string, newPassword: string): Promise<void> =>
+    request<void>('/api/account/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   getNotices: (): Promise<Collection<NoticeView>> =>
     request<Collection<NoticeView>>('/api/account/notices'),
   acknowledgeNotice: (id: string): Promise<NoticeView> =>
@@ -198,11 +211,14 @@ export const apiClient = {
     email: string,
     password: string,
     workspace?: string,
-  ): Promise<{ mfaRequired: boolean; redirectTo?: string }> =>
-    request<{ mfaRequired: boolean; redirectTo?: string }>('/api/auth/sign-in', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, workspace }),
-    }),
+  ): Promise<{ mfaRequired: boolean; passwordResetRequired?: boolean; redirectTo?: string }> =>
+    request<{ mfaRequired: boolean; passwordResetRequired?: boolean; redirectTo?: string }>(
+      '/api/auth/sign-in',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password, workspace }),
+      },
+    ),
 
   // ── Candidate journey ──
   getApplications: (): Promise<Collection<CandidateApplicationView>> =>
@@ -568,6 +584,11 @@ export const apiClient = {
     request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
       method: 'POST',
       body: JSON.stringify({ action: 'approve' }),
+    }),
+  issueDecision: (id: string): Promise<DecisionApprovalView> =>
+    request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'issue' }),
     }),
   returnDecision: (id: string, rationale: string): Promise<DecisionApprovalView> =>
     request<DecisionApprovalView>(`/api/employer/applications/${encodeURIComponent(id)}/approval`, {

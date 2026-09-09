@@ -1,3 +1,4 @@
+/* Utility generation is verified from the emitted production CSS, not only the config. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

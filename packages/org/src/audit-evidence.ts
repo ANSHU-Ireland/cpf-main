@@ -5,23 +5,42 @@ import type { Actor } from './types.js';
 export interface EvidenceCollectionRecord {
   readonly id: string;
   readonly title: string;
+  readonly purpose: string;
   readonly framework: string;
   readonly status: string;
+  readonly custodian: string;
+  readonly sealed: boolean;
   readonly itemCount: number;
+  readonly requirementIds: readonly string[];
+  readonly chainOfCustody: readonly EvidenceCustodyEvent[];
   readonly createdAt: string;
+}
+
+export interface EvidenceCustodyEvent {
+  readonly actor: string;
+  readonly action: string;
+  readonly timestamp: string;
 }
 
 export interface EvidenceCollectionCreate {
   readonly title: string;
+  readonly purpose: string;
   readonly framework: string;
+  readonly reason: string | null;
+  readonly expectedVersion: number | null;
 }
 
 export interface TraceabilityRow {
+  readonly id: string;
   readonly requirementId: string;
   readonly requirementTitle: string;
   readonly controls: readonly string[];
+  readonly surfaces: readonly string[];
+  readonly endpoints: readonly string[];
   readonly evidence: readonly string[];
   readonly coverage: string;
+  readonly status: string;
+  readonly createdAt: string;
 }
 
 export interface AuditEvidenceRepository {
@@ -40,12 +59,46 @@ export function parseEvidenceCollectionCreate(
 ): { ok: true; value: EvidenceCollectionCreate } | { ok: false; errors: string[] } {
   if (raw === null || typeof raw !== 'object') return { ok: false, errors: ['body required'] };
   const obj = raw as Record<string, unknown>;
+  const data =
+    obj.data !== null && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : obj;
   const errors: string[] = [];
-  for (const k of ['title', 'framework'] as const) {
-    if (typeof obj[k] !== 'string' || (obj[k] as string).length === 0) errors.push(`${k} required`);
+  for (const k of ['title', 'purpose'] as const) {
+    if (typeof data[k] !== 'string' || (data[k] as string).trim().length < 4)
+      errors.push(`${k} must contain at least 4 characters`);
   }
+  if (typeof data.title === 'string' && data.title.trim().length > 200)
+    errors.push('title must contain no more than 200 characters');
+  if (typeof data.purpose === 'string' && data.purpose.trim().length > 2000)
+    errors.push('purpose must contain no more than 2000 characters');
+  if (data.framework !== undefined && typeof data.framework !== 'string')
+    errors.push('framework must be a string');
+  if (typeof data.framework === 'string' && data.framework.trim().length > 200)
+    errors.push('framework must contain no more than 200 characters');
+  if (typeof data.framework === 'string' && data.framework.trim().length === 1)
+    errors.push('framework must contain at least 2 characters');
+  if (obj.reason !== undefined && typeof obj.reason !== 'string')
+    errors.push('reason must be a string');
+  if (typeof obj.reason === 'string' && obj.reason.length > 2000)
+    errors.push('reason must contain no more than 2000 characters');
+  if (
+    obj.expectedVersion !== undefined &&
+    (!Number.isInteger(obj.expectedVersion) || obj.expectedVersion !== 0)
+  )
+    errors.push('expectedVersion must be 0 when creating a collection');
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, value: { title: obj.title as string, framework: obj.framework as string } };
+  return {
+    ok: true,
+    value: {
+      title: (data.title as string).trim(),
+      purpose: (data.purpose as string).trim(),
+      framework:
+        typeof data.framework === 'string' && data.framework.trim() !== ''
+          ? data.framework.trim()
+          : 'EU AI Act',
+      reason: typeof obj.reason === 'string' && obj.reason.trim() !== '' ? obj.reason.trim() : null,
+      expectedVersion: obj.expectedVersion === 0 ? 0 : null,
+    },
+  };
 }
 
 type Result<T> = ({ ok: true } & T) | { ok: false; status: number; reason: string };

@@ -6,9 +6,11 @@ import type { Permission } from '@cpf/policy';
  * explicitly. Platform staff cross tenant boundaries via `isPlatformStaff` on the policy actor.
  */
 export const PLATFORM_STAFF_ROLE = 'platform_staff';
+export const SYSTEM_ADMIN_ROLE = 'system_admin';
+export const SUPPORT_AGENT_ROLE = 'support_agent';
 
 /** Grants for the platform administration surface. */
-export const ADMIN_PERMISSIONS: readonly Permission[] = [
+const PLATFORM_STAFF_PERMISSIONS: readonly Permission[] = [
   { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_tenant' },
   { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_tenant' },
   { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_staff' },
@@ -27,4 +29,14 @@ export const ADMIN_PERMISSIONS: readonly Permission[] = [
   { role: PLATFORM_STAFF_ROLE, action: 'read', resourceType: 'platform_support_case' },
   { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_support_case' },
   { role: PLATFORM_STAFF_ROLE, action: 'write', resourceType: 'platform_privileged_access' },
+];
+
+export const ADMIN_PERMISSIONS: readonly Permission[] = [
+  ...PLATFORM_STAFF_PERMISSIONS,
+  ...PLATFORM_STAFF_PERMISSIONS.map((permission) => ({
+    ...permission,
+    role: SYSTEM_ADMIN_ROLE,
+  })),
+  { role: SUPPORT_AGENT_ROLE, action: 'read', resourceType: 'platform_support_case' },
+  { role: SUPPORT_AGENT_ROLE, action: 'write', resourceType: 'platform_support_case' },
 ];

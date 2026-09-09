@@ -28,5 +28,6 @@ export * from './support-message-types.js';
 export * from './support-case-detail-repository.js';
 export * from './support-case-detail.js';
 export * from './auth.js';
+export * from './password-auth-repository.js';
 export * from './reviewer.js';
 export * from './reviewer-repository.js';

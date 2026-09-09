@@ -1,6 +1,14 @@
+import { fileURLToPath, URL } from 'node:url';
+
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./app/**/*.{js,ts,jsx,tsx,mdx}', '../../packages/ui/src/**/*.{js,ts,jsx,tsx}'],
+  // Resolve globs relative to this file, including builds invoked from the monorepo root.
+  content: [
+    fileURLToPath(new URL('./app/**/*.{js,ts,jsx,tsx,mdx}', import.meta.url)).replaceAll('\\', '/'),
+    fileURLToPath(
+      new URL('../../packages/ui/src/**/*.{js,ts,jsx,tsx}', import.meta.url),
+    ).replaceAll('\\', '/'),
+  ],
   theme: {
     extend: {
       colors: {

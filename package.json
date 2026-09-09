@@ -17,9 +17,12 @@
     "test:watch": "vitest",
     "demo:start": "node --env-file-if-exists=.env scripts/start-demo.mjs",
     "demo:smoke": "node scripts/demo-smoke.mjs",
+    "uat:auth-smoke": "node scripts/uat-auth-smoke.mjs",
+    "uat:journeys": "node scripts/demo-smoke.mjs",
     "serve": "pnpm --filter @cpf/server start",
     "serve:dev": "pnpm --filter @cpf/server dev",
-    "verify": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm run test"
+    "verify:web-styles": "node scripts/verify-web-styles.mjs",
+    "verify": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm run verify:web-styles && pnpm run test"
   },
   "devDependencies": {
     "@cpf/db": "workspace:*",
@@ -33,6 +36,7 @@
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "yaml": "2.9.0"
   }
 }

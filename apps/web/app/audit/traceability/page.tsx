@@ -71,6 +71,11 @@ export default function AuditTraceabilityPage() {
                     <div>
                       <StatusBadge tone="info">{t.requirementId}</StatusBadge>
                       <p className="text-sm text-ink mt-1">{t.description}</p>
+                      {t.status && (
+                        <p className="text-sm text-muted mt-2">
+                          Status: {t.status} · Coverage: {t.coverage ?? 'unlinked'}
+                        </p>
+                      )}
                     </div>
                   </div>
 

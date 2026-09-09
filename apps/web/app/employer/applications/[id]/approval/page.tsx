@@ -9,7 +9,12 @@ import { StatusBadge, type BadgeTone } from '../../../../components/StatusBadge'
 import { AsyncBoundary } from '../../../../components/AsyncBoundary';
 import { apiClient, ApiError } from '../../../../lib/api-client';
 import { useAsync } from '../../../../lib/useAsync';
-import type { ApprovalStatus, DecisionApprovalView, DecisionOutcome } from '../../../../lib/types';
+import type {
+  ApprovalStatus,
+  DecisionApprovalView,
+  DecisionOutcome,
+  ProfileView,
+} from '../../../../lib/types';
 
 const TONE: Record<ApprovalStatus, BadgeTone> = {
   awaiting_review: 'neutral',
@@ -40,12 +45,25 @@ function formatDate(iso: string | null): string {
 export default function ApprovalPage(): React.JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const load = useCallback(() => apiClient.getApproval(id), [id]);
-  const { state, reload, setData } = useAsync<DecisionApprovalView>(load);
+  const load = useCallback(async () => {
+    const [approval, profile] = await Promise.all([
+      apiClient.getApproval(id),
+      apiClient.getProfile(),
+    ]);
+    return { approval, profile };
+  }, [id]);
+  const { state, reload, setData } = useAsync(load);
 
   return (
     <AsyncBoundary state={state} onRetry={reload} label="approval">
-      {(approval) => <ApprovalWorkspace id={id} approval={approval} onChanged={setData} />}
+      {({ approval, profile }) => (
+        <ApprovalWorkspace
+          id={id}
+          approval={approval}
+          profile={profile}
+          onChanged={(next) => setData({ approval: next, profile })}
+        />
+      )}
     </AsyncBoundary>
   );
 }
@@ -53,23 +71,27 @@ export default function ApprovalPage(): React.JSX.Element {
 function ApprovalWorkspace({
   id,
   approval,
+  profile,
   onChanged,
 }: {
   readonly id: string;
   readonly approval: DecisionApprovalView;
+  readonly profile: ProfileView;
   readonly onChanged: (next: DecisionApprovalView) => void;
 }): React.JSX.Element {
   const headingId = useId();
   const returnId = useId();
   const [activeTab, setActiveTab] = useState<Tab>('Decision');
-  const [returnRationale, setReturnRationale] = useState(
-    'Please clarify the cited evidence and make the rationale more specific.',
-  );
+  const [returnRationale, setReturnRationale] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const actionable = approval.status === 'awaiting_approval';
+  const canApprove = profile.tenant?.roles.includes('employer_admin_approver') === true;
+  const canIssue = profile.tenant?.roles.includes('employer_admin') === true;
+  const actionable = approval.status === 'awaiting_approval' && canApprove;
+  const issuable = approval.status === 'approved' && canIssue;
 
-  async function act(action: 'approve' | 'return'): Promise<void> {
+  async function act(action: 'approve' | 'return' | 'issue'): Promise<void> {
+    if (action === 'issue' ? !issuable : !actionable) return;
     if (action === 'return' && returnRationale.trim().length < 10) {
       setError('Explain why the decision is being returned (at least 10 characters).');
       return;
@@ -78,9 +100,11 @@ function ApprovalWorkspace({
     setError(null);
     try {
       const next =
-        action === 'approve'
-          ? await apiClient.approveDecision(id)
-          : await apiClient.returnDecision(id, returnRationale.trim());
+        action === 'issue'
+          ? await apiClient.issueDecision(id)
+          : action === 'approve'
+            ? await apiClient.approveDecision(id)
+            : await apiClient.returnDecision(id, returnRationale.trim());
       onChanged(next);
     } catch (caught) {
       setError(
@@ -98,8 +122,15 @@ function ApprovalWorkspace({
         title="Decision approval and issue"
         description="Apply separation of duties and issue a versioned human decision and notice."
         actions={
-          <Button disabled={!actionable || busy} onClick={() => void act('approve')}>
-            {busy ? 'Working…' : 'Approve and issue'}
+          <Button
+            disabled={!(actionable || issuable) || busy}
+            onClick={() => void act(issuable ? 'issue' : 'approve')}
+          >
+            {busy
+              ? 'Working…'
+              : approval.status === 'approved'
+                ? 'Issue decision'
+                : 'Approve decision'}
           </Button>
         }
       />
@@ -107,7 +138,7 @@ function ApprovalWorkspace({
         <StatusBadge tone="info">EMP-21</StatusBadge>
         <span style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>Governance</span>
         <span style={{ marginLeft: 'auto', color: 'var(--color-blue)', fontWeight: 650 }}>
-          Employer Approver · Priya Shah
+          Signed in as {profile.displayName}
         </span>
       </div>
 
@@ -124,7 +155,7 @@ function ApprovalWorkspace({
           <strong style={{ color: 'var(--color-amber)' }}>Human authority checkpoint</strong>
           <p style={{ margin: 'var(--space-unit) 0 0' }}>
             A distinct authorised human approves when tenant policy requires it. The drafter cannot
-            approve their own decision.
+            approve their own decision. An Employer Admin then issues the approved decision.
           </p>
         </section>
 
@@ -275,6 +306,19 @@ function ApprovalWorkspace({
             Returned to the drafter. The decision remains editable and cannot be issued yet.
           </p>
         ) : null}
+        {approval.status === 'approved' ? (
+          <p role="status" style={{ color: 'var(--color-sage)' }}>
+            Approved by {approval.approver}.{' '}
+            {canIssue
+              ? 'Issue the decision to queue the candidate notice.'
+              : 'An Employer Admin must now issue the decision and candidate notice.'}
+          </p>
+        ) : null}
+        {approval.status === 'awaiting_approval' && !canApprove ? (
+          <p role="status" style={{ color: 'var(--color-muted)' }}>
+            A separate user with Employer Approver access must approve or return this decision.
+          </p>
+        ) : null}
         {approval.status !== 'issued' ? (
           <footer
             style={{
@@ -292,8 +336,11 @@ function ApprovalWorkspace({
             >
               Return to drafter
             </Button>
-            <Button disabled={!actionable || busy} onClick={() => void act('approve')}>
-              Approve and issue
+            <Button
+              disabled={!(actionable || issuable) || busy}
+              onClick={() => void act(issuable ? 'issue' : 'approve')}
+            >
+              {approval.status === 'approved' ? 'Issue decision' : 'Approve decision'}
             </Button>
           </footer>
         ) : null}

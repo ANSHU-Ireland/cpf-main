@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import 'dotenv/config';
 
 export default defineConfig({
   resolve: {
@@ -10,6 +11,9 @@ export default defineConfig({
   // Use the React automatic runtime so JSX needs no explicit React import.
   esbuild: { jsx: 'automatic' },
   test: {
+    // Live suites reseed the same Northstar records. Concurrent files can overwrite a response
+    // between its write and reload assertion; serialize files when a shared database is configured.
+    fileParallelism: !(process.env.DATABASE_URL || process.env.PGHOST),
     globals: true,
     environment: 'node',
     // UI packages render in the DOM; everything else stays on the fast node env.

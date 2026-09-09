@@ -1,6 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@cpf/ui';
 import type { AsyncState } from '../lib/useAsync';
 
@@ -43,6 +45,17 @@ export function AsyncBoundary<T>({
   emptyBody = 'There are no items to show right now.',
   label = 'content',
 }: AsyncBoundaryProps<T>): React.JSX.Element {
+  const pathname = usePathname() ?? '';
+  const workspaceRole = [
+    ['/employer', 'Employer'],
+    ['/candidate', 'Candidate'],
+    ['/review', 'Reviewer'],
+    ['/governance', 'Governance'],
+    ['/audit', 'Auditor'],
+    ['/operations', 'Operations'],
+    ['/support', 'Support'],
+    ['/admin', 'Platform admin'],
+  ].find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1];
   if (state.status === 'loading') {
     return (
       <Panel>
@@ -70,12 +83,38 @@ export function AsyncBoundary<T>({
     return (
       <Panel>
         <h2 style={{ margin: 0, color: 'var(--color-ink)', fontSize: '1.1rem' }}>
-          {denied ? 'You don’t have access to this' : 'Something went wrong'}
+          {status === 401
+            ? 'Sign in to continue'
+            : denied
+              ? 'Your account cannot open this record'
+              : 'Something went wrong'}
         </h2>
         <p role="alert" style={{ margin: 0, maxWidth: '48ch' }}>
           {message}
         </p>
-        {denied ? null : (
+        {denied ? (
+          <>
+            <p style={{ margin: 0, maxWidth: '48ch' }}>
+              {status === 401
+                ? 'Your session may have ended. Sign in again to continue.'
+                : 'For the demo, choose the role for this workspace. The account must also have access to this organisation and record.'}
+            </p>
+            <Link
+              href={
+                workspaceRole ? `/sign-in?role=${encodeURIComponent(workspaceRole)}` : '/sign-in'
+              }
+              className="inline-flex min-h-target items-center rounded-control bg-blue px-5 py-3 font-semibold text-paper"
+            >
+              {workspaceRole ? `Sign in for ${workspaceRole}` : 'Sign in or switch workspace'}
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex min-h-target items-center text-sm font-semibold text-blue"
+            >
+              Return to the demo guide
+            </Link>
+          </>
+        ) : (
           <Button variant="secondary" onClick={onRetry}>
             Try again
           </Button>

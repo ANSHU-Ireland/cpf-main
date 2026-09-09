@@ -1,5 +1,5 @@
 import { OPERATION_IDS } from '@cpf/contracts';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ConcreteDispatcher, isConcreteOperation } from './concrete-dispatch.js';
 
 const actor = {
@@ -19,7 +19,13 @@ describe('concrete OpenAPI dispatch coverage', () => {
   });
 
   it('routes auth operations through their contract handlers and fails closed', async () => {
-    const dispatcher = new ConcreteDispatcher({} as never);
+    const client = {
+      query: vi.fn(async () => ({ rows: [] })),
+      release: vi.fn(),
+    };
+    const dispatcher = new ConcreteDispatcher({
+      connect: vi.fn(async () => client),
+    } as never);
     expect((await dispatcher.dispatch('post_auth_login', actor, {}, {}, {}))?.status).toBe(422);
     expect(
       (

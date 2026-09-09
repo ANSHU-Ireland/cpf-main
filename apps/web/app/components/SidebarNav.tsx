@@ -20,6 +20,12 @@ export interface SidebarNavProps {
 /** Accessible vertical navigation; marks the active route with aria-current. */
 export function SidebarNav({ items, label, onNavigate }: SidebarNavProps): React.JSX.Element {
   const pathname = usePathname();
+  const activeHref = items
+    .filter(
+      (item) =>
+        pathname === item.href || (item.exact !== true && pathname.startsWith(`${item.href}/`)),
+    )
+    .sort((left, right) => right.href.length - left.href.length)[0]?.href;
   return (
     <nav aria-label={label}>
       <p
@@ -36,8 +42,7 @@ export function SidebarNav({ items, label, onNavigate }: SidebarNavProps): React
       </p>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '2px' }}>
         {items.map((item) => {
-          const active =
-            pathname === item.href || (item.exact !== true && pathname.startsWith(`${item.href}/`));
+          const active = item.href === activeHref;
           return (
             <li key={item.href}>
               <Link

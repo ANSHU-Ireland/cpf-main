@@ -33,21 +33,24 @@ export interface PreferencesView {
 
 export interface SessionView {
   readonly id: string;
-  readonly device: string;
-  readonly location: string;
+  readonly deviceLabel: string | null;
   readonly createdAt: string;
   readonly lastSeenAt: string;
-  readonly current: boolean;
+  readonly expiresAt: string;
+  readonly status: 'active' | 'expired' | 'revoked';
+}
+
+export interface SessionPage extends Collection<SessionView> {
+  readonly nextCursor: string | null;
 }
 
 export type SecuritySeverity = 'info' | 'warning' | 'critical';
 
 export interface SecurityEventView {
   readonly id: string;
-  readonly type: string;
-  readonly description: string;
+  readonly eventType: string;
+  readonly outcome: string;
   readonly occurredAt: string;
-  readonly severity: SecuritySeverity;
 }
 
 export interface NoticeView {
@@ -1075,6 +1078,8 @@ export interface EvidenceCollectionView {
 
 // Traceability (AUD-02)
 export interface TraceabilityView {
+  readonly status?: string;
+  readonly coverage?: string;
   readonly requirementId: string;
   readonly description: string;
   readonly controls: readonly string[];

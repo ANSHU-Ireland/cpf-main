@@ -3,6 +3,8 @@ dist
 build
 coverage
 .next
+.tmp
+artifacts/uat-credentials
 next-env.d.ts
 docs/source-of-truth/originals
 cpf_openapi_baseline_v2.0.yaml

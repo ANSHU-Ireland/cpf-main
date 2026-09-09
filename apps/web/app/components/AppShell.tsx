@@ -99,9 +99,9 @@ export function AppShell({
           >
             Synthetic demo
           </small>
-          <small className="cpf-shell__date" style={{ color: 'var(--color-muted)' }}>
-            10 August 2026
-          </small>
+          <Link href="/" style={{ color: 'var(--color-blue)', fontSize: 12, fontWeight: 650 }}>
+            Demo guide
+          </Link>
           <strong
             className="cpf-shell__workspace"
             style={{
@@ -162,8 +162,12 @@ export function AppShell({
               borderBlockStart: '1px solid var(--color-line)',
             }}
           >
-            <small style={{ color: 'var(--color-muted)', fontWeight: 650 }}>Tenant</small>
-            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 650 }}>Northstar Logistics</div>
+            <Link
+              href="/account/profile"
+              style={{ color: 'var(--color-blue)', fontSize: 12, fontWeight: 650 }}
+            >
+              My account &amp; organisation
+            </Link>
             <Link
               href="/sign-in"
               className="cpf-shell__mobile-switch"

@@ -33,8 +33,16 @@ export function createGovernanceDocService(deps: {
           errors: parsed.errors.map((message) => ({ detail: message })),
         });
       const r = await createGovernanceDoc(deps, actor, docType, parsed.value);
-      if (!r.ok) return problemResponse({ status: r.status, title: r.reason, correlationId });
-      return jsonResponse(201, r.doc, correlationId);
+      if (!r.ok)
+        return problemResponse({
+          status: r.status,
+          title: r.reason,
+          correlationId,
+          ...(r.errors === undefined
+            ? {}
+            : { errors: r.errors.map((message) => ({ detail: message })) }),
+        });
+      return jsonResponse(200, r.doc, correlationId);
     },
   };
 }

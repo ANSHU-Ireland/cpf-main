@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
+  createGovernanceDocService,
   handleListGovernanceDocs,
   handleGetGovernanceDoc,
   handleCreateGovernanceDoc,
   type GovernanceDocService,
 } from './governance-docs.handler.js';
-import type { Actor, GovernanceDocType } from '@cpf/org';
+import type {
+  Actor,
+  GovernanceDocRecord,
+  GovernanceDocRepository,
+  GovernanceDocType,
+} from '@cpf/org';
 
 const ID = '11111111-1111-1111-1111-111111111111';
 const actor: Actor = { tenantId: ID, userId: ID, roles: ['employer_admin'] };
@@ -16,9 +22,9 @@ function svc(ov: Partial<GovernanceDocService> = {}): GovernanceDocService {
     get: () =>
       Promise.resolve({
         ok: true as const,
-        doc: { id: ID, title: 'T', status: 'draft', createdAt: '', updatedAt: '' },
+        doc: { id: ID, title: 'T', status: 'draft', createdAt: '', updatedAt: '', data: {} },
       }),
-    create: () => Promise.resolve({ status: 201, headers: {}, body: '{}' }),
+    create: () => Promise.resolve({ status: 200, headers: {}, body: '{}' }),
     ...ov,
   };
 }
@@ -34,6 +40,9 @@ const TYPES: GovernanceDocType[] = [
   'technical_document',
   'vendor_evidence',
   'deployer_instruction',
+  'eu_declaration',
+  'eu_registration',
+  'ce_marking',
 ];
 
 describe('handleListGovernanceDocs', () => {
@@ -65,9 +74,40 @@ describe('handleGetGovernanceDoc', () => {
 
 describe('handleCreateGovernanceDoc', () => {
   for (const dt of TYPES) {
-    it(`201 for ${dt}`, async () => {
+    it(`200 for ${dt}`, async () => {
       const r = await handleCreateGovernanceDoc(svc(), { actor, docType: dt, body: {} });
-      expect(r.status).toBe(201);
+      expect(r.status).toBe(200);
     });
   }
+
+  it('returns explicit validation details without calling the database a success', async () => {
+    const doc: GovernanceDocRecord = {
+      id: ID,
+      title: 'T',
+      status: 'draft',
+      createdAt: '',
+      updatedAt: '',
+      data: {},
+    };
+    const repository: GovernanceDocRepository = {
+      listDocs: () => Promise.resolve({ items: [doc], total: 1 }),
+      getDocs: () => Promise.resolve(doc),
+      createDoc: () =>
+        Promise.resolve({
+          ok: false,
+          status: 422,
+          reason: 'invalid_governance_document',
+          errors: ['documentCode is required'],
+        }),
+    };
+    const response = await createGovernanceDocService({ repository }).create(
+      actor,
+      'qms_document',
+      {
+        data: { title: 'Incomplete' },
+      },
+    );
+    expect(response.status).toBe(422);
+    expect(JSON.stringify(response.body)).toContain('documentCode is required');
+  });
 });

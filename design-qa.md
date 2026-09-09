@@ -1,5 +1,53 @@
 # Design QA — shared UI contract and production journey repair
 
+## Session checkpoint — 9 September 2026
+
+final result: blocked
+
+ACC-03 now has a canonical-data table, search/status filters, pagination and confirmed revocation.
+Eight UI tests, one adapter test, ten domain tests and three isolated live database tests passed.
+Static type and lint checks passed. These are functional checks, not a visual acceptance pass.
+
+- Typography: another source raster still resolves to serif; unsuitable for typography sign-off.
+  The original SVG remains unchanged. Browser file navigation was security-blocked; no workaround
+  was attempted.
+- Layout: responsive table/stacked-row rules implemented; matched desktop/mobile captures pending.
+- Colors: existing Penpot-derived application tokens used; visual parity pending.
+- Assets: no new artwork or replacement source designs introduced.
+- Content: actual session fields replace generic handoff records. No invented location/current
+  device, no restore action. Pagination/filter scope and revocation consequences are explicit.
+
+The browser at port 4300 was found to be a different Desktop checkout. Its observed 401 state
+does not validate this worktree's revised screen. Do not carry forward a historical visual pass.
+
+## Current checkpoint — AUTH-01 / ACC-03, 6 September 2026
+
+final result: blocked
+
+Source truth: `cpf-penpot-handoff/interfaces/auth-01.svg` and `interfaces/acc-03.svg` in the same
+handoff directory; original frames 1440 × 1024. The supplied ACC-03 screenshot was opened and
+the current browser security page was captured, but their viewport and state differ. No valid
+combined, same-viewport comparison of the revised implementation has been completed.
+
+- Fonts/typography: tokens specify Public Sans / Source Sans 3 / Arial. The local SVG rasterizer
+  fell back to a serif face; those diagnostic PNGs are **not** typography acceptance evidence.
+- Spacing/layout: desktop reference includes a 330 px handoff-only annotation rail. Current
+  browser capture was compact-width and scrolled within events; not a valid desktop comparison.
+- Colors/tokens: source palette read; exact visual comparison remains outstanding.
+- Assets: original SVGs unchanged. Diagnostic renders are local only, not replacement UI assets.
+- Copy/content: AUTH-01 and ACC-03 contain generic placeholder fields/rows. Actual login/session
+  fields must follow their API contracts and schema; see `docs/execution/AUTH_SOURCE_RECONCILIATION_2026-09-06.md`.
+
+Implementation checkpoint `14ec8ac` preserves workspace intent through required password change,
+adds required-step guidance and links to real session management. Formatting, lint and web
+typecheck and all 31 targeted tests passed. No browser password was entered or changed. A final build and revised-screen
+capture remain required; this is not a passed visual handoff or release-ready product.
+
+Next: render references with the specified font, compare at a matching viewport/state, implement
+ACC-03's real session table and confirmation controls, and complete the connected hiring UAT.
+
+## Historical evidence below (not a pass for the current auth changes)
+
 Date: 2026-08-10
 
 ## Comparison target

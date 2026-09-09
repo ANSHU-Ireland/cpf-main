@@ -11,9 +11,11 @@ still require evidence from their authorised owners.
 
 ## UAT environment
 
-- Web application: `http://127.0.0.1:4300`
-- Platform API: `http://127.0.0.1:3000`
+- Web application: `http://127.0.0.1:4301`
+- Platform API: `http://127.0.0.1:3301`
 - Data mode: `CPF_DEMO_MODE=true`; all identities and records are synthetic
+- Seed inventory: 30 tenants, 242 reset-required users, 120 campaigns, 359 candidates,
+  360 applications and 390 canonical governance documents
 - Visual source: `cpf-penpot-handoff` Option 2 tokens and interface SVGs
 - Browser sizes checked: 320 × 900, 768 × 1024 and 1440 × 1024
 
@@ -36,8 +38,14 @@ still require evidence from their authorised owners.
 - ESLint passed on every changed TypeScript and JavaScript file.
 - Five safety-boundary tests passed, including proof that demo projections are enabled only in
   demo mode while production keeps the documented `501 application/problem+json` boundary.
-- The expanded functional smoke suite passed 32 authenticated reads and safe synthetic actions
-  across all seven roles.
+- The expanded functional smoke suite passed 34 authenticated reads and safe synthetic actions
+  across all seven roles. A separate authentication probe signed in all nine seeded personas,
+  rejected an invalid password with `401`, and returned one tenant-scoped canonical record from
+  each of the nine principal governance-document list endpoints.
+- The complete configured PostgreSQL gate passed 178 test files / 1,657 tests with zero skips or
+  failures, including all 13 governance-document families, audit/outbox evidence and cross-tenant
+  denial.
+- Contract regeneration passed without drift for all 244 OpenAPI operations.
 
 ## Defects found and resolved during UAT
 
@@ -54,6 +62,13 @@ still require evidence from their authorised owners.
    overflow.
 6. Candidate home and application records hid the primary assessment action. Both now expose a
    direct, Penpot-aligned Continue assessment path.
+7. Governance-document routes derived plural operation names that did not match repository types;
+   reads queried nonexistent generic columns and writes always targeted the quality-document table.
+   All 13 families now use explicit canonical mappings, fail-closed validation, tenant-scoped
+   payload evidence and auditable outbox events.
+8. The restricted AWS runtime role could not resolve a bearer session before tenant context existed.
+   A fixed-search-path security-definer bootstrap now returns only active identity/scopes for one
+   exact token hash; public execution is revoked and the runtime role is tested in CI.
 
 ## Accessibility and usability evidence
 

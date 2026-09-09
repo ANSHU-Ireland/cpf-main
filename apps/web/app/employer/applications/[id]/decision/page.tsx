@@ -10,7 +10,7 @@ import { StatusBadge, type BadgeTone } from '../../../../components/StatusBadge'
 import { AsyncBoundary } from '../../../../components/AsyncBoundary';
 import { apiClient, ApiError } from '../../../../lib/api-client';
 import { useAsync } from '../../../../lib/useAsync';
-import type { DecisionDraftView, DecisionOutcome } from '../../../../lib/types';
+import type { DecisionDraftView, DecisionOutcome, ProfileView } from '../../../../lib/types';
 
 const fieldStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-control)',
@@ -48,12 +48,22 @@ type Tab = (typeof TABS)[number];
 export default function DecisionPage(): React.JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const load = useCallback(() => apiClient.getDecision(id), [id]);
-  const { state, reload, setData } = useAsync<DecisionDraftView>(load);
+  const load = useCallback(async () => {
+    const [draft, profile] = await Promise.all([apiClient.getDecision(id), apiClient.getProfile()]);
+    return { draft, profile };
+  }, [id]);
+  const { state, reload, setData } = useAsync(load);
 
   return (
     <AsyncBoundary state={state} onRetry={reload} label="decision">
-      {(draft) => <DecisionWorkspace id={id} draft={draft} onSaved={setData} />}
+      {({ draft, profile }) => (
+        <DecisionWorkspace
+          id={id}
+          draft={draft}
+          profile={profile}
+          onSaved={(next) => setData({ draft: next, profile })}
+        />
+      )}
     </AsyncBoundary>
   );
 }
@@ -61,10 +71,12 @@ export default function DecisionPage(): React.JSX.Element {
 function DecisionWorkspace({
   id,
   draft,
+  profile,
   onSaved,
 }: {
   readonly id: string;
   readonly draft: DecisionDraftView;
+  readonly profile: ProfileView;
   readonly onSaved: (next: DecisionDraftView) => void;
 }): React.JSX.Element {
   const headingId = useId();
@@ -78,7 +90,9 @@ function DecisionWorkspace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const editable = draft.status === 'draft' || draft.status === 'returned';
+  const canDraft = profile.tenant?.roles.includes('employer_admin') === true;
+  const editable =
+    canDraft && draft.reviewComplete && (draft.status === 'draft' || draft.status === 'returned');
 
   useEffect(() => {
     setOutcome(draft.outcome ?? '');
@@ -131,6 +145,9 @@ function DecisionWorkspace({
       <div style={{ display: 'flex', gap: 'calc(var(--space-unit) * 2)', alignItems: 'center' }}>
         <StatusBadge tone="info">EMP-20</StatusBadge>
         <span style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>Governance</span>
+        <span style={{ marginLeft: 'auto', color: 'var(--color-muted)' }}>
+          Signed in as {profile.displayName}
+        </span>
       </div>
 
       <Card style={{ padding: 'calc(var(--space-unit) * 6)' }}>
@@ -145,8 +162,8 @@ function DecisionWorkspace({
         >
           <strong style={{ color: 'var(--color-amber)' }}>Human authority checkpoint</strong>
           <p style={{ margin: 'var(--space-unit) 0 0' }}>
-            Human-authored decision; outcome is never preselected and a separate approver must issue
-            it.
+            Record a human decision, obtain separate approval, then have an Employer Admin issue the
+            approved decision and notice.
           </p>
         </section>
 
@@ -182,6 +199,10 @@ function DecisionWorkspace({
             !draft.reviewComplete ? (
               <p style={{ margin: 0, color: 'var(--color-muted)' }}>
                 Review must be complete before a decision can be drafted for {draft.candidateRef}.
+              </p>
+            ) : !canDraft && draft.decisionId === null ? (
+              <p style={{ margin: 0, color: 'var(--color-muted)' }}>
+                An Employer Admin must draft this decision before a separate approver can review it.
               </p>
             ) : !editable ? (
               <DecisionSummary draft={draft} id={id} />
@@ -337,7 +358,7 @@ function DecisionSummary({
         </p>
       ) : (
         <p style={{ margin: 0 }}>
-          This decision is awaiting separate approval.{' '}
+          Review the approval and issuance status of this decision.{' '}
           <Link
             href={`/employer/applications/${id}/approval`}
             style={{ color: 'var(--color-blue)', fontWeight: 650 }}

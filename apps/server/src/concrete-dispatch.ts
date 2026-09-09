@@ -8,6 +8,7 @@ import {
   getOrganization as getOrganizationDomain,
   updateOrganization as updateOrganizationDomain,
   type Actor,
+  type GovernanceDocType,
   type RawCampaignListQuery,
 } from '@cpf/org';
 import type { HttpResponse } from '@cpf/http';
@@ -63,7 +64,6 @@ import {
   PgGovernanceSubmissionRepository,
   PgReviewAssignmentRepository,
   PgAssessmentVersionRepository,
-  DemoAuthRepository,
 } from '@cpf/org';
 
 import {
@@ -76,6 +76,10 @@ import {
   PgSupportCaseRepository,
   PgSupportCaseDetailRepository,
   PgReviewerRepository,
+  PgPasswordAuthRepository,
+  getMe,
+  listSecurityEvents,
+  updateMe,
 } from '@cpf/account';
 
 const CONCRETE_OPERATIONS = new Set<string>([
@@ -190,6 +194,7 @@ const CONCRETE_OPERATIONS = new Set<string>([
   'post_ai_models_modelId_suspend',
   'post_applications_applicationId_bookings',
   'post_applications_applicationId_decisions',
+  'get_applications_applicationId_decision_context',
   'post_applications_applicationId_invitations',
   'post_assessment_versions_versionId_activate',
   'post_assessment_versions_versionId_defects',
@@ -329,6 +334,37 @@ export function isConcreteOperation(operationId: string): boolean {
   return CONCRETE_OPERATIONS.has(operationId);
 }
 
+const GOVERNANCE_DOC_OPERATION_TYPES: Readonly<Record<string, GovernanceDocType>> = {
+  get_governance_ai_literacy: 'ai_literacy',
+  get_governance_data_use_register: 'data_use_register',
+  get_governance_datasets: 'dataset',
+  get_governance_impact_assessments: 'impact_assessment',
+  get_governance_post_market_plans: 'post_market_plan',
+  get_governance_post_market_signals: 'post_market_signal',
+  get_governance_qms_documents: 'qms_document',
+  get_governance_technical_documents: 'technical_document',
+  get_governance_vendor_evidence: 'vendor_evidence',
+  post_governance_ai_literacy: 'ai_literacy',
+  post_governance_ce_marking: 'ce_marking',
+  post_governance_data_use_register: 'data_use_register',
+  post_governance_datasets: 'dataset',
+  post_governance_deployer_instructions: 'deployer_instruction',
+  post_governance_eu_declarations: 'eu_declaration',
+  post_governance_eu_registrations: 'eu_registration',
+  post_governance_impact_assessments: 'impact_assessment',
+  post_governance_post_market_plans: 'post_market_plan',
+  post_governance_post_market_signals: 'post_market_signal',
+  post_governance_qms_documents: 'qms_document',
+  post_governance_technical_documents: 'technical_document',
+  post_governance_vendor_evidence: 'vendor_evidence',
+};
+
+function governanceDocTypeFor(operationId: string): GovernanceDocType {
+  const docType = GOVERNANCE_DOC_OPERATION_TYPES[operationId];
+  if (docType === undefined) throw new Error(`No governance document mapping for ${operationId}`);
+  return docType;
+}
+
 export class ConcreteDispatcher {
   readonly #pool: Pool;
   readonly #opts: { role?: string; importDataKey?: string; integrationDataKey?: string };
@@ -433,7 +469,10 @@ export class ConcreteDispatcher {
       ),
     });
     this.#auth = api.createAuthService({
-      repository: new DemoAuthRepository(pool) as never,
+      repository: new PgPasswordAuthRepository(pool, {
+        role: options.role ?? 'cpf_app',
+        sessionTtlSeconds: Number(process.env.CPF_SESSION_TTL_SECONDS ?? 28_800),
+      }),
     });
     this.#reviewer = api.createReviewerService({ repository: new PgReviewerRepository(pool) });
     this.#accommodations = api.createAccommodationService({
@@ -748,6 +787,8 @@ export class ConcreteDispatcher {
           body,
           idempotencyKey,
         });
+      case 'get_applications_applicationId_decision_context':
+        return api.handleGetDecisionContext(this.#decisions, { actor, applicationId });
       case 'post_decisions_decisionId_approvals':
         return api.handleApproveDecision(this.#decisions, {
           actor,
@@ -1090,7 +1131,7 @@ export class ConcreteDispatcher {
       case 'get_governance_ai_literacy':
         return api.handleListGovernanceDocs(this.#governanceDocs, {
           actor,
-          docType: operationId.replace('get_governance_', '') as never,
+          docType: governanceDocTypeFor(operationId),
         });
       case 'post_governance_qms_documents':
       case 'post_governance_technical_documents':
@@ -1098,6 +1139,7 @@ export class ConcreteDispatcher {
       case 'post_governance_data_use_register':
       case 'post_governance_vendor_evidence':
       case 'post_governance_impact_assessments':
+      case 'post_governance_deployer_instructions':
       case 'post_governance_post_market_plans':
       case 'post_governance_post_market_signals':
       case 'post_governance_ai_literacy':
@@ -1106,7 +1148,7 @@ export class ConcreteDispatcher {
       case 'post_governance_eu_registrations':
         return api.handleCreateGovernanceDoc(this.#governanceDocs, {
           actor,
-          docType: operationId.replace('post_governance_', '') as never,
+          docType: governanceDocTypeFor(operationId),
           body,
         });
 
@@ -1127,12 +1169,6 @@ export class ConcreteDispatcher {
         return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
           actor,
           submissionType: 'serious_incident' as never,
-          body,
-        });
-      case 'post_governance_deployer_instructions':
-        return api.handleCreateGovernanceSubmission(this.#governanceSubmissions, {
-          actor,
-          submissionType: 'deployer_instruction' as never,
           body,
         });
       case 'post_governance_conformity_assessments_assessmentId_approve':
@@ -1242,15 +1278,15 @@ export class ConcreteDispatcher {
 
       // ── Account / Me ──────────────────────────────────────────────────────
       case 'get_me': {
-        const svc = { getMe: (a: Actor) => new PgAccountRepository(this.#pool).findProfileData(a) };
-        return api.handleGetMe(svc as never, { actor });
+        const repository = new PgAccountRepository(this.#pool);
+        return api.handleGetMe({ getMe: (a: Actor) => getMe({ repository }, a) }, { actor });
       }
       case 'patch_me': {
-        const svc = {
-          updateMe: (a: Actor, u: unknown) =>
-            new PgAccountRepository(this.#pool).applyProfileUpdate(a, u as never),
-        };
-        return api.handlePatchMe(svc as never, { actor, body });
+        const repository = new PgAccountRepository(this.#pool);
+        return api.handlePatchMe(
+          { updateMe: (a: Actor, u: never) => updateMe({ repository }, a, u) },
+          { actor, body },
+        );
       }
       case 'post_me_data_export':
       case 'post_me_deactivation':
@@ -1275,7 +1311,8 @@ export class ConcreteDispatcher {
       // ── Me Security Events ────────────────────────────────────────────────
       case 'get_me_security_events': {
         const svc = {
-          listSecurityEvents: (a: Actor, q: never) => this.#securityEvents.listSecurityEvents(a, q),
+          listSecurityEvents: (a: Actor, q: never) =>
+            listSecurityEvents({ repository: this.#securityEvents }, a, q),
         };
         return api.handleGetMeSecurityEvents(svc as never, { actor, query: {} as never });
       }

@@ -116,7 +116,10 @@ async function readProfile(client: PoolClient, actor: Actor): Promise<ProfileDat
   const memRes = await client.query<MembershipRow>(
     `SELECT m.tenant_id,
             m.status,
-            COALESCE(array_agg(r.code) FILTER (WHERE r.code IS NOT NULL), '{}') AS roles
+            COALESCE(
+              array_agg(DISTINCT r.code ORDER BY r.code) FILTER (WHERE r.code IS NOT NULL),
+              '{}'
+            ) AS roles
        FROM iam.memberships m
        LEFT JOIN iam.membership_roles mr ON mr.membership_id = m.id
        LEFT JOIN iam.roles r ON r.id = mr.role_id
